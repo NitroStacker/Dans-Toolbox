@@ -4,6 +4,19 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-07-31
+
+### Changed
+
+- Reworked setup into a clean three-step Theme, Tools, and Layout flow.
+- Reduced setup copy and replaced the dense single page with focused card choices and fixed navigation.
+- Added keyboard navigation with Left, Right, Enter, and Escape.
+- Added a short splash, step transitions, text reveals, signal VFX, an animated layout handoff, and tool-window reveal wipes.
+
+### Fixed
+
+- Restored Native Dock's transient thumbnail state after Unity deserialization to prevent repeated exceptions when saved tabs return after a domain reload.
+
 ## [1.1.3] - 2026-07-31
 
 ### Fixed

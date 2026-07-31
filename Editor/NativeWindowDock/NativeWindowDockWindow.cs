@@ -76,14 +76,15 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private HashSet<long> windowsBeforeLaunch = new HashSet<long>();
         private Vector2 cropDragStartMouse;
         private NativeWindowCrop cropDragStart;
-        private readonly Dictionary<long, Texture2D> candidateThumbnails =
+        private Dictionary<long, Texture2D> candidateThumbnails =
             new Dictionary<long, Texture2D>();
-        private readonly HashSet<long> failedThumbnailHandles = new HashSet<long>();
-        private readonly HashSet<long> pendingThumbnailHandles = new HashSet<long>();
-        private readonly ConcurrentQueue<QueuedThumbnail> queuedThumbnails =
+        private HashSet<long> failedThumbnailHandles = new HashSet<long>();
+        private HashSet<long> pendingThumbnailHandles = new HashSet<long>();
+        private ConcurrentQueue<QueuedThumbnail> queuedThumbnails =
             new ConcurrentQueue<QueuedThumbnail>();
         private CancellationTokenSource thumbnailCancellation;
         private int thumbnailGeneration;
+        private double revealStartedAt;
 
         private sealed class QueuedThumbnail
         {
@@ -134,6 +135,8 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         private void OnEnable()
         {
+            EnsureRuntimeState();
+            revealStartedAt = EditorApplication.timeSinceStartup;
             EnsurePanelIdentity();
             UpdateTitle();
             minSize = new Vector2(520f, 340f);
@@ -153,6 +156,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         private void OnDisable()
         {
+            EnsureRuntimeState();
             EditorApplication.update -= Tick;
             AssemblyReloadEvents.beforeAssemblyReload -= DetachForReload;
             ResetThumbnailPreviews();
@@ -278,6 +282,13 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     Debug.LogWarning("Native Window Dock: " + exception);
                     Repaint();
                 }
+            }
+
+            if (DansToolboxMotion.DrawWindowReveal(
+                    new Rect(0f, 0f, position.width, position.height),
+                    revealStartedAt))
+            {
+                Repaint();
             }
         }
 
@@ -1199,6 +1210,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         private void Tick()
         {
+            EnsureRuntimeState();
             DrainThumbnailQueue();
             double now = EditorApplication.timeSinceStartup;
             if (session != null)
@@ -1257,6 +1269,21 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     NativeWindowDockGui.Warning);
                 Repaint();
             }
+        }
+
+        private void EnsureRuntimeState()
+        {
+            candidates ??= Array.Empty<NativeWindowCandidate>();
+            windowsBeforeLaunch ??= new HashSet<long>();
+            candidateThumbnails ??= new Dictionary<long, Texture2D>();
+            failedThumbnailHandles ??= new HashSet<long>();
+            pendingThumbnailHandles ??= new HashSet<long>();
+            queuedThumbnails ??= new ConcurrentQueue<QueuedThumbnail>();
+            attachedLabel ??= string.Empty;
+            cropProfileKey ??= string.Empty;
+            launchPath ??= string.Empty;
+            launchArguments ??= string.Empty;
+            statusMessage ??= "READY  ·  choose a running window or launch an application";
         }
 
         private bool IsSelectedDockTab()

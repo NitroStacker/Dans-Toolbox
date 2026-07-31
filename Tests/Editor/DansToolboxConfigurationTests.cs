@@ -80,6 +80,32 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void SetupWizard_MovesThroughThreeBoundedSteps()
+        {
+            DansToolboxSetupWizard wizard =
+                ScriptableObject.CreateInstance<DansToolboxSetupWizard>();
+            try
+            {
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Theme));
+                wizard.MoveNext();
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Tools));
+                wizard.MoveNext();
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Layout));
+                wizard.MoveNext();
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Layout));
+                wizard.MoveBack();
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Tools));
+                wizard.MoveBack();
+                wizard.MoveBack();
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Theme));
+            }
+            finally
+            {
+                Object.DestroyImmediate(wizard);
+            }
+        }
+
+        [Test]
         public void PackageAssets_HaveUniqueGuids()
         {
             string packageRoot = GetPackageRoot();

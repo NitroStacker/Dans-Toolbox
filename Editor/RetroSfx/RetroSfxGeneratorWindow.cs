@@ -73,6 +73,7 @@ namespace DansToolbox.EditorTools.Audio
         [NonSerialized] private ReorderableList effectList;
         [NonSerialized] private int pendingEffectRemoval = -1;
         [NonSerialized] private ImportWaveformHandle activeImportWaveformHandle;
+        [NonSerialized] private double revealStartedAt;
 
         private float GeneratedDuration =>
             generatedSamples == null
@@ -95,6 +96,7 @@ namespace DansToolbox.EditorTools.Audio
 
         private void OnEnable()
         {
+            revealStartedAt = EditorApplication.timeSinceStartup;
             wantsMouseMove = true;
             previewIsActive = false;
             settings ??= new RetroSfxSettings();
@@ -177,6 +179,13 @@ namespace DansToolbox.EditorTools.Audio
             }
 
             if (Event.current.type == EventType.MouseMove)
+            {
+                Repaint();
+            }
+
+            if (DansToolboxMotion.DrawWindowReveal(
+                    new Rect(0f, 0f, position.width, position.height),
+                    revealStartedAt))
             {
                 Repaint();
             }

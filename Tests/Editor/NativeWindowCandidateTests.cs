@@ -1,5 +1,7 @@
 using System;
+using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace DansToolbox.EditorTools.NativeWindowDock.Tests
 {
@@ -142,6 +144,50 @@ namespace DansToolbox.EditorTools.NativeWindowDock.Tests
 
             Assert.IsTrue(NativeWindowClaimRegistry.TryClaim(target, secondPanel));
             NativeWindowClaimRegistry.Release(target, secondPanel);
+        }
+
+        [Test]
+        public void RuntimeCollections_AreRestoredAfterEditorDeserialization()
+        {
+            NativeWindowDockWindow window =
+                ScriptableObject.CreateInstance<NativeWindowDockWindow>();
+            try
+            {
+                const BindingFlags flags =
+                    BindingFlags.Instance | BindingFlags.NonPublic;
+                string[] fieldNames =
+                {
+                    "candidateThumbnails",
+                    "failedThumbnailHandles",
+                    "pendingThumbnailHandles",
+                    "queuedThumbnails"
+                };
+
+                foreach (string fieldName in fieldNames)
+                {
+                    FieldInfo field = typeof(NativeWindowDockWindow).GetField(fieldName, flags);
+                    Assert.That(field, Is.Not.Null, fieldName);
+                    field.SetValue(window, null);
+                }
+
+                MethodInfo restore = typeof(NativeWindowDockWindow).GetMethod(
+                    "EnsureRuntimeState",
+                    flags);
+                Assert.That(restore, Is.Not.Null);
+                restore.Invoke(window, null);
+
+                foreach (string fieldName in fieldNames)
+                {
+                    Assert.That(
+                        typeof(NativeWindowDockWindow).GetField(fieldName, flags)?.GetValue(window),
+                        Is.Not.Null,
+                        fieldName);
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+            }
         }
     }
 }

@@ -2,7 +2,7 @@
 
 ## Setup
 
-The first-install wizard opens over a blurred view of Unity and selects the shared color theme, enabled tools, and optional recommended workspace. Settings are saved per project. Reopen it from the Dans Toolbox toolbar icon or with **Tools > Dans Toolbox > Setup Wizard**.
+The setup wizard opens over a blurred view of Unity on first install, after reinstalling the package, and once after every package-version update. It selects the shared color theme, enabled tools, and optional recommended workspace. Settings are saved per project. Reopen it from the Dans Toolbox toolbar icon or with **Tools > Dans Toolbox > Setup Wizard**.
 
 The available themes are **Signal Orange**, **Neon Cyan**, and **Arcade Violet**. Disabling a tool prevents its menu command from opening and closes any existing instance. Applying **ToolBox Layout** replaces the current Unity window arrangement without recreating the main Unity window, then removes panes for disabled tools.
 

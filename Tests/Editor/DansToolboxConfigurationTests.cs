@@ -91,6 +91,61 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void SetupPrompt_OpensOnceForEveryPackageVersion()
+        {
+            Assert.That(
+                DansToolboxSettings.ShouldOfferSetupForVersion(
+                    true,
+                    false,
+                    "1.3.0",
+                    string.Empty,
+                    false,
+                    "1.3.1"),
+                Is.True,
+                "A package update should offer setup again.");
+            Assert.That(
+                DansToolboxSettings.ShouldOfferSetupForVersion(
+                    true,
+                    false,
+                    "1.3.1",
+                    string.Empty,
+                    false,
+                    "1.3.1"),
+                Is.False,
+                "Applying setup should acknowledge the current version.");
+            Assert.That(
+                DansToolboxSettings.ShouldOfferSetupForVersion(
+                    true,
+                    true,
+                    "1.3.0",
+                    "1.3.1",
+                    false,
+                    "1.3.1"),
+                Is.False,
+                "Dismissing setup should suppress repeats for the current version.");
+            Assert.That(
+                DansToolboxSettings.ShouldOfferSetupForVersion(
+                    true,
+                    true,
+                    "1.3.0",
+                    "1.3.1",
+                    false,
+                    "1.3.2"),
+                Is.True,
+                "A later update should offer setup after an earlier dismissal.");
+            Assert.That(
+                DansToolboxSettings.ShouldOfferSetupForVersion(
+                    true,
+                    false,
+                    "1.3.1",
+                    string.Empty,
+                    true,
+                    "1.3.1"),
+                Is.True,
+                "Reinstalling the same version should offer setup again.");
+        }
+
+        [Test]
         public void ToolbarButton_CanBeCreated()
         {
             Assert.That(DansToolboxToolbarButton.Create(), Is.Not.Null);

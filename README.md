@@ -22,7 +22,7 @@ The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they ca
 After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.3.0
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.3.1
 ```
 
 For local development, use:
@@ -36,7 +36,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.3.0"
+    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.3.1"
   }
 }
 ```

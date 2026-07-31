@@ -4,6 +4,33 @@ using UnityEditor;
 
 namespace DansToolbox.Editor
 {
+    [InitializeOnLoad]
+    internal static class DansToolboxPackageLifecycle
+    {
+        private const string PackageName = "com.dans.toolbox";
+
+        static DansToolboxPackageLifecycle()
+        {
+            UnityEditor.PackageManager.Events.registeringPackages -=
+                OnPackagesRegistering;
+            UnityEditor.PackageManager.Events.registeringPackages +=
+                OnPackagesRegistering;
+        }
+
+        private static void OnPackagesRegistering(
+            UnityEditor.PackageManager.PackageRegistrationEventArgs changes)
+        {
+            foreach (UnityEditor.PackageManager.PackageInfo package in changes.removed)
+            {
+                if (string.Equals(package.name, PackageName, StringComparison.Ordinal))
+                {
+                    DansToolboxSettings.MarkPackageRemoved();
+                    return;
+                }
+            }
+        }
+    }
+
     public readonly struct DansToolboxToolDescriptor
     {
         public DansToolboxToolDescriptor(
@@ -69,17 +96,65 @@ namespace DansToolbox.Editor
     public sealed class DansToolboxSettings : ScriptableSingleton<DansToolboxSettings>
     {
         [UnityEngine.SerializeField] private bool initialized;
+        // Retained so existing project settings deserialize without churn.
         [UnityEngine.SerializeField] private bool setupPromptDismissed;
+        [UnityEngine.SerializeField] private string setupCompletedVersion = string.Empty;
+        [UnityEngine.SerializeField] private string setupPromptDismissedVersion = string.Empty;
+        [UnityEngine.SerializeField] private bool setupRequiredAfterReinstall;
         [UnityEngine.SerializeField] private DansToolboxThemeId theme =
             DansToolboxThemeId.SignalOrange;
         [UnityEngine.SerializeField] private List<string> enabledToolIds = new List<string>();
         [UnityEngine.SerializeField] private bool recommendedLayoutSelected;
 
         public static bool IsInitialized => instance.initialized;
-        public static bool ShouldOfferSetup =>
-            !instance.initialized && !instance.setupPromptDismissed;
+        public static bool ShouldOfferSetup => ShouldOfferSetupForVersion(
+            instance.initialized,
+            instance.setupPromptDismissed,
+            instance.setupCompletedVersion,
+            instance.setupPromptDismissedVersion,
+            instance.setupRequiredAfterReinstall,
+            CurrentPackageVersion);
         public static DansToolboxThemeId Theme => instance.theme;
         public static bool RecommendedLayoutSelected => instance.recommendedLayoutSelected;
+
+        internal static string CurrentPackageVersion
+        {
+            get
+            {
+                UnityEditor.PackageManager.PackageInfo package =
+                    UnityEditor.PackageManager.PackageInfo.FindForAssembly(
+                        typeof(DansToolboxSettings).Assembly);
+                return package?.version ?? string.Empty;
+            }
+        }
+
+        internal static bool ShouldOfferSetupForVersion(
+            bool isInitialized,
+            bool legacyPromptDismissed,
+            string completedVersion,
+            string dismissedVersion,
+            bool requiredAfterReinstall,
+            string currentVersion)
+        {
+            if (requiredAfterReinstall)
+            {
+                return true;
+            }
+
+            if (string.IsNullOrEmpty(currentVersion))
+            {
+                return !isInitialized && !legacyPromptDismissed;
+            }
+
+            return !string.Equals(
+                       completedVersion,
+                       currentVersion,
+                       StringComparison.Ordinal) &&
+                   !string.Equals(
+                       dismissedVersion,
+                       currentVersion,
+                       StringComparison.Ordinal);
+        }
 
         public static bool IsToolEnabled(string toolId)
         {
@@ -100,6 +175,9 @@ namespace DansToolbox.Editor
             DansToolboxSettings settings = instance;
             settings.initialized = true;
             settings.setupPromptDismissed = false;
+            settings.setupCompletedVersion = CurrentPackageVersion;
+            settings.setupPromptDismissedVersion = string.Empty;
+            settings.setupRequiredAfterReinstall = false;
             settings.theme = selectedTheme;
             settings.enabledToolIds = new List<string>(enabledTools ?? Array.Empty<string>());
             settings.recommendedLayoutSelected = useRecommendedLayout;
@@ -112,6 +190,15 @@ namespace DansToolbox.Editor
         {
             DansToolboxSettings settings = instance;
             settings.setupPromptDismissed = true;
+            settings.setupPromptDismissedVersion = CurrentPackageVersion;
+            settings.setupRequiredAfterReinstall = false;
+            settings.Save(true);
+        }
+
+        internal static void MarkPackageRemoved()
+        {
+            DansToolboxSettings settings = instance;
+            settings.setupRequiredAfterReinstall = true;
             settings.Save(true);
         }
     }

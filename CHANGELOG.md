@@ -4,6 +4,13 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2026-07-31
+
+### Changed
+
+- Open the setup wizard after first install, reinstalling the package, and every Dans Toolbox package-version update, even when setup was completed for the same or an earlier version.
+- Remember completion or dismissal per version so ordinary domain reloads and Editor restarts do not repeatedly reopen setup.
+
 ## [1.3.0] - 2026-07-31
 
 ### Added

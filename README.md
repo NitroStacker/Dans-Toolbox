@@ -9,7 +9,7 @@ Both tools are Editor-only. Native Window Dock is available only in the Windows 
 
 ## First-install setup
 
-The setup wizard opens once after the package is installed. It lets each project choose:
+The setup wizard opens as a focused, blurred overlay after the package is installed. It lets each project choose:
 
 - Signal Orange, Neon Cyan, or Arcade Violet color themes.
 - Which Dans Toolbox tools are enabled.
@@ -22,7 +22,7 @@ The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they ca
 After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.2.1
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.3.0
 ```
 
 For local development, use:
@@ -36,7 +36,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.2.1"
+    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.3.0"
   }
 }
 ```

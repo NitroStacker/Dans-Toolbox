@@ -45,9 +45,13 @@ namespace DansToolbox.Editor
         private const float Gap = 10f;
         private const float StepRailHeight = 36f;
         private const float FooterHeight = 38f;
+        private const float OverlayPanelWidth = 652f;
+        private const float OverlayPanelHeight = 642f;
+        private const float OverlayEdgeMargin = 36f;
         private const double SplashDuration = 0.82d;
         private const double StepTransitionDuration = 0.24d;
         private const double LayoutHandoffDuration = 0.72d;
+        private const double LayoutSettleDuration = 0.28d;
         private static readonly string[] StepLabels = { "01  THEME", "02  TOOLS", "03  LAYOUT" };
 
         [SerializeField] private DansToolboxSetupStep currentStep;
@@ -62,30 +66,62 @@ namespace DansToolbox.Editor
         [SerializeField] private int stepTransitionDirection = 1;
         [SerializeField] private bool layoutHandoffActive;
         [SerializeField] private double layoutHandoffStartedAt;
+        [SerializeField] private bool layoutApplyStarted;
+        [SerializeField] private double layoutSettleStartedAt;
 
         private WizardStyles styles;
         private DansToolboxThemeId styledTheme = (DansToolboxThemeId)(-1);
+        [System.NonSerialized] private Texture2D backdrop;
+        [System.NonSerialized] private float surfaceWidth;
+        [System.NonSerialized] private float surfaceHeight;
 
         internal DansToolboxSetupStep CurrentStep => currentStep;
 
         [MenuItem("Tools/Dans Toolbox/Setup Wizard", false, -100)]
         internal static void Open()
         {
-            DansToolboxSetupWizard window = GetWindow<DansToolboxSetupWizard>(true);
+            foreach (DansToolboxSetupWizard existing in
+                     Resources.FindObjectsOfTypeAll<DansToolboxSetupWizard>())
+            {
+                existing.Close();
+            }
+
+            Texture2D capturedBackdrop = DansToolboxEditorBackdrop.CaptureBlurred();
+            Rect mainWindow = EditorGUIUtility.GetMainWindowPosition();
+            DansToolboxSetupWizard window = CreateInstance<DansToolboxSetupWizard>();
             window.titleContent = new GUIContent("Dans Toolbox Setup");
-            window.minSize = new Vector2(580f, 430f);
-            window.maxSize = new Vector2(820f, 620f);
+            window.backdrop = capturedBackdrop;
+            window.position = mainWindow;
+            window.minSize = mainWindow.size;
+            window.maxSize = mainWindow.size;
             window.ResetFromSettings();
-            window.Show();
+            window.ShowPopup();
             window.Focus();
         }
 
         private void OnEnable()
         {
+            AssemblyReloadEvents.beforeAssemblyReload -= CloseForReload;
+            AssemblyReloadEvents.beforeAssemblyReload += CloseForReload;
             if (!stagedStateLoaded)
             {
                 ResetFromSettings();
             }
+        }
+
+        private void OnDisable()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload -= CloseForReload;
+            if (backdrop != null)
+            {
+                DestroyImmediate(backdrop);
+                backdrop = null;
+            }
+        }
+
+        private void CloseForReload()
+        {
+            Close();
         }
 
         private void ResetFromSettings()
@@ -113,6 +149,8 @@ namespace DansToolbox.Editor
             stepTransitionStartedAt = splashStartedAt + SplashDuration;
             stepTransitionDirection = 1;
             layoutHandoffActive = false;
+            layoutApplyStarted = false;
+            layoutSettleStartedAt = 0d;
             Repaint();
         }
 
@@ -122,8 +160,38 @@ namespace DansToolbox.Editor
 
             DansToolboxPalette palette = DansToolboxTheme.GetPalette(selectedTheme);
             EnsureStyles(palette);
-            EditorGUI.DrawRect(new Rect(0f, 0f, position.width, position.height), palette.Canvas);
-            EditorGUI.DrawRect(new Rect(0f, 0f, position.width, 2f), palette.Accent);
+            Rect canvas = new Rect(0f, 0f, position.width, position.height);
+            DrawBackdrop(canvas, palette);
+            Rect panel = CalculatePanelRect(canvas.size);
+
+            Event current = Event.current;
+            if (current.type == EventType.MouseDown && !panel.Contains(current.mousePosition))
+            {
+                Close();
+                current.Use();
+                return;
+            }
+
+            DrawOverlayPanel(panel, palette);
+            Rect innerPanel = new Rect(
+                panel.x + 1f,
+                panel.y + 1f,
+                panel.width - 2f,
+                panel.height - 2f);
+            GUI.BeginGroup(innerPanel);
+            DrawWizardSurface(palette, innerPanel.width, innerPanel.height);
+            GUI.EndGroup();
+        }
+
+        private void DrawWizardSurface(
+            DansToolboxPalette palette,
+            float width,
+            float height)
+        {
+            surfaceWidth = width;
+            surfaceHeight = height;
+            EditorGUI.DrawRect(new Rect(0f, 0f, surfaceWidth, surfaceHeight), palette.Canvas);
+            EditorGUI.DrawRect(new Rect(0f, 0f, surfaceWidth, 2f), palette.Accent);
 
             if (layoutHandoffActive)
             {
@@ -137,8 +205,8 @@ namespace DansToolbox.Editor
                 return;
             }
 
-            float innerWidth = position.width - Margin * 2f;
-            float footerY = position.height - Margin - FooterHeight;
+            float innerWidth = surfaceWidth - Margin * 2f;
+            float footerY = surfaceHeight - Margin - FooterHeight;
             Rect railRect = new Rect(Margin, Margin, innerWidth, StepRailHeight);
             Rect contentRect = new Rect(
                 Margin,
@@ -148,9 +216,56 @@ namespace DansToolbox.Editor
             Rect footerRect = new Rect(Margin, footerY, innerWidth, FooterHeight);
 
             DrawStepRail(railRect, palette);
-            DrawSignalVfx(railRect, palette, StepTransitionProgress);
             DrawCurrentStep(contentRect, palette);
             DrawFooter(footerRect, palette);
+        }
+
+        internal static Rect CalculatePanelRect(Vector2 canvasSize)
+        {
+            float width = Mathf.Min(
+                OverlayPanelWidth,
+                Mathf.Max(1f, canvasSize.x - OverlayEdgeMargin * 2f));
+            float height = Mathf.Min(
+                OverlayPanelHeight,
+                Mathf.Max(1f, canvasSize.y - OverlayEdgeMargin * 2f));
+            return new Rect(
+                (canvasSize.x - width) * 0.5f,
+                (canvasSize.y - height) * 0.5f,
+                width,
+                height);
+        }
+
+        private void DrawBackdrop(Rect canvas, DansToolboxPalette palette)
+        {
+            if (backdrop != null)
+            {
+                GUI.DrawTexture(canvas, backdrop, ScaleMode.StretchToFill, false);
+            }
+            else
+            {
+                EditorGUI.DrawRect(canvas, palette.Inset);
+            }
+
+            EditorGUI.DrawRect(canvas, new Color(0.015f, 0.02f, 0.028f, 0.72f));
+        }
+
+        private static void DrawOverlayPanel(Rect panel, DansToolboxPalette palette)
+        {
+            for (int index = 5; index >= 1; index--)
+            {
+                float spread = index * 5f;
+                Color shadow = Color.black;
+                shadow.a = 0.035f * (6 - index);
+                EditorGUI.DrawRect(
+                    new Rect(
+                        panel.x - spread,
+                        panel.y - spread + 8f,
+                        panel.width + spread * 2f,
+                        panel.height + spread * 2f),
+                    shadow);
+            }
+
+            EditorGUI.DrawRect(panel, palette.BorderStrong);
         }
 
         private void Update()
@@ -176,11 +291,23 @@ namespace DansToolbox.Editor
             if (layoutHandoffActive)
             {
                 repaint = true;
-                if (now - layoutHandoffStartedAt >= LayoutHandoffDuration)
+                if (!layoutApplyStarted &&
+                    now - layoutHandoffStartedAt >= LayoutHandoffDuration)
+                {
+                    layoutApplyStarted = true;
+                    layoutSettleStartedAt = now;
+                    if (!DansToolboxLayoutInstaller.ApplyRecommendedLayoutNow())
+                    {
+                        layoutHandoffActive = false;
+                        Close();
+                        return;
+                    }
+                }
+                else if (layoutApplyStarted &&
+                         now - layoutSettleStartedAt >= LayoutSettleDuration)
                 {
                     layoutHandoffActive = false;
                     Close();
-                    EditorApplication.delayCall += DansToolboxLayoutInstaller.ApplyRecommendedLayout;
                     return;
                 }
             }
@@ -488,6 +615,8 @@ namespace DansToolbox.Editor
             {
                 layoutHandoffActive = true;
                 layoutHandoffStartedAt = EditorApplication.timeSinceStartup;
+                layoutApplyStarted = false;
+                layoutSettleStartedAt = 0d;
                 Repaint();
                 return;
             }
@@ -560,8 +689,8 @@ namespace DansToolbox.Editor
             float eased = EaseOutCubic(progress);
             float logoSize = Mathf.Lerp(44f, 56f, eased);
             Rect logo = new Rect(
-                position.width * 0.5f - logoSize * 0.5f,
-                position.height * 0.5f - 68f,
+                surfaceWidth * 0.5f - logoSize * 0.5f,
+                surfaceHeight * 0.5f - 68f,
                 logoSize,
                 logoSize * 0.72f);
 
@@ -574,7 +703,7 @@ namespace DansToolbox.Editor
                 palette.Signal);
 
             Rect textRect = new Rect(
-                position.width * 0.5f - 150f,
+                surfaceWidth * 0.5f - 150f,
                 logo.yMax + 20f,
                 300f,
                 28f);
@@ -587,7 +716,7 @@ namespace DansToolbox.Editor
             GUI.EndGroup();
 
             Rect progressTrack = new Rect(
-                position.width * 0.5f - 96f,
+                surfaceWidth * 0.5f - 96f,
                 textRect.yMax + 13f,
                 192f,
                 2f);
@@ -595,7 +724,6 @@ namespace DansToolbox.Editor
             EditorGUI.DrawRect(
                 new Rect(progressTrack.x, progressTrack.y, progressTrack.width * eased, 2f),
                 palette.Accent);
-            DrawSignalVfx(progressTrack, palette, progress);
         }
 
         private void DrawLayoutHandoff(DansToolboxPalette palette)
@@ -606,15 +734,15 @@ namespace DansToolbox.Editor
             float eased = EaseInOutCubic(progress);
             Rect stage = new Rect(
                 Margin + 30f,
-                position.height * 0.5f - 92f,
-                position.width - Margin * 2f - 60f,
+                surfaceHeight * 0.5f - 92f,
+                surfaceWidth - Margin * 2f - 60f,
                 126f);
 
             float panelWidth = Mathf.Max(80f, (stage.width - Gap * 2f) / 3f);
             for (int index = 0; index < 3; index++)
             {
                 float destination = stage.x + index * (panelWidth + Gap);
-                float origin = position.width * 0.5f - panelWidth * 0.5f;
+                float origin = surfaceWidth * 0.5f - panelWidth * 0.5f;
                 float x = Mathf.Lerp(origin, destination, eased);
                 float yOffset = (index - 1) * (1f - eased) * 24f;
                 Rect panel = new Rect(x, stage.y + yOffset, panelWidth, 78f);
@@ -630,7 +758,7 @@ namespace DansToolbox.Editor
             Rect labelRect = new Rect(
                 Margin,
                 stage.yMax + 12f,
-                position.width - Margin * 2f,
+                surfaceWidth - Margin * 2f,
                 28f);
             Rect clip = new Rect(
                 labelRect.x,
@@ -643,27 +771,6 @@ namespace DansToolbox.Editor
                 "ARRANGING WORKSPACE",
                 styles.Splash);
             GUI.EndGroup();
-            DrawSignalVfx(stage, palette, progress);
-        }
-
-        private static void DrawSignalVfx(
-            Rect bounds,
-            DansToolboxPalette palette,
-            float progress)
-        {
-            float time = (float)EditorApplication.timeSinceStartup;
-            for (int index = 0; index < 9; index++)
-            {
-                float phase = Mathf.Repeat(time * 0.9f + index * 0.137f, 1f);
-                float x = Mathf.Lerp(bounds.x, bounds.xMax, phase);
-                float wave = Mathf.Sin((phase + index * 0.21f) * Mathf.PI * 2f);
-                float y = bounds.center.y + wave * Mathf.Min(12f, bounds.height * 0.22f);
-                float alpha = Mathf.Sin(phase * Mathf.PI) * Mathf.Clamp01(progress * 2f);
-                Color color = index % 3 == 0 ? palette.Signal : palette.Accent;
-                color.a *= alpha * 0.72f;
-                float size = index % 3 == 0 ? 3f : 2f;
-                EditorGUI.DrawRect(new Rect(x, y, size, size), color);
-            }
         }
 
         private static float EaseOutCubic(float value)

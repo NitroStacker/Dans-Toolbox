@@ -4,6 +4,22 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-07-31
+
+### Added
+
+- Present setup as a centered overlay over a softly blurred snapshot of the Unity Editor.
+- Keep a dark fallback backdrop on platforms where native Editor capture is unavailable.
+
+### Changed
+
+- Removed decorative setup particles while retaining the focused splash and structural step transitions.
+- Keep the setup cover visible through the recommended-layout handoff while Unity settles.
+
+### Fixed
+
+- Preserve Unity's existing native main window during layout loading so applying ToolBox Layout no longer briefly minimizes and maximizes the Editor.
+
 ## [1.2.1] - 2026-07-31
 
 ### Fixed

@@ -25,17 +25,22 @@ namespace DansToolbox.Editor
 
         internal static void ApplyRecommendedLayout()
         {
+            EditorApplication.delayCall += () => ApplyRecommendedLayoutNow();
+        }
+
+        internal static bool ApplyRecommendedLayoutNow()
+        {
             string path = GetLayoutPath();
             if (!File.Exists(path))
             {
                 Debug.LogError("Dans Toolbox could not find its recommended layout.");
-                return;
+                return false;
             }
 
-            EditorApplication.delayCall += () => LoadLayout(path);
+            return LoadLayout(path);
         }
 
-        private static void LoadLayout(string path)
+        private static bool LoadLayout(string path)
         {
             try
             {
@@ -52,28 +57,38 @@ namespace DansToolbox.Editor
                         }
 
                         ParameterInfo[] parameters = method.GetParameters();
-                        return parameters.Length == 2 &&
+                        return parameters.Length == 5 &&
                                parameters[0].ParameterType == typeof(string) &&
-                               parameters[1].ParameterType == typeof(bool);
+                               parameters[1].ParameterType == typeof(bool) &&
+                               parameters[2].ParameterType == typeof(bool) &&
+                               parameters[3].ParameterType == typeof(bool) &&
+                               parameters[4].ParameterType == typeof(bool);
                     });
                 if (loader == null)
                 {
                     throw new MissingMethodException(
-                        "UnityEditor.WindowLayout.TryLoadWindowLayout(string, bool)");
+                        "UnityEditor.WindowLayout.TryLoadWindowLayout(string, bool, bool, bool, bool)");
                 }
 
-                bool loaded = (bool)loader.Invoke(null, new object[] { path, false });
+                // KeepMainWindow is critical here. Without it Unity tears down and
+                // recreates its native main window, which visibly minimizes and
+                // maximizes the Editor during the layout swap.
+                bool loaded = (bool)loader.Invoke(
+                    null,
+                    new object[] { path, false, false, true, true });
                 if (!loaded)
                 {
                     throw new InvalidOperationException("Unity rejected the layout file.");
                 }
 
                 EditorApplication.delayCall += CloseDisabledToolWindows;
+                return true;
             }
             catch (Exception exception)
             {
                 Debug.LogError("Dans Toolbox could not apply ToolBox Layout: " +
                                Unwrap(exception).Message);
+                return false;
             }
         }
 

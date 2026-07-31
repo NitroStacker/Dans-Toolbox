@@ -67,11 +67,27 @@ namespace DansToolbox.Editor.Tests
                     }
 
                     ParameterInfo[] parameters = method.GetParameters();
-                    return parameters.Length == 2 &&
+                    return parameters.Length == 5 &&
                            parameters[0].ParameterType == typeof(string) &&
-                           parameters[1].ParameterType == typeof(bool);
+                           parameters[1].ParameterType == typeof(bool) &&
+                           parameters[2].ParameterType == typeof(bool) &&
+                           parameters[3].ParameterType == typeof(bool) &&
+                           parameters[4].ParameterType == typeof(bool);
                 });
             Assert.That(loader, Is.Not.Null);
+        }
+
+        [Test]
+        public void SetupWizard_OverlayPanelStaysCenteredAndInsideCanvas()
+        {
+            Rect panel = DansToolboxSetupWizard.CalculatePanelRect(new Vector2(1200f, 800f));
+
+            Assert.That(panel.center.x, Is.EqualTo(600f).Within(0.01f));
+            Assert.That(panel.center.y, Is.EqualTo(400f).Within(0.01f));
+            Assert.That(panel.xMin, Is.GreaterThanOrEqualTo(0f));
+            Assert.That(panel.yMin, Is.GreaterThanOrEqualTo(0f));
+            Assert.That(panel.xMax, Is.LessThanOrEqualTo(1200f));
+            Assert.That(panel.yMax, Is.LessThanOrEqualTo(800f));
         }
 
         [Test]

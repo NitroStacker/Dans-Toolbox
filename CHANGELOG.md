@@ -4,6 +4,14 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-07-31
+
+### Fixed
+
+- Automatically reveal the registered Dans Toolbox button when Unity serializes a newly installed toolbar element as hidden.
+- Added **Tools > Dans Toolbox > Show Toolbar Icon** as a manual recovery action.
+- Deferred Native Dock theme access until `OnEnable` so restored tabs do not touch project settings from an EditorWindow constructor.
+
 ## [1.2.0] - 2026-07-31
 
 ### Changed

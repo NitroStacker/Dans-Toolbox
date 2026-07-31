@@ -66,7 +66,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private string cropProfileKey = string.Empty;
         private string statusMessage =
             "READY  ·  choose a running window or launch an application";
-        private Color statusColor = NativeWindowDockGui.Muted;
+        private Color statusColor;
         private bool pendingLaunch;
         private int launchedProcessId;
         private double launchDeadline;
@@ -136,6 +136,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private void OnEnable()
         {
             EnsureRuntimeState();
+            statusColor = NativeWindowDockGui.Muted;
             revealStartedAt = EditorApplication.timeSinceStartup;
             EnsurePanelIdentity();
             UpdateTitle();

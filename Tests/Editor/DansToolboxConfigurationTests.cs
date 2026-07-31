@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Toolbars;
 using UnityEngine;
 
 namespace DansToolbox.Editor.Tests
@@ -77,6 +78,21 @@ namespace DansToolbox.Editor.Tests
         public void ToolbarButton_CanBeCreated()
         {
             Assert.That(DansToolboxToolbarButton.Create(), Is.Not.Null);
+        }
+
+        [Test]
+        public void ToolbarButton_RegistersInVisibleLeftGroup()
+        {
+            MethodInfo factory = typeof(DansToolboxToolbarButton).GetMethod(
+                "Create",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            MainToolbarElementAttribute attribute =
+                factory?.GetCustomAttribute<MainToolbarElementAttribute>();
+
+            Assert.That(attribute, Is.Not.Null);
+            Assert.That(attribute.path, Is.EqualTo(DansToolboxToolbarButton.ElementPath));
+            Assert.That(attribute.defaultDockPosition, Is.EqualTo(MainToolbarDockPosition.Left));
+            Assert.That(attribute.defaultDockIndex, Is.EqualTo(2));
         }
 
         [Test]

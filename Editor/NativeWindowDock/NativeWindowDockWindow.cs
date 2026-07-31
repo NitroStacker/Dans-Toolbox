@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
+using DansToolbox.Editor;
 using Debug = UnityEngine.Debug;
 
 namespace DansToolbox.EditorTools.NativeWindowDock
@@ -112,6 +113,13 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private static void Open()
         {
             CreatePanel();
+        }
+
+        [MenuItem("Tools/Dans Toolbox/Native Window Dock", true)]
+        private static bool ValidateOpen()
+        {
+            return DansToolboxSettings.IsToolEnabled(
+                DansToolboxTools.NativeWindowDockId);
         }
 
         private static NativeWindowDockWindow CreatePanel()

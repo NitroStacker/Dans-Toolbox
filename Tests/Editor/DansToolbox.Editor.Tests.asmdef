@@ -1,7 +1,8 @@
 {
-  "name": "DansToolbox.NativeWindowDock.Editor.Tests",
-  "rootNamespace": "DansToolbox.EditorTools.NativeWindowDock.Tests",
+  "name": "DansToolbox.Editor.Tests",
+  "rootNamespace": "DansToolbox.Editor.Tests",
   "references": [
+    "DansToolbox.Core.Editor",
     "DansToolbox.NativeWindowDock.Editor"
   ],
   "optionalUnityReferences": [

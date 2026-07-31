@@ -1,7 +1,9 @@
 {
   "name": "DansToolbox.NativeWindowDock.Editor",
   "rootNamespace": "DansToolbox.EditorTools.NativeWindowDock",
-  "references": [],
+  "references": [
+    "DansToolbox.Core.Editor"
+  ],
   "includePlatforms": [
     "Editor"
   ],

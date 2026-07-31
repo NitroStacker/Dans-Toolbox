@@ -7,12 +7,22 @@ Dans Toolbox is a Unity 6 Editor package containing two focused tools:
 
 Both tools are Editor-only. Native Window Dock is available only in the Windows Editor.
 
+## First-install setup
+
+The setup wizard opens once after the package is installed. It lets each project choose:
+
+- Signal Orange, Neon Cyan, or Arcade Violet color themes.
+- Which Dans Toolbox tools are enabled.
+- Whether to apply the packaged **ToolBox Layout** workspace.
+
+The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they can be shared with the project. Reopen the wizard at any time from **Tools > Dans Toolbox > Setup**.
+
 ## Install from Git
 
 After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
 
 ```text
-https://github.com/YOUR-ACCOUNT/dans-toolbox.git#v1.0.0
+https://github.com/YOUR-ACCOUNT/dans-toolbox.git#v1.1.0
 ```
 
 For local development, use:
@@ -26,13 +36,14 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/YOUR-ACCOUNT/dans-toolbox.git#v1.0.0"
+    "com.dans.toolbox": "https://github.com/YOUR-ACCOUNT/dans-toolbox.git#v1.1.0"
   }
 }
 ```
 
 ## Open the tools
 
+- **Tools > Dans Toolbox > Setup**
 - **Tools > Dans Toolbox > Retro SFX**
 - **Tools > Dans Toolbox > Native Window Dock**
 

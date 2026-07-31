@@ -1,0 +1,3 @@
+# Unity's serialized layout writer preserves spaces after empty YAML values.
+*.wlt whitespace=-trailing-space
+*.dwlt whitespace=-trailing-space

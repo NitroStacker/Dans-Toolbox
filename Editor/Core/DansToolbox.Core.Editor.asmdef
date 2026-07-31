@@ -1,9 +1,7 @@
 {
-  "name": "DansToolbox.RetroSfx.Editor",
-  "rootNamespace": "DansToolbox.EditorTools.Audio",
-  "references": [
-    "DansToolbox.Core.Editor"
-  ],
+  "name": "DansToolbox.Core.Editor",
+  "rootNamespace": "DansToolbox.Editor",
+  "references": [],
   "includePlatforms": [
     "Editor"
   ],

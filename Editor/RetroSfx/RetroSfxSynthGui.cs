@@ -1,5 +1,6 @@
 using UnityEditor;
 using UnityEngine;
+using DansToolbox.Editor;
 
 namespace DansToolbox.EditorTools.Audio
 {
@@ -16,18 +17,19 @@ namespace DansToolbox.EditorTools.Audio
             Reset
         }
 
-        internal static readonly Color Canvas = new Color(0.105f, 0.11f, 0.115f);
-        internal static readonly Color Panel = new Color(0.155f, 0.16f, 0.165f);
-        internal static readonly Color PanelInset = new Color(0.09f, 0.095f, 0.1f);
-        internal static readonly Color PanelRaised = new Color(0.2f, 0.205f, 0.21f);
-        internal static readonly Color Border = new Color(0.27f, 0.275f, 0.28f);
-        internal static readonly Color BorderStrong = new Color(0.38f, 0.385f, 0.39f);
-        internal static readonly Color Text = new Color(0.88f, 0.875f, 0.84f);
-        internal static readonly Color MutedText = new Color(0.57f, 0.575f, 0.56f);
-        internal static readonly Color Accent = new Color(1f, 0.55f, 0.12f);
-        internal static readonly Color AccentSoft = new Color(0.66f, 0.33f, 0.08f);
-        internal static readonly Color Signal = new Color(1f, 0.68f, 0.24f);
-        internal static readonly Color Success = new Color(0.42f, 0.78f, 0.48f);
+        internal static Color Canvas => DansToolboxTheme.Current.Canvas;
+        internal static Color Panel => DansToolboxTheme.Current.Panel;
+        internal static Color PanelInset => DansToolboxTheme.Current.Inset;
+        internal static Color PanelRaised => DansToolboxTheme.Current.Raised;
+        internal static Color Border => DansToolboxTheme.Current.Border;
+        internal static Color BorderStrong => DansToolboxTheme.Current.BorderStrong;
+        internal static Color Text => DansToolboxTheme.Current.Text;
+        internal static Color MutedText => DansToolboxTheme.Current.Muted;
+        internal static Color Accent => DansToolboxTheme.Current.Accent;
+        internal static Color AccentSoft => DansToolboxTheme.Current.AccentSoft;
+        internal static Color Signal => DansToolboxTheme.Current.Signal;
+        internal static Color Success => DansToolboxTheme.Current.Success;
+        internal static Color Danger => DansToolboxTheme.Current.Danger;
 
         private static GUIStyle panelStyle;
         private static GUIStyle insetStyle;
@@ -46,6 +48,30 @@ namespace DansToolbox.EditorTools.Audio
         private static GUIStyle inlineValueStyle;
         private static float dragStartValue;
         private static float dragStartMouseY;
+
+        static RetroSfxSynthGui()
+        {
+            DansToolboxTheme.Changed += ResetStyles;
+        }
+
+        private static void ResetStyles()
+        {
+            panelStyle = null;
+            insetStyle = null;
+            headerStyle = null;
+            titleStyle = null;
+            subtitleStyle = null;
+            sectionTitleStyle = null;
+            labelStyle = null;
+            valueStyle = null;
+            presetButtonStyle = null;
+            primaryButtonStyle = null;
+            fieldStyle = null;
+            statusStyle = null;
+            tinyStyle = null;
+            helpStyle = null;
+            inlineValueStyle = null;
+        }
 
         internal static GUIStyle PanelStyle => panelStyle ??= CreatePanelStyle(Panel, Border, 10);
         internal static GUIStyle InsetStyle => insetStyle ??= CreatePanelStyle(PanelInset, Border, 8);
@@ -115,7 +141,7 @@ namespace DansToolbox.EditorTools.Audio
         internal static GUIStyle PresetButtonStyle =>
             presetButtonStyle ??= CreateFlatButtonStyle(
                 PanelRaised,
-                new Color(0.24f, 0.245f, 0.25f),
+                DansToolboxTheme.Current.Hover,
                 AccentSoft,
                 Text,
                 Color.white,
@@ -126,7 +152,7 @@ namespace DansToolbox.EditorTools.Audio
             primaryButtonStyle ??= CreateFlatButtonStyle(
                 AccentSoft,
                 Accent,
-                new Color(0.48f, 0.23f, 0.05f),
+                Color.Lerp(PanelInset, AccentSoft, 0.55f),
                 Color.white,
                 Color.black,
                 48f,
@@ -185,7 +211,7 @@ namespace DansToolbox.EditorTools.Audio
             {
                 Color fill = highlighted
                     ? Accent
-                    : hovered ? new Color(0.29f, 0.295f, 0.3f) : PanelInset;
+                    : hovered ? DansToolboxTheme.Current.Hover : PanelInset;
                 Color outline = highlighted ? Signal : hovered ? BorderStrong : Border;
                 DrawFlatBox(rect, fill, outline);
                 DrawTransportIcon(rect, icon, highlighted ? Color.black : Text);
@@ -216,7 +242,7 @@ namespace DansToolbox.EditorTools.Audio
                     ? AccentSoft
                     : hovered ? PanelRaised : PanelInset;
                 Color outline = danger && hovered
-                    ? new Color(0.8f, 0.3f, 0.22f)
+                    ? Danger
                     : selected ? Accent : hovered ? BorderStrong : Border;
                 DrawFlatBox(rect, fill, outline);
 
@@ -226,7 +252,7 @@ namespace DansToolbox.EditorTools.Audio
                     fontStyle = FontStyle.Bold
                 };
                 style.normal.textColor = danger && hovered
-                    ? new Color(1f, 0.58f, 0.5f)
+                    ? Color.Lerp(Text, Danger, 0.55f)
                     : selected ? Color.white : Text;
                 GUI.Label(rect, label, style);
             }
@@ -402,7 +428,7 @@ namespace DansToolbox.EditorTools.Audio
 
             if (Event.current.type == EventType.Repaint)
             {
-                Color fill = selected ? new Color(0.29f, 0.22f, 0.15f) : PanelInset;
+                Color fill = selected ? Color.Lerp(PanelInset, AccentSoft, 0.45f) : PanelInset;
                 DrawFlatBox(rect, fill, selected ? Accent : Border);
                 Rect iconRect = new Rect(rect.x + 9f, rect.y + 7f, rect.width - 18f, 20f);
                 DrawWaveIcon(iconRect, waveType, selected ? Signal : Text);
@@ -649,7 +675,7 @@ namespace DansToolbox.EditorTools.Audio
         private static void DrawScrew(Vector2 center)
         {
             Handles.BeginGUI();
-            Handles.color = new Color(0.1f, 0.1f, 0.1f);
+            Handles.color = PanelInset;
             Handles.DrawSolidDisc(center, Vector3.forward, 4f);
             Handles.color = BorderStrong;
             Handles.DrawWireDisc(center, Vector3.forward, 4f);
@@ -740,7 +766,7 @@ namespace DansToolbox.EditorTools.Audio
             DrawArc(center, radius + 4f, 135f, Mathf.Lerp(135f, 405f, normalizedValue), Accent, 2.8f);
 
             Handles.BeginGUI();
-            Handles.color = active ? new Color(0.31f, 0.315f, 0.32f) : new Color(0.235f, 0.24f, 0.245f);
+            Handles.color = active ? DansToolboxTheme.Current.Hover : PanelRaised;
             Handles.DrawSolidDisc(center, Vector3.forward, radius);
             Handles.color = active ? Accent : BorderStrong;
             Handles.DrawWireDisc(center, Vector3.forward, radius);

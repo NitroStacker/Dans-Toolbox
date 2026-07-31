@@ -4,6 +4,19 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-07-31
+
+### Added
+
+- First-install setup wizard with project-level settings.
+- Signal Orange, Neon Cyan, and Arcade Violet color themes shared by both tools.
+- Per-tool enablement designed to scale as more Dans Toolbox tools are added.
+- Optional packaged ToolBox Layout with safe Unity 6 layout loading.
+
+### Changed
+
+- Retro SFX and Native Window Dock now consume a shared theme and configuration core.
+
 ## [1.0.0] - 2026-07-31
 
 ### Added

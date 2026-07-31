@@ -4,6 +4,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using DansToolbox.Editor;
 
 namespace DansToolbox.EditorTools.Audio
 {
@@ -84,6 +85,12 @@ namespace DansToolbox.EditorTools.Audio
             RetroSfxGeneratorWindow window = GetWindow<RetroSfxGeneratorWindow>();
             window.titleContent = new GUIContent("Retro SFX");
             window.minSize = new Vector2(620f, 680f);
+        }
+
+        [MenuItem("Tools/Dans Toolbox/Retro SFX", true)]
+        private static bool ValidateOpenWindow()
+        {
+            return DansToolboxSettings.IsToolEnabled(DansToolboxTools.RetroSfxId);
         }
 
         private void OnEnable()

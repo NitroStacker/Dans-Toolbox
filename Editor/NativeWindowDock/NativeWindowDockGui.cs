@@ -1,26 +1,25 @@
 using UnityEditor;
 using UnityEngine;
+using DansToolbox.Editor;
 
 namespace DansToolbox.EditorTools.NativeWindowDock
 {
     internal static class NativeWindowDockGui
     {
-        // Mirrors the warm graphite-and-signal palette used by Retro SFX while
-        // remaining self-contained so the embedded package can travel between projects.
-        internal static readonly Color Canvas = new Color(0.105f, 0.11f, 0.115f);
-        internal static readonly Color Raised = new Color(0.155f, 0.16f, 0.165f);
-        internal static readonly Color Header = new Color(0.2f, 0.205f, 0.21f);
-        internal static readonly Color Inset = new Color(0.09f, 0.095f, 0.1f);
-        internal static readonly Color Hover = new Color(0.24f, 0.245f, 0.25f);
-        internal static readonly Color Border = new Color(0.27f, 0.275f, 0.28f);
-        internal static readonly Color BorderStrong = new Color(0.38f, 0.385f, 0.39f);
-        internal static readonly Color Text = new Color(0.88f, 0.875f, 0.84f);
-        internal static readonly Color Muted = new Color(0.57f, 0.575f, 0.56f);
-        internal static readonly Color Accent = new Color(1f, 0.55f, 0.12f);
-        internal static readonly Color AccentHover = new Color(1f, 0.68f, 0.24f);
-        internal static readonly Color AccentSoft = new Color(0.66f, 0.33f, 0.08f);
-        internal static readonly Color Warning = new Color32(240, 180, 72, 255);
-        internal static readonly Color Danger = new Color32(235, 98, 105, 255);
+        internal static Color Canvas => DansToolboxTheme.Current.Canvas;
+        internal static Color Raised => DansToolboxTheme.Current.Panel;
+        internal static Color Header => DansToolboxTheme.Current.Raised;
+        internal static Color Inset => DansToolboxTheme.Current.Inset;
+        internal static Color Hover => DansToolboxTheme.Current.Hover;
+        internal static Color Border => DansToolboxTheme.Current.Border;
+        internal static Color BorderStrong => DansToolboxTheme.Current.BorderStrong;
+        internal static Color Text => DansToolboxTheme.Current.Text;
+        internal static Color Muted => DansToolboxTheme.Current.Muted;
+        internal static Color Accent => DansToolboxTheme.Current.Accent;
+        internal static Color AccentHover => DansToolboxTheme.Current.AccentHover;
+        internal static Color AccentSoft => DansToolboxTheme.Current.AccentSoft;
+        internal static Color Warning => DansToolboxTheme.Current.Warning;
+        internal static Color Danger => DansToolboxTheme.Current.Danger;
 
         private static GUIStyle title;
         private static GUIStyle subtitle;
@@ -37,6 +36,30 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private static GUIStyle windowPickerButton;
         private static GUIStyle cardTitle;
         private static GUIStyle cardSubtitle;
+
+        static NativeWindowDockGui()
+        {
+            DansToolboxTheme.Changed += ResetStyles;
+        }
+
+        private static void ResetStyles()
+        {
+            title = null;
+            subtitle = null;
+            body = null;
+            muted = null;
+            status = null;
+            popup = null;
+            textField = null;
+            centeredTitle = null;
+            centeredBody = null;
+            button = null;
+            primaryButton = null;
+            dangerButton = null;
+            windowPickerButton = null;
+            cardTitle = null;
+            cardSubtitle = null;
+        }
 
         internal static GUIStyle Title => title ??= CreateLabel(18, FontStyle.Bold, Text);
         internal static GUIStyle Subtitle => subtitle ??= CreateLabel(10, FontStyle.Bold, Muted);
@@ -141,12 +164,16 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             button ??= CreateButton(Header, Hover, AccentSoft, Text, Color.white);
 
         internal static GUIStyle PrimaryButton =>
-            primaryButton ??= CreateButton(AccentSoft, Accent, new Color(0.48f, 0.23f, 0.05f),
+            primaryButton ??= CreateButton(AccentSoft, Accent, Color.Lerp(Inset, AccentSoft, 0.55f),
                 Color.white, Color.black);
 
         internal static GUIStyle DangerButton =>
-            dangerButton ??= CreateButton(new Color32(86, 42, 48, 255), new Color32(111, 48, 56, 255),
-                new Color32(73, 36, 41, 255), new Color32(255, 217, 220, 255), Color.white);
+            dangerButton ??= CreateButton(
+                Color.Lerp(Inset, Danger, 0.28f),
+                Color.Lerp(Inset, Danger, 0.42f),
+                Color.Lerp(Inset, Danger, 0.2f),
+                Color.Lerp(Text, Danger, 0.3f),
+                Color.white);
 
         internal static GUIStyle WindowPickerButton
         {

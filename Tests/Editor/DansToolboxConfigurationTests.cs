@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
 
 namespace DansToolbox.Editor.Tests
 {
@@ -76,6 +77,58 @@ namespace DansToolbox.Editor.Tests
         public void ToolbarButton_CanBeCreated()
         {
             Assert.That(DansToolboxToolbarButton.Create(), Is.Not.Null);
+        }
+
+        [Test]
+        public void PackageAssets_HaveUniqueGuids()
+        {
+            string packageRoot = GetPackageRoot();
+            string[] guids = Directory.EnumerateFiles(packageRoot, "*.meta", SearchOption.AllDirectories)
+                .Select(ReadMetaGuid)
+                .Where(guid => !string.IsNullOrEmpty(guid))
+                .ToArray();
+
+            Assert.That(guids.Length, Is.GreaterThan(0));
+            Assert.That(guids.Distinct().Count(), Is.EqualTo(guids.Length));
+        }
+
+        [Test]
+        public void PackageAssets_DoNotReuseProjectAssetGuids()
+        {
+            var packageGuids = new HashSet<string>(
+                Directory.EnumerateFiles(GetPackageRoot(), "*.meta", SearchOption.AllDirectories)
+                    .Select(ReadMetaGuid)
+                    .Where(guid => !string.IsNullOrEmpty(guid)));
+
+            string[] collisions = Directory
+                .EnumerateFiles(Application.dataPath, "*.meta", SearchOption.AllDirectories)
+                .Select(path => new { Path = path, Guid = ReadMetaGuid(path) })
+                .Where(asset => !string.IsNullOrEmpty(asset.Guid) && packageGuids.Contains(asset.Guid))
+                .Select(asset => asset.Path)
+                .ToArray();
+
+            Assert.That(collisions, Is.Empty, string.Join("\n", collisions));
+        }
+
+        private static string GetPackageRoot()
+        {
+            UnityEditor.PackageManager.PackageInfo package =
+                UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(DansToolboxTheme).Assembly);
+            Assert.That(package, Is.Not.Null);
+            return package.resolvedPath;
+        }
+
+        private static string ReadMetaGuid(string path)
+        {
+            foreach (string line in File.ReadLines(path))
+            {
+                if (line.StartsWith("guid: "))
+                {
+                    return line.Substring(6).Trim();
+                }
+            }
+
+            return string.Empty;
         }
     }
 }

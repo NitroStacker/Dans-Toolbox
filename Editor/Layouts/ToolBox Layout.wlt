@@ -318,7 +318,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4c3f498359fcbe94fa298a38989a2b06, type: 3}
+  m_Script: {fileID: 11500000, guid: 9c77ffd0e02740e18ad35a672c19f110, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DansToolbox.NativeWindowDock.Editor::DansToolbox.EditorTools.NativeWindowDock.NativeWindowDockWindow
   m_MinSize: {x: 520, y: 340}
@@ -368,7 +368,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: db040e6cf641f254e968badbaf507c2b, type: 3}
+  m_Script: {fileID: 11500000, guid: 98ef4dbfde374671b3eb8b26849e3e08, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DansToolbox.RetroSfx.Editor::DansToolbox.EditorTools.Audio.RetroSfxGeneratorWindow
   m_MinSize: {x: 900, y: 650}
@@ -425,7 +425,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: db040e6cf641f254e968badbaf507c2b, type: 3}
+  m_Script: {fileID: 11500000, guid: 98ef4dbfde374671b3eb8b26849e3e08, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DansToolbox.RetroSfx.Editor::DansToolbox.EditorTools.Audio.RetroSfxGeneratorWindow
   m_MinSize: {x: 620, y: 680}
@@ -478,7 +478,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4c3f498359fcbe94fa298a38989a2b06, type: 3}
+  m_Script: {fileID: 11500000, guid: 9c77ffd0e02740e18ad35a672c19f110, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DansToolbox.NativeWindowDock.Editor::DansToolbox.EditorTools.NativeWindowDock.NativeWindowDockWindow
   m_MinSize: {x: 520, y: 340}

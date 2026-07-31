@@ -4,6 +4,13 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.3] - 2026-07-31
+
+### Fixed
+
+- Assigned independent Unity asset GUIDs to the package so it can coexist with shared Retro Song Maker support scripts retained by an existing project.
+- Added regression coverage for duplicate package GUIDs and collisions with assets in the consuming project.
+
 ## [1.1.2] - 2026-07-31
 
 ### Added

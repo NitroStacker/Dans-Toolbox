@@ -4,6 +4,12 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-07-31
+
+### Changed
+
+- Made the permanent manual entry explicit at **Tools > Dans Toolbox > Setup Wizard**.
+
 ## [1.1.0] - 2026-07-31
 
 ### Added

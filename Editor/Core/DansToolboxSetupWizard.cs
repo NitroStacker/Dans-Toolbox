@@ -44,7 +44,7 @@ namespace DansToolbox.Editor
         private WizardStyles styles;
         private DansToolboxThemeId styledTheme = (DansToolboxThemeId)(-1);
 
-        [MenuItem("Tools/Dans Toolbox/Setup", false, -100)]
+        [MenuItem("Tools/Dans Toolbox/Setup Wizard", false, -100)]
         internal static void Open()
         {
             DansToolboxSetupWizard window = GetWindow<DansToolboxSetupWizard>(true);
@@ -246,7 +246,7 @@ namespace DansToolbox.Editor
             }
 
             GUI.Label(new Rect(laterRect.xMax + 12f, row.y, row.width - 310f, row.height),
-                "Reopen this wizard from Tools > Dans Toolbox > Setup.", styles.Small);
+                "Reopen this wizard from Tools > Dans Toolbox > Setup Wizard.", styles.Small);
             if (DrawFlatButton(applyRect, "APPLY SETUP", palette, true))
             {
                 DansToolboxSettings.Apply(selectedTheme, enabledToolIds, useRecommendedLayout);

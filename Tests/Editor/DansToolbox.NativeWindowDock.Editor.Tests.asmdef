@@ -1,0 +1,21 @@
+{
+  "name": "DansToolbox.NativeWindowDock.Editor.Tests",
+  "rootNamespace": "DansToolbox.EditorTools.NativeWindowDock.Tests",
+  "references": [
+    "DansToolbox.NativeWindowDock.Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

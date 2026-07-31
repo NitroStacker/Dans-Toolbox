@@ -1,0 +1,17 @@
+{
+  "name": "com.dans.toolbox",
+  "version": "1.0.0",
+  "displayName": "Dans Toolbox",
+  "description": "A polished Unity Editor toolbox containing Retro SFX and Native Window Dock.",
+  "unity": "6000.0",
+  "keywords": [
+    "editor",
+    "audio",
+    "sfx",
+    "windows",
+    "dock"
+  ],
+  "author": {
+    "name": "Dan"
+  }
+}

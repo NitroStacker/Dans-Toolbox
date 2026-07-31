@@ -15,14 +15,14 @@ The setup wizard opens once after the package is installed. It lets each project
 - Which Dans Toolbox tools are enabled.
 - Whether to apply the packaged **ToolBox Layout** workspace.
 
-The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they can be shared with the project. Reopen the wizard at any time from **Tools > Dans Toolbox > Setup Wizard**.
+The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they can be shared with the project. Reopen the wizard at any time from the Dans Toolbox icon in Unity's main toolbar or from **Tools > Dans Toolbox > Setup Wizard**.
 
 ## Install from Git
 
 After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.1.1
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.1.2
 ```
 
 For local development, use:
@@ -36,13 +36,14 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.1.1"
+    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.1.2"
   }
 }
 ```
 
 ## Open the tools
 
+- **Dans Toolbox icon in the Unity main toolbar**
 - **Tools > Dans Toolbox > Setup Wizard**
 - **Tools > Dans Toolbox > Retro SFX**
 - **Tools > Dans Toolbox > Native Window Dock**

@@ -71,5 +71,11 @@ namespace DansToolbox.Editor.Tests
                 });
             Assert.That(loader, Is.Not.Null);
         }
+
+        [Test]
+        public void ToolbarButton_CanBeCreated()
+        {
+            Assert.That(DansToolboxToolbarButton.Create(), Is.Not.Null);
+        }
     }
 }

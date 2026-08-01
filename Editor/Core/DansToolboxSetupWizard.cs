@@ -50,8 +50,9 @@ namespace DansToolbox.Editor
         private const float OverlayEdgeMargin = 36f;
         private const double SplashDuration = 0.82d;
         private const double StepTransitionDuration = 0.24d;
-        private const double LayoutHandoffDuration = 0.72d;
-        private const double LayoutSettleDuration = 0.28d;
+        private const double LayoutHandoffDuration = 1.65d;
+        private const double LayoutSettleDuration = 0.52d;
+        private const float InstallFadeStart = 0.72f;
         private static readonly string[] StepLabels = { "01  THEME", "02  TOOLS", "03  LAYOUT" };
 
         [SerializeField] private DansToolboxSetupStep currentStep;
@@ -67,7 +68,6 @@ namespace DansToolbox.Editor
         [SerializeField] private bool layoutHandoffActive;
         [SerializeField] private double layoutHandoffStartedAt;
         [SerializeField] private bool layoutApplyStarted;
-        [SerializeField] private double layoutSettleStartedAt;
 
         private WizardStyles styles;
         private DansToolboxThemeId styledTheme = (DansToolboxThemeId)(-1);
@@ -150,7 +150,6 @@ namespace DansToolbox.Editor
             stepTransitionDirection = 1;
             layoutHandoffActive = false;
             layoutApplyStarted = false;
-            layoutSettleStartedAt = 0d;
             Repaint();
         }
 
@@ -161,11 +160,14 @@ namespace DansToolbox.Editor
             DansToolboxPalette palette = DansToolboxTheme.GetPalette(selectedTheme);
             EnsureStyles(palette);
             Rect canvas = new Rect(0f, 0f, position.width, position.height);
-            DrawBackdrop(canvas, palette);
+            DrawBackdrop(canvas, palette, 1f);
+
             Rect panel = CalculatePanelRect(canvas.size);
 
             Event current = Event.current;
-            if (current.type == EventType.MouseDown && !panel.Contains(current.mousePosition))
+            if (!layoutHandoffActive &&
+                current.type == EventType.MouseDown &&
+                !panel.Contains(current.mousePosition))
             {
                 Close();
                 current.Use();
@@ -235,18 +237,25 @@ namespace DansToolbox.Editor
                 height);
         }
 
-        private void DrawBackdrop(Rect canvas, DansToolboxPalette palette)
+        private void DrawBackdrop(Rect canvas, DansToolboxPalette palette, float opacity)
         {
+            Color previousColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, opacity);
             if (backdrop != null)
             {
                 GUI.DrawTexture(canvas, backdrop, ScaleMode.StretchToFill, false);
             }
             else
             {
-                EditorGUI.DrawRect(canvas, palette.Inset);
+                Color fallback = palette.Inset;
+                fallback.a *= opacity;
+                EditorGUI.DrawRect(canvas, fallback);
             }
+            GUI.color = previousColor;
 
-            EditorGUI.DrawRect(canvas, new Color(0.015f, 0.02f, 0.028f, 0.72f));
+            EditorGUI.DrawRect(
+                canvas,
+                new Color(0.015f, 0.02f, 0.028f, 0.72f * opacity));
         }
 
         private static void DrawOverlayPanel(Rect panel, DansToolboxPalette palette)
@@ -295,19 +304,22 @@ namespace DansToolbox.Editor
                     now - layoutHandoffStartedAt >= LayoutHandoffDuration)
                 {
                     layoutApplyStarted = true;
-                    layoutSettleStartedAt = now;
+                    DansToolboxThemeId successTheme = selectedTheme;
                     if (!DansToolboxLayoutInstaller.ApplyRecommendedLayoutNow())
                     {
                         layoutHandoffActive = false;
                         Close();
                         return;
                     }
-                }
-                else if (layoutApplyStarted &&
-                         now - layoutSettleStartedAt >= LayoutSettleDuration)
-                {
-                    layoutHandoffActive = false;
-                    Close();
+
+                    DansToolboxInstallSuccessOverlay.ShowAfter(
+                        successTheme,
+                        LayoutSettleDuration);
+                    if (this != null)
+                    {
+                        layoutHandoffActive = false;
+                        Close();
+                    }
                     return;
                 }
             }
@@ -616,11 +628,11 @@ namespace DansToolbox.Editor
                 layoutHandoffActive = true;
                 layoutHandoffStartedAt = EditorApplication.timeSinceStartup;
                 layoutApplyStarted = false;
-                layoutSettleStartedAt = 0d;
                 Repaint();
                 return;
             }
 
+            DansToolboxInstallSuccessOverlay.ShowAfter(selectedTheme, 0.08d);
             Close();
         }
 
@@ -731,7 +743,6 @@ namespace DansToolbox.Editor
             float progress = Mathf.Clamp01((float)(
                 (EditorApplication.timeSinceStartup - layoutHandoffStartedAt) /
                 LayoutHandoffDuration));
-            float eased = EaseInOutCubic(progress);
             Rect stage = new Rect(
                 Margin + 30f,
                 surfaceHeight * 0.5f - 92f,
@@ -741,10 +752,13 @@ namespace DansToolbox.Editor
             float panelWidth = Mathf.Max(80f, (stage.width - Gap * 2f) / 3f);
             for (int index = 0; index < 3; index++)
             {
+                float staggered = Mathf.Clamp01((progress - index * 0.07f) / 0.86f);
+                float panelEase = EaseInOutCubic(staggered);
                 float destination = stage.x + index * (panelWidth + Gap);
                 float origin = surfaceWidth * 0.5f - panelWidth * 0.5f;
-                float x = Mathf.Lerp(origin, destination, eased);
-                float yOffset = (index - 1) * (1f - eased) * 24f;
+                float x = Mathf.Lerp(origin, destination, panelEase);
+                float arc = Mathf.Sin(panelEase * Mathf.PI) * (index == 1 ? -24f : -40f);
+                float yOffset = (index - 1) * (1f - panelEase) * 30f + arc;
                 Rect panel = new Rect(x, stage.y + yOffset, panelWidth, 78f);
                 DrawPanel(
                     panel,
@@ -753,6 +767,16 @@ namespace DansToolbox.Editor
                 EditorGUI.DrawRect(
                     new Rect(panel.x + 8f, panel.y + 8f, panel.width - 16f, 3f),
                     index == 1 ? palette.Signal : palette.AccentSoft);
+
+                float settle = Mathf.Clamp01((progress - 0.68f - index * 0.035f) / 0.22f);
+                if (settle > 0f)
+                {
+                    Color pulse = index == 1 ? palette.Signal : palette.Accent;
+                    pulse.a = Mathf.Sin(settle * Mathf.PI) * 0.75f;
+                    EditorGUI.DrawRect(
+                        new Rect(panel.x + 1f, panel.yMax - 3f, panel.width - 2f, 2f),
+                        pulse);
+                }
             }
 
             Rect labelRect = new Rect(
@@ -771,6 +795,30 @@ namespace DansToolbox.Editor
                 "ARRANGING WORKSPACE",
                 styles.Splash);
             GUI.EndGroup();
+        }
+
+        internal static float CalculateInstallIconScale(float progress)
+        {
+            progress = Mathf.Clamp01(progress);
+            if (progress <= 0f)
+            {
+                return 0f;
+            }
+
+            if (progress >= 1f)
+            {
+                return 1f;
+            }
+
+            return 1f - Mathf.Exp(-7f * progress) * Mathf.Cos(12f * progress);
+        }
+
+        internal static float CalculateInstallOverlayOpacity(float progress)
+        {
+            float fade = Mathf.Clamp01(
+                (Mathf.Clamp01(progress) - InstallFadeStart) /
+                (1f - InstallFadeStart));
+            return 1f - fade * fade * (3f - 2f * fade);
         }
 
         private static float EaseOutCubic(float value)

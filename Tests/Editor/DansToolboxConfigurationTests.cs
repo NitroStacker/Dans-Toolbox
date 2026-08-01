@@ -193,6 +193,44 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void SetupWizard_InstalledIconSpringOvershootsAndSettles()
+        {
+            float[] samples = Enumerable.Range(0, 101)
+                .Select(index => DansToolboxSetupWizard.CalculateInstallIconScale(index / 100f))
+                .ToArray();
+
+            Assert.That(samples[0], Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(samples.Max(), Is.GreaterThan(1.05f));
+            Assert.That(samples[samples.Length - 1], Is.EqualTo(1f).Within(0.0001f));
+        }
+
+        [Test]
+        public void SetupWizard_InstalledOverlayHoldsThenFadesOut()
+        {
+            Assert.That(
+                DansToolboxSetupWizard.CalculateInstallOverlayOpacity(0.5f),
+                Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(
+                DansToolboxSetupWizard.CalculateInstallOverlayOpacity(0.86f),
+                Is.InRange(0.35f, 0.65f));
+            Assert.That(
+                DansToolboxSetupWizard.CalculateInstallOverlayOpacity(1f),
+                Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void ToolReveal_UsesCinematicDurationAndStaggeredBands()
+        {
+            Assert.That(DansToolboxMotion.RevealDuration, Is.GreaterThanOrEqualTo(1.2d));
+            Assert.That(
+                DansToolboxMotion.CalculateRevealBandProgress(0.2f, 0),
+                Is.GreaterThan(DansToolboxMotion.CalculateRevealBandProgress(0.2f, 3)));
+            Assert.That(
+                DansToolboxMotion.CalculateRevealBandProgress(1f, 3),
+                Is.EqualTo(1f).Within(0.0001f));
+        }
+
+        [Test]
         public void PackageAssets_HaveUniqueGuids()
         {
             string packageRoot = GetPackageRoot();

@@ -23,7 +23,7 @@ namespace DansToolbox.Editor
                 DansToolboxSetupWizard.Open);
         }
 
-        private static Texture2D LoadIcon()
+        internal static Texture2D LoadIcon()
         {
             UnityEditor.PackageManager.PackageInfo package =
                 UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(DansToolboxToolbarButton).Assembly);

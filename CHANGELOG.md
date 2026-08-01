@@ -4,6 +4,17 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-07-31
+
+### Added
+
+- Finish setup with a full-overlay **Toolbox installed!** splash using the real toolbar icon, spring motion, and a unified blur-and-content fade.
+
+### Changed
+
+- Slow tool-tab reveals into a staggered multi-band curtain with a restrained signal scan.
+- Extend the recommended-layout handoff with arcing pane movement, staggered placement, and a short settling pulse before completion.
+
 ## [1.3.1] - 2026-07-31
 
 ### Changed

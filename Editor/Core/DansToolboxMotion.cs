@@ -5,7 +5,8 @@ namespace DansToolbox.Editor
 {
     public static class DansToolboxMotion
     {
-        private const double RevealDuration = 0.28d;
+        internal const double RevealDuration = 1.35d;
+        private const int RevealBands = 4;
 
         public static bool DrawWindowReveal(Rect rect, double startedAt)
         {
@@ -16,25 +17,51 @@ namespace DansToolbox.Editor
                 return false;
             }
 
-            float inverse = 1f - progress;
-            float eased = 1f - inverse * inverse * inverse;
-            float coverWidth = rect.width * (1f - eased);
             DansToolboxPalette palette = DansToolboxTheme.Current;
-            Rect cover = new Rect(rect.xMax - coverWidth, rect.y, coverWidth, rect.height);
-            EditorGUI.DrawRect(cover, palette.Canvas);
-
-            float edgeX = Mathf.Max(rect.x, cover.x - 2f);
-            EditorGUI.DrawRect(new Rect(edgeX, rect.y, 2f, rect.height), palette.Accent);
-            for (int index = 0; index < 7; index++)
+            float bandHeight = rect.height / RevealBands;
+            for (int index = 0; index < RevealBands; index++)
             {
-                float phase = Mathf.Repeat(progress * 1.4f + index * 0.173f, 1f);
-                float y = Mathf.Lerp(rect.y + 10f, rect.yMax - 10f, phase);
-                Color color = index % 3 == 0 ? palette.Signal : palette.Accent;
-                color.a *= Mathf.Sin(phase * Mathf.PI) * 0.78f;
-                EditorGUI.DrawRect(new Rect(edgeX - 5f - index % 2 * 4f, y, 3f, 3f), color);
+                float bandProgress = CalculateRevealBandProgress(progress, index);
+                float coverWidth = rect.width * (1f - EaseOutQuint(bandProgress));
+                float y = rect.y + bandHeight * index;
+                float height = index == RevealBands - 1 ? rect.yMax - y : bandHeight + 1f;
+                Rect cover = new Rect(rect.xMax - coverWidth, y, coverWidth, height);
+                EditorGUI.DrawRect(cover, palette.Canvas);
+
+                if (coverWidth > 0.5f)
+                {
+                    float edgeX = Mathf.Max(rect.x, cover.x - 2f);
+                    Color edge = index % 2 == 0 ? palette.Accent : palette.Signal;
+                    edge.a = Mathf.Lerp(0.9f, 0.25f, bandProgress);
+                    EditorGUI.DrawRect(new Rect(edgeX, y, 2f, height), edge);
+                }
             }
 
+            float scanProgress = Mathf.Clamp01((progress - 0.08f) / 0.78f);
+            float scanX = Mathf.Lerp(rect.x, rect.xMax, EaseOutCubic(scanProgress));
+            Color scan = palette.Signal;
+            scan.a = Mathf.Sin(scanProgress * Mathf.PI) * 0.4f;
+            EditorGUI.DrawRect(new Rect(scanX, rect.y, 1f, rect.height), scan);
+
             return true;
+        }
+
+        internal static float CalculateRevealBandProgress(float progress, int bandIndex)
+        {
+            float delay = Mathf.Clamp(bandIndex, 0, RevealBands - 1) * 0.075f;
+            return Mathf.Clamp01((Mathf.Clamp01(progress) - delay) / (0.82f - delay));
+        }
+
+        private static float EaseOutCubic(float value)
+        {
+            float inverse = 1f - Mathf.Clamp01(value);
+            return 1f - inverse * inverse * inverse;
+        }
+
+        private static float EaseOutQuint(float value)
+        {
+            float inverse = 1f - Mathf.Clamp01(value);
+            return 1f - inverse * inverse * inverse * inverse * inverse;
         }
     }
 }

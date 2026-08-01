@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using DansToolbox.Editor;
 using UnityEditor;
@@ -28,6 +29,8 @@ namespace DansToolbox.EditorTools.BetterInspector
         [SerializeField] private List<Object> history = new List<Object>();
         [SerializeField] private int historyIndex = -1;
         [SerializeField] private List<string> collapsedKeys = new List<string>();
+        [SerializeField] private List<string> collapsedPreviewKeys = new List<string>();
+        [SerializeField] private List<string> expandedReferenceKeys = new List<string>();
 
         private readonly List<BetterInspectorEditorEntry> entries =
             new List<BetterInspectorEditorEntry>();
@@ -67,6 +70,8 @@ namespace DansToolbox.EditorTools.BetterInspector
             revealStartedAt = EditorApplication.timeSinceStartup;
             history ??= new List<Object>();
             collapsedKeys ??= new List<string>();
+            collapsedPreviewKeys ??= new List<string>();
+            expandedReferenceKeys ??= new List<string>();
             lockedTargets ??= Array.Empty<Object>();
             titleContent = new GUIContent(
                 "Better Inspector",
@@ -146,6 +151,26 @@ namespace DansToolbox.EditorTools.BetterInspector
             if (DansToolboxMotion.DrawWindowReveal(canvas, revealStartedAt))
             {
                 Repaint();
+            }
+        }
+
+        private void Update()
+        {
+            foreach (BetterInspectorEditorEntry entry in entries)
+            {
+                try
+                {
+                    if ((entry.Editor != null && entry.Editor.RequiresConstantRepaint()) ||
+                        (entry.PreviewEditor != null && entry.PreviewEditor.RequiresConstantRepaint()))
+                    {
+                        Repaint();
+                        return;
+                    }
+                }
+                catch (Exception)
+                {
+                    // A native editor can become invalid while Unity imports or reloads assets.
+                }
             }
         }
 
@@ -501,7 +526,20 @@ namespace DansToolbox.EditorTools.BetterInspector
         {
             pointerOverContentElement = false;
             pendingComponentContextEntry = null;
-            GUILayout.BeginArea(new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f));
+            Rect inner = new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f);
+            BetterInspectorEditorEntry previewEntry = diagnosticsOnly
+                ? null
+                : entries.FirstOrDefault(entry => ShouldShowEntry(entry) && CanDrawPreview(entry));
+            float previewHeight = previewEntry == null
+                ? 0f
+                : GetPreviewPanelHeight(previewEntry, inner.height);
+            Rect scrollingArea = new Rect(
+                inner.x,
+                inner.y,
+                inner.width,
+                Mathf.Max(1f, inner.height - previewHeight - (previewHeight > 0f ? 5f : 0f)));
+
+            GUILayout.BeginArea(scrollingArea);
             scroll = EditorGUILayout.BeginScrollView(scroll, false, true);
 
             if (targets.Length == 0)
@@ -535,6 +573,13 @@ namespace DansToolbox.EditorTools.BetterInspector
 
             EditorGUILayout.EndScrollView();
             GUILayout.EndArea();
+
+            if (previewEntry != null)
+            {
+                Rect previewRect = new Rect(inner.x, inner.yMax - previewHeight, inner.width, previewHeight);
+                DrawPreview(previewEntry, previewRect, palette);
+                pointerOverContentElement |= previewRect.Contains(Event.current.mousePosition);
+            }
         }
 
         private void DrawEditorCard(BetterInspectorEditorEntry entry, DansToolboxPalette palette)
@@ -589,6 +634,8 @@ namespace DansToolbox.EditorTools.BetterInspector
                 try
                 {
                     DrawEditorBody(entry);
+                    DrawContextActions(entry, palette);
+                    DrawReferenceSummary(entry, palette);
                 }
                 catch (Exception exception)
                 {
@@ -622,11 +669,242 @@ namespace DansToolbox.EditorTools.BetterInspector
             string trimmed = search?.Trim() ?? string.Empty;
             if (string.IsNullOrEmpty(trimmed) || MatchesSearch(trimmed, entry.Title, entry.Type.FullName))
             {
-                entry.Editor.OnInspectorGUI();
+                using (new BetterInspectorEditorVisibilityScope(entry.Editor.targets))
+                {
+                    entry.Editor.OnInspectorGUI();
+                }
                 return;
             }
 
             DrawFilteredProperties(entry.Editor.serializedObject, trimmed);
+        }
+
+        private void DrawContextActions(BetterInspectorEditorEntry entry, DansToolboxPalette palette)
+        {
+            if (entry.Actions.Count == 0)
+            {
+                return;
+            }
+
+            GUILayout.Space(8f);
+            GUILayout.Label("ACTIONS", styles.SectionLabel);
+            int columns = position.width >= 560f ? 3 : position.width >= 380f ? 2 : 1;
+            for (int index = 0; index < entry.Actions.Count; index += columns)
+            {
+                GUILayout.BeginHorizontal();
+                for (int column = 0; column < columns; column++)
+                {
+                    int actionIndex = index + column;
+                    if (actionIndex >= entry.Actions.Count)
+                    {
+                        GUILayout.FlexibleSpace();
+                        continue;
+                    }
+
+                    BetterInspectorAction action = entry.Actions[actionIndex];
+                    if (GUILayout.Button(action.Label.ToUpperInvariant(), styles.SmallButton, GUILayout.Height(24f)))
+                    {
+                        InvokeContextAction(entry, action);
+                    }
+                }
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        private void InvokeContextAction(BetterInspectorEditorEntry entry, BetterInspectorAction action)
+        {
+            Object[] actionTargets = entry.Targets.Where(target => target != null).ToArray();
+            Undo.RecordObjects(actionTargets, action.Label);
+            foreach (Object target in actionTargets)
+            {
+                try
+                {
+                    action.Method.Invoke(target, null);
+                    EditorUtility.SetDirty(target);
+                }
+                catch (TargetInvocationException exception)
+                {
+                    Debug.LogException(exception.InnerException ?? exception, target);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception, target);
+                }
+            }
+            OnObjectsChanged();
+        }
+
+        private void DrawReferenceSummary(BetterInspectorEditorEntry entry, DansToolboxPalette palette)
+        {
+            List<SerializedProperty> references = GetObjectReferenceProperties(entry.Targets);
+            if (references.Count == 0)
+            {
+                return;
+            }
+
+            string key = entry.Key + "::references";
+            bool expanded = expandedReferenceKeys.Contains(key);
+            GUILayout.Space(8f);
+            Rect header = GUILayoutUtility.GetRect(1f, 24f, GUILayout.ExpandWidth(true));
+            EditorGUI.DrawRect(header, palette.Panel);
+            GUI.Label(new Rect(header.x + 8f, header.y + 2f, 18f, 20f), expanded ? "â–¾" : "â–¸", styles.Foldout);
+            GUI.Label(
+                new Rect(header.x + 28f, header.y + 2f, header.width - 36f, 20f),
+                "REFERENCES  Â·  " + references.Count,
+                styles.SectionLabel);
+            if (GUI.Button(header, GUIContent.none, GUIStyle.none))
+            {
+                if (expanded)
+                {
+                    expandedReferenceKeys.Remove(key);
+                }
+                else
+                {
+                    expandedReferenceKeys.Add(key);
+                }
+                expanded = !expanded;
+            }
+
+            if (!expanded)
+            {
+                return;
+            }
+
+            EditorGUI.indentLevel++;
+            foreach (SerializedProperty reference in references)
+            {
+                EditorGUILayout.PropertyField(reference, false);
+            }
+            EditorGUI.indentLevel--;
+            references[0].serializedObject.ApplyModifiedProperties();
+        }
+
+        private static List<SerializedProperty> GetObjectReferenceProperties(Object[] targets)
+        {
+            var result = new List<SerializedProperty>();
+            if (targets == null || targets.Length == 0 || targets.Any(target => target == null))
+            {
+                return result;
+            }
+
+            try
+            {
+                var serializedObject = new SerializedObject(targets);
+                serializedObject.UpdateIfRequiredOrScript();
+                SerializedProperty property = serializedObject.GetIterator();
+                bool enterChildren = true;
+                while (property.NextVisible(enterChildren))
+                {
+                    enterChildren = true;
+                    if (property.name == "m_Script" ||
+                        property.propertyType != SerializedPropertyType.ObjectReference ||
+                        (!property.hasMultipleDifferentValues && property.objectReferenceValue == null))
+                    {
+                        continue;
+                    }
+
+                    result.Add(property.Copy());
+                    enterChildren = false;
+                }
+            }
+            catch (Exception)
+            {
+                // Some native object types do not expose a SerializedObject property tree.
+            }
+            return result;
+        }
+
+        private static bool CanDrawPreview(BetterInspectorEditorEntry entry)
+        {
+            UnityEditor.Editor previewEditor = entry.GetPreviewEditor();
+            if (previewEditor == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                return previewEditor.HasPreviewGUI();
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private float GetPreviewPanelHeight(BetterInspectorEditorEntry entry, float availableHeight)
+        {
+            string key = entry.Key + "::preview";
+            bool expanded = !collapsedPreviewKeys.Contains(key);
+            if (!expanded)
+            {
+                return Mathf.Min(23f, availableHeight);
+            }
+
+            float minimum = Mathf.Min(92f, availableHeight);
+            float maximum = Mathf.Min(280f, availableHeight);
+            return Mathf.Clamp(availableHeight * 0.34f, minimum, maximum);
+        }
+
+        private void DrawPreview(BetterInspectorEditorEntry entry, Rect rect, DansToolboxPalette palette)
+        {
+            UnityEditor.Editor previewEditor = entry.GetPreviewEditor();
+            if (previewEditor == null)
+            {
+                return;
+            }
+
+            string key = entry.Key + "::preview";
+            bool expanded = !collapsedPreviewKeys.Contains(key);
+            GUILayout.BeginArea(rect, styles.Card);
+            GUILayout.BeginHorizontal(EditorStyles.toolbar);
+            bool updated = EditorGUILayout.Foldout(expanded, "PREVIEW", true, styles.SectionLabel);
+            if (updated != expanded)
+            {
+                collapsedPreviewKeys.Remove(key);
+                if (!updated)
+                {
+                    collapsedPreviewKeys.Add(key);
+                }
+                expanded = updated;
+            }
+            if (expanded)
+            {
+                GUILayout.FlexibleSpace();
+                using (new BetterInspectorEditorVisibilityScope(previewEditor.targets))
+                {
+                    previewEditor.OnPreviewSettings();
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            if (!expanded)
+            {
+                GUILayout.EndArea();
+                return;
+            }
+
+            string info = string.Empty;
+            float infoHeight = 18f;
+            Rect previewRect = new Rect(3f, 23f, Mathf.Max(1f, rect.width - 6f), Mathf.Max(1f, rect.height - 26f - infoHeight));
+            EditorGUI.DrawRect(previewRect, palette.Canvas);
+            using (new BetterInspectorEditorVisibilityScope(previewEditor.targets))
+            {
+                if (previewEditor == entry.Editor)
+                {
+                    previewEditor.OnInteractivePreviewGUI(previewRect, styles.PreviewBackground);
+                }
+                else
+                {
+                    previewEditor.DrawPreview(previewRect);
+                }
+                info = previewEditor.GetInfoString();
+            }
+            if (!string.IsNullOrWhiteSpace(info))
+            {
+                GUI.Label(new Rect(6f, rect.height - infoHeight - 2f, rect.width - 12f, infoHeight), info, styles.Path);
+            }
+            GUILayout.EndArea();
         }
 
         private static void DrawFilteredProperties(SerializedObject serializedObject, string query)
@@ -778,6 +1056,10 @@ namespace DansToolbox.EditorTools.BetterInspector
         private static bool EntryMatchesSearch(BetterInspectorEditorEntry entry, string query)
         {
             var haystack = new StringBuilder(entry.Title).Append(' ').Append(entry.Type.FullName);
+            foreach (BetterInspectorAction action in entry.Actions)
+            {
+                haystack.Append(' ').Append(action.Label);
+            }
             try
             {
                 SerializedProperty property = entry.Editor.serializedObject.GetIterator();
@@ -883,12 +1165,93 @@ namespace DansToolbox.EditorTools.BetterInspector
             Type type = targets[0].GetType();
             if (targets.All(target => target != null && target.GetType() == type))
             {
-                UnityEditor.Editor editor = UnityEditor.Editor.CreateEditor(targets);
+                Object[] editorTargets = GetNativeEditorTargets(targets);
+                UnityEditor.Editor editor = UnityEditor.Editor.CreateEditor(editorTargets);
                 if (editor != null)
                 {
-                    entries.Add(new BetterInspectorEditorEntry(type.AssemblyQualifiedName, type, targets, editor));
+                    UnityEditor.Editor previewEditor = editorTargets.SequenceEqual(targets)
+                        ? null
+                        : UnityEditor.Editor.CreateEditor(targets);
+                    entries.Add(new BetterInspectorEditorEntry(
+                        type.AssemblyQualifiedName,
+                        type,
+                        targets,
+                        editor,
+                        previewEditor));
                 }
             }
+        }
+
+        internal static Object[] GetNativeEditorTargets(Object[] targets)
+        {
+            if (targets == null || targets.Length == 0 || targets.Any(target => target == null))
+            {
+                return targets ?? Array.Empty<Object>();
+            }
+
+            var importers = new List<AssetImporter>(targets.Length);
+            Type importerType = null;
+            foreach (Object target in targets)
+            {
+                if (AssetDatabase.IsNativeAsset(target))
+                {
+                    return targets;
+                }
+
+                string path = AssetDatabase.GetAssetPath(target);
+                AssetImporter importer = string.IsNullOrEmpty(path) ? null : AssetImporter.GetAtPath(path);
+                if (importer == null || IsNativeFormatImporter(importer))
+                {
+                    return targets;
+                }
+
+                importerType ??= importer.GetType();
+                if (importer.GetType() != importerType)
+                {
+                    return targets;
+                }
+                importers.Add(importer);
+            }
+            return importers.Cast<Object>().ToArray();
+        }
+
+        internal static bool IsNativeFormatImporter(AssetImporter importer)
+        {
+            return importer != null &&
+                   string.Equals(importer.GetType().Name, "NativeFormatImporter", StringComparison.Ordinal);
+        }
+
+        internal static List<BetterInspectorAction> GetContextActions(Type type)
+        {
+            var actions = new List<BetterInspectorAction>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (Type current = type; current != null && current != typeof(Object); current = current.BaseType)
+            {
+                foreach (MethodInfo method in current.GetMethods(
+                             BindingFlags.Instance |
+                             BindingFlags.Public |
+                             BindingFlags.NonPublic |
+                             BindingFlags.DeclaredOnly))
+                {
+                    if (method.IsAbstract || method.ContainsGenericParameters || method.GetParameters().Length != 0)
+                    {
+                        continue;
+                    }
+
+                    foreach (ContextMenu attribute in method.GetCustomAttributes(typeof(ContextMenu), true).Cast<ContextMenu>())
+                    {
+                        string label = string.IsNullOrWhiteSpace(attribute.menuItem)
+                            ? ObjectNames.NicifyVariableName(method.Name)
+                            : attribute.menuItem;
+                        string identity = method.DeclaringType?.AssemblyQualifiedName + "::" + method.Name + "::" + label;
+                        if (seen.Add(identity))
+                        {
+                            actions.Add(new BetterInspectorAction(label, method));
+                        }
+                    }
+                }
+            }
+            return actions.OrderBy(action => action.Label, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         private static string BuildSignature(Object[] targets)
@@ -1217,6 +1580,10 @@ namespace DansToolbox.EditorTools.BetterInspector
                 {
                     DestroyImmediate(entry.Editor);
                 }
+                if (entry.PreviewEditor != null && entry.PreviewEditor != entry.Editor)
+                {
+                    DestroyImmediate(entry.PreviewEditor);
+                }
             }
             entries.Clear();
         }
@@ -1288,6 +1655,11 @@ namespace DansToolbox.EditorTools.BetterInspector
                     fontStyle = FontStyle.Bold,
                     normal = { textColor = palette.Text, background = MakeTexture(palette.AccentSoft) },
                     hover = { textColor = palette.Text, background = MakeTexture(palette.Accent) }
+                },
+                PreviewBackground = new GUIStyle
+                {
+                    normal = { background = MakeTexture(palette.Canvas) },
+                    padding = new RectOffset(1, 1, 1, 1)
                 }
             };
             styles.ObjectName.clipping = TextClipping.Clip;
@@ -1394,12 +1766,19 @@ namespace DansToolbox.EditorTools.BetterInspector
 
     internal sealed class BetterInspectorEditorEntry
     {
-        internal BetterInspectorEditorEntry(string key, Type type, Object[] targets, UnityEditor.Editor editor)
+        internal BetterInspectorEditorEntry(
+            string key,
+            Type type,
+            Object[] targets,
+            UnityEditor.Editor editor,
+            UnityEditor.Editor previewEditor = null)
         {
             Key = key;
             Type = type;
             Targets = targets;
             Editor = editor;
+            PreviewEditor = previewEditor;
+            Actions = BetterInspectorWindow.GetContextActions(type);
             Title = ObjectNames.NicifyVariableName(type.Name).ToUpperInvariant();
         }
 
@@ -1407,7 +1786,68 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal Type Type { get; }
         internal Object[] Targets { get; }
         internal UnityEditor.Editor Editor { get; }
+        internal UnityEditor.Editor PreviewEditor { get; }
+        internal IReadOnlyList<BetterInspectorAction> Actions { get; }
         internal string Title { get; }
+
+        internal UnityEditor.Editor GetPreviewEditor()
+        {
+            try
+            {
+                if (Editor != null && Editor.HasPreviewGUI())
+                {
+                    return Editor;
+                }
+            }
+            catch (Exception)
+            {
+                // Fall back to the selected object's editor below.
+            }
+            return PreviewEditor;
+        }
+    }
+
+    internal readonly struct BetterInspectorAction
+    {
+        internal BetterInspectorAction(string label, MethodInfo method)
+        {
+            Label = label;
+            Method = method;
+        }
+
+        internal string Label { get; }
+        internal MethodInfo Method { get; }
+    }
+
+    internal sealed class BetterInspectorEditorVisibilityScope : IDisposable
+    {
+        private readonly Object[] targets;
+        private readonly bool[] previousStates;
+
+        internal BetterInspectorEditorVisibilityScope(Object[] editorTargets)
+        {
+            targets = editorTargets?.Where(target => target != null).Distinct().ToArray() ?? Array.Empty<Object>();
+            previousStates = new bool[targets.Length];
+            for (int index = 0; index < targets.Length; index++)
+            {
+                previousStates[index] = InternalEditorUtility.GetIsInspectorExpanded(targets[index]);
+                if (!previousStates[index])
+                {
+                    InternalEditorUtility.SetIsInspectorExpanded(targets[index], true);
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            for (int index = 0; index < targets.Length; index++)
+            {
+                if (targets[index] != null && !previousStates[index])
+                {
+                    InternalEditorUtility.SetIsInspectorExpanded(targets[index], false);
+                }
+            }
+        }
     }
 
     internal sealed class BetterInspectorStyles
@@ -1432,5 +1872,6 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal GUIStyle StatusAccent;
         internal GUIStyle SmallButton;
         internal GUIStyle PrimaryButton;
+        internal GUIStyle PreviewBackground;
     }
 }

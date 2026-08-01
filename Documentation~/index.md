@@ -43,6 +43,10 @@ Better Hierarchy follows Unity's normal Hierarchy shortcuts: **Delete/Backspace*
 
 Open **Tools > Dans Toolbox > Better Inspector**. Better Inspector follows the live Unity selection and renders the same native or third-party custom editors inside compact, themed component cards. The ToolBox workspace places it in the former Inspector dock beside Retro SFX and Native Window Dock.
 
+Native `.mat` and `.asset` files render through their real Unity custom editors. Imported textures, models, audio, scripts, and other source files render through Unity's importer inspectors, including platform overrides and their normal Apply/Revert workflows. A fixed preview host below the scrolling properties preserves each editor's native preview settings, interaction, and information without interfering with the rest of the Editor surface.
+
+Better Inspector adds an Odin-inspired **Actions** group for zero-argument methods marked with Unity's `ContextMenu` attribute. Its collapsible **References** group provides a compact, editable view of live serialized object links while the complete native editor remains available above it.
+
 Use the header circle to lock the current targets. Selection history remains available from the back/forward buttons or **Alt+Left/Right** when unlocked. Star component cards to create a focused favorites view, and collapse cards individually or together when working with component-heavy objects.
 
 The toolbar search matches both component names and serialized field names. A component-name match keeps its complete custom editor. A field-only match switches that card to a focused property view, which is useful for finding a single value on a large component. Press **Ctrl/Cmd+F** to focus search and **Escape** to clear it.

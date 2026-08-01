@@ -4,6 +4,19 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] - 2026-08-01
+
+### Added
+
+- Add Odin-inspired responsive action groups for zero-argument methods marked with Unity's `ContextMenu` attribute.
+- Add collapsible serialized-reference summaries and a persistent native preview panel with preview settings and asset information.
+
+### Fixed
+
+- Render native assets such as Materials through their real Unity custom editors even when Unity stores their Inspector expansion state as collapsed.
+- Render imported assets through their importer inspectors, preserving texture/model/audio/script import settings, Apply/Revert workflows, multi-editing, and custom importer UI.
+- Isolate low-level native asset previews outside the scroll view so texture and render previews cannot corrupt the surrounding Editor surface.
+
 ## [1.7.0] - 2026-08-01
 
 ### Added

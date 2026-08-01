@@ -1,6 +1,9 @@
+using System.IO;
 using System.Linq;
 using DansToolbox.EditorTools.BetterInspector;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace DansToolbox.Editor.Tests
@@ -228,10 +231,93 @@ namespace DansToolbox.Editor.Tests
                     new Vector2(50f, 30f)),
                 Is.False);
         }
+
+        [Test]
+        public void NativeAsset_UsesTheSelectedObjectEditor()
+        {
+            const string path = "Assets/BetterInspectorNativeParityTest.mat";
+            Shader shader = Shader.Find("Standard") ?? Shader.Find("Hidden/InternalErrorShader");
+            Assert.That(shader, Is.Not.Null);
+            var material = new Material(shader);
+            try
+            {
+                AssetDatabase.CreateAsset(material, path);
+
+                Object[] editorTargets = BetterInspectorWindow.GetNativeEditorTargets(
+                    new Object[] { material });
+
+                Assert.That(editorTargets, Has.Length.EqualTo(1));
+                Assert.That(editorTargets[0], Is.SameAs(material));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(path);
+            }
+        }
+
+        [Test]
+        public void ImportedAsset_UsesItsImporterEditorTarget()
+        {
+            const string path = "Assets/BetterInspectorImportedParityTest.txt";
+            try
+            {
+                File.WriteAllText(path, "Better Inspector parity test");
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+                TextAsset asset = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
+
+                Object[] editorTargets = BetterInspectorWindow.GetNativeEditorTargets(
+                    new Object[] { asset });
+
+                Assert.That(editorTargets, Has.Length.EqualTo(1));
+                Assert.That(editorTargets[0], Is.InstanceOf<AssetImporter>());
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(path);
+            }
+        }
+
+        [Test]
+        public void NativeEditorVisibilityScope_ExpandsAndRestoresTarget()
+        {
+            Shader shader = Shader.Find("Standard") ?? Shader.Find("Hidden/InternalErrorShader");
+            var material = new Material(shader);
+            try
+            {
+                InternalEditorUtility.SetIsInspectorExpanded(material, false);
+
+                using (new BetterInspectorEditorVisibilityScope(new Object[] { material }))
+                {
+                    Assert.That(InternalEditorUtility.GetIsInspectorExpanded(material), Is.True);
+                }
+
+                Assert.That(InternalEditorUtility.GetIsInspectorExpanded(material), Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(material);
+            }
+        }
+
+        [Test]
+        public void ContextActions_ExposeAttributedMethodsAsButtons()
+        {
+            var actions = BetterInspectorWindow.GetContextActions(typeof(BetterInspectorActionTestAsset));
+
+            Assert.That(actions.Select(action => action.Label), Does.Contain("Run Test Action"));
+        }
     }
 
     [AddComponentMenu("Better Inspector Tests/Custom Tool")]
     public sealed class BetterInspectorCategorizedTestType
     {
+    }
+
+    public sealed class BetterInspectorActionTestAsset : ScriptableObject
+    {
+        [ContextMenu("Run Test Action")]
+        private void RunTestAction()
+        {
+        }
     }
 }

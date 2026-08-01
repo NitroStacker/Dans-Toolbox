@@ -71,12 +71,15 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ## Better Inspector essentials
 
 - Select GameObjects, components, or assets; Better Inspector follows the live selection while preserving Unity's native and third-party custom editors.
+- Native assets use their complete custom editors, while imported assets use Unity's real importer inspectors with their normal Apply/Revert controls and platform settings.
+- Use the fixed preview panel for Unity's native interactive previews and preview settings; collapse it when you want more editing space.
 - Pin the current target with the header lock, then inspect other selections without losing it. Use the back/forward buttons or Alt+Left/Right to revisit selection history.
 - Search by component name or serialized field name. A component-name match keeps the full custom editor; a field-only match draws a focused serialized-property view.
 - Star frequently used component cards and use the toolbar star to show favorites only. Collapse individual cards or all cards for dense objects.
 - Multi-select GameObjects to edit every component type and duplicate ordinal shared by the selection.
 - Use **+ Component** for a searchable, multi-object Add Component palette.
 - Open a card's `...` menu to copy/paste values, move, remove, or open Unity's complete component context menu.
+- Expand **References** for a compact view of the object's live serialized links. Methods marked with Unity's `ContextMenu` attribute appear as responsive **Actions** buttons.
 - Open `!` diagnostics to find missing scripts and broken object references, ping their owners, and remove missing script slots with Undo.
 - Press Ctrl/Cmd+F to focus search, Escape to clear it, and Alt+Left/Right to move through history.
 

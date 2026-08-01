@@ -37,6 +37,7 @@ namespace DansToolbox.Editor.Tests
             Assert.That(ids, Does.Contain(DansToolboxTools.RetroSfxId));
             Assert.That(ids, Does.Contain(DansToolboxTools.NativeWindowDockId));
             Assert.That(ids, Does.Contain(DansToolboxTools.BetterHierarchyId));
+            Assert.That(ids, Does.Contain(DansToolboxTools.BetterInspectorId));
         }
 
         [Test]
@@ -50,6 +51,8 @@ namespace DansToolbox.Editor.Tests
             Assert.That(layout, Does.Contain("DansToolbox.RetroSfx.Editor"));
             Assert.That(layout, Does.Contain("DansToolbox.NativeWindowDock.Editor"));
             Assert.That(layout, Does.Contain("DansToolbox.BetterHierarchy.Editor"));
+            Assert.That(layout, Does.Contain("DansToolbox.BetterInspector.Editor"));
+            Assert.That(layout, Does.Not.Contain("m_Text: Inspector"));
             Assert.That(layout, Does.Not.Contain("BattleSoccer.EditorTools"));
             Assert.That(layout, Does.Not.Contain("RetroSongArrangerWindow"));
         }

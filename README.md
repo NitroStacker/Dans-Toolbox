@@ -1,10 +1,11 @@
 # Dans Toolbox
 
-Dans Toolbox is a Unity 6 Editor package containing three focused tools:
+Dans Toolbox is a Unity 6 Editor package containing four focused tools:
 
 - **Retro SFX** — create, preview, import, process, and render retro sound effects.
 - **Native Window Dock** — place interactive Windows application windows inside resizable Unity tabs, including multi-panel layouts and crop framing.
 - **Better Hierarchy** — replace Unity's hierarchy with rule styling, collections, diagnostics, visual search, batch actions, and the thumbnail-based Object Atlas.
+- **Better Inspector** — inspect scene objects and assets with searchable component cards, pinned targets, favorites, multi-editing, and diagnostics.
 
 All tools are Editor-only. Native Window Dock is available only in the Windows Editor.
 
@@ -49,6 +50,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - **Tools > Dans Toolbox > Retro SFX**
 - **Tools > Dans Toolbox > Native Window Dock**
 - **Tools > Dans Toolbox > Better Hierarchy**
+- **Tools > Dans Toolbox > Better Inspector**
 
 ## Better Hierarchy essentials
 
@@ -62,6 +64,18 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - Rules, view modes, batch tools, isolation, and the stock Unity Hierarchy fallback live under the `...` menu.
 - Prefab instance menus expose ping, apply, revert, and unpack actions with confirmation for destructive changes.
 - Unity's normal Hierarchy keyboard workflow is preserved, including Delete/Backspace, F2/Return, duplicate, copy/cut/paste, select all, search, frame, Undo/Redo, and create-empty shortcuts.
+
+## Better Inspector essentials
+
+- Select GameObjects, components, or assets; Better Inspector follows the live selection while preserving Unity's native and third-party custom editors.
+- Pin the current target with the header lock, then inspect other selections without losing it. Use the back/forward buttons or Alt+Left/Right to revisit selection history.
+- Search by component name or serialized field name. A component-name match keeps the full custom editor; a field-only match draws a focused serialized-property view.
+- Star frequently used component cards and use the toolbar star to show favorites only. Collapse individual cards or all cards for dense objects.
+- Multi-select GameObjects to edit every component type and duplicate ordinal shared by the selection.
+- Use **+ Component** for a searchable, multi-object Add Component palette.
+- Open a card's `...` menu to copy/paste values, move, remove, or open Unity's complete component context menu.
+- Open `!` diagnostics to find missing scripts and broken object references, ping their owners, and remove missing script slots with Undo.
+- Press Ctrl/Cmd+F to focus search, Escape to clear it, and Alt+Left/Right to move through history.
 
 ## Updating users
 

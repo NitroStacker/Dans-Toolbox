@@ -59,6 +59,7 @@ namespace DansToolbox.Editor
         public const string RetroSfxId = "retro-sfx";
         public const string NativeWindowDockId = "native-window-dock";
         public const string BetterHierarchyId = "better-hierarchy";
+        public const string BetterInspectorId = "better-inspector";
 
         private static readonly IReadOnlyList<DansToolboxToolDescriptor> descriptors =
             new[]
@@ -79,6 +80,12 @@ namespace DansToolbox.Editor
                     BetterHierarchyId,
                     "Better Hierarchy",
                     "Navigate, organize, inspect, and preview scene objects in a visual hierarchy.",
+                    true,
+                    false),
+                new DansToolboxToolDescriptor(
+                    BetterInspectorId,
+                    "Better Inspector",
+                    "Inspect faster with search, pinned targets, component cards, favorites, and diagnostics.",
                     true,
                     false)
             };
@@ -111,6 +118,7 @@ namespace DansToolbox.Editor
         [UnityEngine.SerializeField] private DansToolboxThemeId theme =
             DansToolboxThemeId.SignalOrange;
         [UnityEngine.SerializeField] private List<string> enabledToolIds = new List<string>();
+        [UnityEngine.SerializeField] private List<string> knownToolIds = new List<string>();
         [UnityEngine.SerializeField] private bool recommendedLayoutSelected;
 
         public static bool IsInitialized => instance.initialized;
@@ -171,7 +179,10 @@ namespace DansToolbox.Editor
                 return DansToolboxTools.Find(toolId).DefaultEnabled;
             }
 
-            return settings.enabledToolIds.Contains(toolId);
+            settings.EnsureKnownToolsMigrated();
+            return settings.enabledToolIds.Contains(toolId) ||
+                   (!settings.knownToolIds.Contains(toolId) &&
+                    DansToolboxTools.Find(toolId).DefaultEnabled);
         }
 
         public static void Apply(
@@ -187,6 +198,11 @@ namespace DansToolbox.Editor
             settings.setupRequiredAfterReinstall = false;
             settings.theme = selectedTheme;
             settings.enabledToolIds = new List<string>(enabledTools ?? Array.Empty<string>());
+            settings.knownToolIds = new List<string>();
+            foreach (DansToolboxToolDescriptor tool in DansToolboxTools.All)
+            {
+                settings.knownToolIds.Add(tool.Id);
+            }
             settings.recommendedLayoutSelected = useRecommendedLayout;
             settings.Save(true);
             DansToolboxTheme.NotifyChanged();
@@ -207,6 +223,22 @@ namespace DansToolbox.Editor
             DansToolboxSettings settings = instance;
             settings.setupRequiredAfterReinstall = true;
             settings.Save(true);
+        }
+
+        private void EnsureKnownToolsMigrated()
+        {
+            knownToolIds ??= new List<string>();
+            if (knownToolIds.Count > 0)
+            {
+                return;
+            }
+
+            // Settings written before the catalog tracked known tools belong to
+            // the first three releases. Preserve their explicit on/off choices,
+            // while allowing newly introduced default tools to opt in once.
+            knownToolIds.Add(DansToolboxTools.RetroSfxId);
+            knownToolIds.Add(DansToolboxTools.NativeWindowDockId);
+            knownToolIds.Add(DansToolboxTools.BetterHierarchyId);
         }
     }
 }

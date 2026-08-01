@@ -39,6 +39,24 @@ Use an object's context menu to make it the default parent for new objects and p
 
 Better Hierarchy follows Unity's normal Hierarchy shortcuts: **Delete/Backspace** deletes, **F2/Return** renames, **Ctrl/Cmd+D** duplicates, **Ctrl/Cmd+C/X/V** copies, cuts, and pastes, **Ctrl/Cmd+A** selects all, **Ctrl/Cmd+F** focuses search, and **F** frames the selection. Unity's standard create-empty shortcuts also work. Press **Space** to switch Tree/Atlas.
 
+## Better Inspector
+
+Open **Tools > Dans Toolbox > Better Inspector**. Better Inspector follows the live Unity selection and renders the same native or third-party custom editors inside compact, themed component cards. The ToolBox workspace places it in the former Inspector dock beside Retro SFX and Native Window Dock.
+
+Use the header circle to lock the current targets. Selection history remains available from the back/forward buttons or **Alt+Left/Right** when unlocked. Star component cards to create a focused favorites view, and collapse cards individually or together when working with component-heavy objects.
+
+The toolbar search matches both component names and serialized field names. A component-name match keeps its complete custom editor. A field-only match switches that card to a focused property view, which is useful for finding a single value on a large component. Press **Ctrl/Cmd+F** to focus search and **Escape** to clear it.
+
+Multi-selection creates one multi-object editor for every component type and duplicate ordinal shared by all selected GameObjects. **+ Component** opens a searchable component palette and applies the chosen component to each compatible selected object with Undo.
+
+The Add Component palette mirrors Unity's registered category structure, including nested package and script groups. Category rows use representative native icons, and every component keeps its own Unity icon while browsing or searching. Browse from the category index or type immediately to search every category at once; **Escape** clears search, moves up one category, then closes the palette.
+
+Each card menu exposes favorite, copy/paste values, reorder, remove, and Unity's native component context menu. The `!` view scans selected GameObjects for missing scripts and broken serialized object references. Issues can be pinged, and missing scripts can be removed as one Undoable operation.
+
+Right-click blank space below the component cards to open Unity's native Inspector menu. A **Better Inspector** submenu adds expand/collapse, favorites, diagnostics, target locking, refresh, search cleanup, and access to the stock Inspector without hiding Unity or package-added commands.
+
+Right-click a component card to open that component's complete Unity context menu with an additional **Better Inspector** submenu. Native property-field menus retain priority, while unclaimed card space provides favorite, collapse, isolate, diagnostics, and refresh actions.
+
 ## Package updates
 
 Releases use the version in `package.json` and a matching Git tag. See the repository README for release and user-update instructions.

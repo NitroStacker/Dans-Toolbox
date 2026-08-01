@@ -4,6 +4,28 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-07-31
+
+### Added
+
+- Add **Better Inspector** as a fourth selectable Dans Toolbox tool and replace the stock Inspector in the recommended ToolBox layout.
+- Add target locking, selection history, component favorites, collapse controls, and responsive component cards.
+- Add component-and-property search that preserves full native and third-party custom editors until a focused field query is active.
+- Add multi-object component editing for components shared by every selected GameObject.
+- Add a searchable Add Component palette with common components surfaced before a query is entered.
+- Organize the Better Inspector Add Component palette by Unity's registered component categories, with nested navigation and global search.
+- Preserve native component icons throughout category browsing and use representative component icons in the category index.
+- Add missing-script and broken-reference diagnostics with ping and Undoable missing-script repair.
+- Add component copy, paste, reorder, remove, and native context-menu access from every card.
+
+### Changed
+
+- Track known setup tools so newly introduced default tools opt in for existing projects without re-enabling tools users previously disabled.
+- Align the Better Inspector Add Component action with the Layer control's header column.
+- Extend Unity's native empty-Inspector context menu with Better Inspector display, locking, refresh, search, and stock-Inspector actions.
+- Extend Unity's native component context menu from component-card right-clicks with favorite, collapse, isolate, diagnostics, and refresh actions.
+- Bump the package development version to `1.6.0`.
+
 ## [1.5.0] - 2026-07-31
 
 ### Added

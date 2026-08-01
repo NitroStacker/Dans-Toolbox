@@ -4,7 +4,8 @@
   "references": [
     "DansToolbox.Core.Editor",
     "DansToolbox.NativeWindowDock.Editor",
-    "DansToolbox.BetterHierarchy.Editor"
+    "DansToolbox.BetterHierarchy.Editor",
+    "DansToolbox.BetterInspector.Editor"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

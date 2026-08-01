@@ -100,6 +100,8 @@ namespace DansToolbox.Editor
                 DansToolboxTools.NativeWindowDockId);
             bool hierarchyEnabled = DansToolboxSettings.IsToolEnabled(
                 DansToolboxTools.BetterHierarchyId);
+            bool inspectorEnabled = DansToolboxSettings.IsToolEnabled(
+                DansToolboxTools.BetterInspectorId);
 
             foreach (EditorWindow window in Resources.FindObjectsOfTypeAll<EditorWindow>())
             {
@@ -109,7 +111,9 @@ namespace DansToolbox.Editor
                     (!dockEnabled &&
                      fullName == "DansToolbox.EditorTools.NativeWindowDock.NativeWindowDockWindow") ||
                     (!hierarchyEnabled &&
-                     fullName == "DansToolbox.EditorTools.BetterHierarchy.BetterHierarchyWindow"))
+                     fullName == "DansToolbox.EditorTools.BetterHierarchy.BetterHierarchyWindow") ||
+                    (!inspectorEnabled &&
+                     fullName == "DansToolbox.EditorTools.BetterInspector.BetterInspectorWindow"))
                 {
                     window.Close();
                 }

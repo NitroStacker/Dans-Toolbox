@@ -58,6 +58,7 @@ namespace DansToolbox.Editor
     {
         public const string RetroSfxId = "retro-sfx";
         public const string NativeWindowDockId = "native-window-dock";
+        public const string BetterHierarchyId = "better-hierarchy";
 
         private static readonly IReadOnlyList<DansToolboxToolDescriptor> descriptors =
             new[]
@@ -73,7 +74,13 @@ namespace DansToolbox.Editor
                     "Native Window Dock",
                     "Embed interactive Windows applications in resizable Unity tabs.",
                     true,
-                    true)
+                    true),
+                new DansToolboxToolDescriptor(
+                    BetterHierarchyId,
+                    "Better Hierarchy",
+                    "Navigate, organize, inspect, and preview scene objects in a visual hierarchy.",
+                    true,
+                    false)
             };
 
         public static IReadOnlyList<DansToolboxToolDescriptor> All => descriptors;

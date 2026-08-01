@@ -4,6 +4,34 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-07-31
+
+### Added
+
+- Add **Better Hierarchy** as a third selectable Dans Toolbox tool and replace the stock Hierarchy in the recommended layout when enabled.
+- Add rule-driven row colors, icons, badges, headers, tree guides, component mini-inspectors, hover actions, favorites, selection history, scene navigation, Prefab Mode support, and visual query filters.
+- Add the cached-thumbnail **Object Atlas** for scene objects, branches, favorites, recents, and drag-or-double-click prefab placement.
+- Add both virtual collections and Undoable Transform-parent collections.
+- Add incremental scene diagnostics for missing scripts and references, broken prefabs, transform hazards, deep trees, inactive parents, duplicate listeners, EventSystems and Main Cameras, and organizer candidates.
+- Add batch rename, state, sorting, prefab replacement, and component-copy workflows.
+- Add Clean, Production, Debug, Art, Level Design, and Custom view modes.
+- Add saved searches, default parenting, prefab override badges, and safe apply, revert, and unpack actions.
+
+### Changed
+
+- Restore Unity's complete native Hierarchy context menu for object and blank-row clicks, including editing, selection, prefab, creation, Properties, and package-added commands.
+- Deselect on empty-space clicks and add density-safe centered row content with Retro SFX hover states.
+- Pin the Better Hierarchy working canvas to `#1B1C1D`.
+- Match native Hierarchy keyboard editing for delete, rename, duplicate, copy, cut, paste, select all, frame, search, and empty-object creation shortcuts.
+- Remove virtual or Parent collection members directly from their row, with batch removal from virtual collection menus and world-transform preservation for Parent members.
+- Include Better Hierarchy in the shared staggered reveal when the wizard applies the workspace.
+- Rename the recommended workspace to **ToolBox**.
+- Keep virtual collections collapsed when scene or Inspector selection sync reveals an object that also belongs to a collection.
+- Confirm collection deletion with separate keep-items and delete-all paths for both virtual and Parent collections, including Undo and world-transform preservation.
+- Delete empty virtual and Parent collections immediately without showing a confirmation popup.
+- Place Better Hierarchy's object, collection, and scene-specific actions first, above Unity's live package-aware menus, so the additional controls are immediately visible.
+- Stabilize expansion with persistent row identities, non-expanding selection synchronization, and temporary search expansion that restores the user's previous tree state.
+
 ## [1.4.0] - 2026-07-31
 
 ### Added
@@ -36,7 +64,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Fixed
 
-- Preserve Unity's existing native main window during layout loading so applying ToolBox Layout no longer briefly minimizes and maximizes the Editor.
+- Preserve Unity's existing native main window during layout loading so applying ToolBox no longer briefly minimizes and maximizes the Editor.
 
 ## [1.2.1] - 2026-07-31
 
@@ -85,7 +113,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - First-install setup wizard with project-level settings.
 - Signal Orange, Neon Cyan, and Arcade Violet color themes shared by both tools.
 - Per-tool enablement designed to scale as more Dans Toolbox tools are added.
-- Optional packaged ToolBox Layout with safe Unity 6 layout loading.
+- Optional packaged ToolBox workspace with safe Unity 6 layout loading.
 
 ### Changed
 

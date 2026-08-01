@@ -3,7 +3,8 @@
   "rootNamespace": "DansToolbox.Editor.Tests",
   "references": [
     "DansToolbox.Core.Editor",
-    "DansToolbox.NativeWindowDock.Editor"
+    "DansToolbox.NativeWindowDock.Editor",
+    "DansToolbox.BetterHierarchy.Editor"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

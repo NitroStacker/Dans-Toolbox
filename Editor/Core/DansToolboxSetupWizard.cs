@@ -524,7 +524,7 @@ namespace DansToolbox.Editor
                 recommended);
             GUI.Label(
                 new Rect(rect.x + 14f, rect.yMax - 48f, rect.width - 48f, 28f),
-                recommended ? "TOOLBOX LAYOUT" : "KEEP CURRENT",
+                recommended ? "TOOLBOX" : "KEEP CURRENT",
                 styles.CardTitle);
 
             if (selected)

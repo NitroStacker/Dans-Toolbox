@@ -36,6 +36,7 @@ namespace DansToolbox.Editor.Tests
 
             Assert.That(ids, Does.Contain(DansToolboxTools.RetroSfxId));
             Assert.That(ids, Does.Contain(DansToolboxTools.NativeWindowDockId));
+            Assert.That(ids, Does.Contain(DansToolboxTools.BetterHierarchyId));
         }
 
         [Test]
@@ -43,10 +44,12 @@ namespace DansToolbox.Editor.Tests
         {
             string path = DansToolboxLayoutInstaller.GetLayoutPath();
             Assert.That(File.Exists(path), Is.True, path);
+            Assert.That(Path.GetFileName(path), Is.EqualTo("ToolBox.wlt"));
 
             string layout = File.ReadAllText(path);
             Assert.That(layout, Does.Contain("DansToolbox.RetroSfx.Editor"));
             Assert.That(layout, Does.Contain("DansToolbox.NativeWindowDock.Editor"));
+            Assert.That(layout, Does.Contain("DansToolbox.BetterHierarchy.Editor"));
             Assert.That(layout, Does.Not.Contain("BattleSoccer.EditorTools"));
             Assert.That(layout, Does.Not.Contain("RetroSongArrangerWindow"));
         }

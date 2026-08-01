@@ -9,7 +9,7 @@ namespace DansToolbox.Editor
 {
     internal static class DansToolboxLayoutInstaller
     {
-        private const string LayoutRelativePath = "Editor/Layouts/ToolBox Layout.wlt";
+        private const string LayoutRelativePath = "Editor/Layouts/ToolBox.wlt";
 
         internal static string GetLayoutPath()
         {
@@ -86,7 +86,7 @@ namespace DansToolbox.Editor
             }
             catch (Exception exception)
             {
-                Debug.LogError("Dans Toolbox could not apply ToolBox Layout: " +
+                Debug.LogError("Dans Toolbox could not apply ToolBox: " +
                                Unwrap(exception).Message);
                 return false;
             }
@@ -98,6 +98,8 @@ namespace DansToolbox.Editor
                 DansToolboxTools.RetroSfxId);
             bool dockEnabled = DansToolboxSettings.IsToolEnabled(
                 DansToolboxTools.NativeWindowDockId);
+            bool hierarchyEnabled = DansToolboxSettings.IsToolEnabled(
+                DansToolboxTools.BetterHierarchyId);
 
             foreach (EditorWindow window in Resources.FindObjectsOfTypeAll<EditorWindow>())
             {
@@ -105,7 +107,9 @@ namespace DansToolbox.Editor
                 if ((!retroEnabled &&
                      fullName == "DansToolbox.EditorTools.Audio.RetroSfxGeneratorWindow") ||
                     (!dockEnabled &&
-                     fullName == "DansToolbox.EditorTools.NativeWindowDock.NativeWindowDockWindow"))
+                     fullName == "DansToolbox.EditorTools.NativeWindowDock.NativeWindowDockWindow") ||
+                    (!hierarchyEnabled &&
+                     fullName == "DansToolbox.EditorTools.BetterHierarchy.BetterHierarchyWindow"))
                 {
                     window.Close();
                 }

@@ -1,11 +1,13 @@
 # Dans Toolbox
 
-Dans Toolbox is a Unity 6 Editor package containing four focused tools:
+Dans Toolbox is a Unity 6 Editor package containing five focused tools:
 
 - **Retro SFX** — create, preview, import, process, and render retro sound effects.
 - **Native Window Dock** — place interactive Windows application windows inside resizable Unity tabs, including multi-panel layouts and crop framing.
 - **Better Hierarchy** — replace Unity's hierarchy with rule styling, collections, diagnostics, visual search, batch actions, and the thumbnail-based Object Atlas.
 - **Better Inspector** — inspect scene objects and assets with searchable component cards, pinned targets, favorites, multi-editing, and diagnostics.
+
+- **Better Project** — browse assets with visual rules, smart collections, rich previews, health diagnostics, batch actions, and dependency impact tracing.
 
 All tools are Editor-only. Native Window Dock is available only in the Windows Editor.
 
@@ -24,7 +26,7 @@ The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they ca
 After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.5.0
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.7.0
 ```
 
 For local development, use:
@@ -38,7 +40,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.5.0"
+    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.7.0"
   }
 }
 ```
@@ -51,6 +53,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - **Tools > Dans Toolbox > Native Window Dock**
 - **Tools > Dans Toolbox > Better Hierarchy**
 - **Tools > Dans Toolbox > Better Inspector**
+- **Tools > Dans Toolbox > Better Project**
 
 ## Better Hierarchy essentials
 
@@ -76,6 +79,18 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - Open a card's `...` menu to copy/paste values, move, remove, or open Unity's complete component context menu.
 - Open `!` diagnostics to find missing scripts and broken object references, ping their owners, and remove missing script slots with Undo.
 - Press Ctrl/Cmd+F to focus search, Escape to clear it, and Alt+Left/Right to move through history.
+
+## Better Project essentials
+
+- **Browse / Library / Impact** switches between folders, virtual workspaces, and asset relationships.
+- Browse in list, grid, details, or split-pane views with breadcrumbs, back/forward history, pinned folders, previews, sub-assets, and native drag/drop.
+- Color and badge assets manually or through project-shared rules for path, type, extension, label, package, folder, and diagnostic matches.
+- Search accepts fuzzy terms plus `t:`, `ext:`, `path:`, `l:`, `size:`, `modified:`, `ref:`, and `is:folder`, `is:package`, `is:favorite`, `is:problem`, or `is:unused` filters. Prefix a term with `-` to exclude it.
+- Smart collections preserve saved queries; manual collections group assets without moving them on disk.
+- Library health views find broken imports, missing scripts or shaders, oversized assets, empty folders, unused candidates, and exact duplicate file content.
+- Impact maps direct dependencies and indexed reverse references, estimates build use, collects or exports dependencies, previews safe deletion impact, and can replace serialized references with a dry-run scan.
+- Batch actions rename with preview, apply labels, move assets, and apply compatible importer presets.
+- Native Project shortcuts are preserved, including F2, Delete, Enter, Backspace, Ctrl/Cmd+A/C/X/V/D/F, and Alt+Left/Right. The stock Project window remains available from `...`.
 
 ## Updating users
 

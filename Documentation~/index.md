@@ -57,6 +57,16 @@ Right-click blank space below the component cards to open Unity's native Inspect
 
 Right-click a component card to open that component's complete Unity context menu with an additional **Better Inspector** submenu. Native property-field menus retain priority, while unclaimed card space provides favorite, collapse, isolate, diagnostics, and refresh actions.
 
+## Better Project
+
+Open **Tools > Dans Toolbox > Better Project**. Browse assets in compact list, visual grid, sortable details, or split-pane views. The ToolBox workspace places Better Project in the stock Project dock and keeps **Unity Project Window** available from the `...` menu.
+
+Use **Browse** for folders, history, pinned locations, previews, sub-assets, drag/drop, and familiar file operations. Use **Library** for favorites, recents, saved searches, smart or manual collections, exact-content duplicates, oversized assets, issues, and unused candidates. Use **Impact** to navigate dependencies and reverse references, assess likely build use, collect or export a dependency set, replace serialized references, or inspect deletion impact.
+
+Rules stored in `ProjectSettings/BetterProjectSettings.asset` color and badge assets by path, name, type, extension, label, package, folder, diagnostic, or exact asset. Personal favorites and navigation history are stored under `UserSettings`. Search supports fuzzy text and `t:`, `ext:`, `path:`, `l:`, `size:`, `modified:`, `ref:`, and `is:` filters.
+
+Better Project requests previews only for visible assets and builds its reverse-reference index incrementally. Closed scenes are reported by Impact but intentionally excluded from automatic reference replacement; open and review those scene references explicitly.
+
 ## Package updates
 
 Releases use the version in `package.json` and a matching Git tag. See the repository README for release and user-update instructions.

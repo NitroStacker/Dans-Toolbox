@@ -4,6 +4,22 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-08-01
+
+### Added
+
+- Add **Better Project** as a fifth selectable tool and replace the stock Project tab in the recommended ToolBox layout.
+- Add Browse, Library, and Impact surfaces with folder history, breadcrumbs, pinned locations, list/grid/details views, split panes, previews, sub-assets, and selection synchronization.
+- Add project-shared rule colors, icons, badges, saved searches, smart collections, and manual collections without moving assets.
+- Add fuzzy structured search, lazy asset diagnostics, exact-content duplicate discovery, build-use hints, optional Addressables and version-control metadata, and incremental reverse-reference indexing.
+- Add dependency mapping, reference replacement with a dry-run scan, dependency collection/export, safe deletion impact, two-asset comparison, and rich type/import metadata.
+- Add batch rename previews, labels, moves, importer presets, drag/drop, native keyboard parity, and the stock Unity Project fallback.
+
+### Changed
+
+- Extend the shared setup catalog, disabled-tool cleanup, reveal animation, documentation, tests, and package metadata for Better Project.
+- Bump the package development version to `1.7.0`.
+
 ## [1.6.0] - 2026-07-31
 
 ### Added

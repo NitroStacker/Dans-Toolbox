@@ -1,8 +1,8 @@
 {
   "name": "com.dans.toolbox",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "displayName": "Dans Toolbox",
-  "description": "A polished Unity Editor toolbox containing Retro SFX, Native Window Dock, Better Hierarchy, and Better Inspector.",
+  "description": "A polished Unity Editor toolbox containing Retro SFX, Native Window Dock, Better Hierarchy, Better Inspector, and Better Project.",
   "unity": "6000.0",
   "keywords": [
     "editor",
@@ -12,7 +12,10 @@
     "dock",
     "hierarchy",
     "inspector",
-    "scene"
+    "scene",
+    "project",
+    "assets",
+    "browser"
   ],
   "author": {
     "name": "Dan"

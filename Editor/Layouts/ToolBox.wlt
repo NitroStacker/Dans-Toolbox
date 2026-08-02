@@ -302,13 +302,14 @@ MonoBehaviour:
     height: 1284.6666
   m_MinSize: {x: 621, y: 706}
   m_MaxSize: {x: 4001, y: 4026}
-  m_ActualView: {fileID: 15}
+  m_ActualView: {fileID: 26}
   m_Panes:
   - {fileID: 25}
   - {fileID: 15}
   - {fileID: 16}
-  m_Selected: 1
-  m_LastSelected: 0
+  - {fileID: 26}
+  m_Selected: 3
+  m_LastSelected: 1
 --- !u!114 &13
 MonoBehaviour:
   m_ObjectHideFlags: 52
@@ -2235,3 +2236,46 @@ MonoBehaviour:
   history: []
   historyIndex: -1
   collapsedKeys: []
+--- !u!114 &26
+MonoBehaviour:
+  m_ObjectHideFlags: 52
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6dfb152b09c44582a56b5b156658d169, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DansToolbox.BetterScene.Editor::DansToolbox.EditorTools.BetterScene.BetterSceneWindow
+  m_MinSize: {x: 300, y: 300}
+  m_MaxSize: {x: 4000, y: 4000}
+  m_TitleContent:
+    m_Text: Better Scene
+    m_Image: {fileID: 8634526014445323508, guid: 0000000000000000d000000000000000, type: 0}
+    m_Tooltip: 
+    m_TextWithWhitespace: "Better Scene\u200B"
+  m_Pos:
+    serializedVersion: 2
+    x: 1826
+    y: 86
+    width: 731.6666
+    height: 1258.6666
+  m_SerializedDataModeController:
+    m_DataMode: 0
+    m_PreferredDataMode: 0
+    m_SupportedDataModes: 
+    isAutomatic: 1
+  m_ViewDataDictionary: {fileID: 0}
+  m_OverlayCanvas:
+    m_LastAppliedPresetName: Default
+    m_SaveData: []
+    m_ContainerData: []
+    m_DynamicPanelContainerData: []
+    m_OverlaysVisible: 1
+    m_DynamicPanelBehavior: 0
+  scroll: {x: 0, y: 0}
+  replacementAsset: {fileID: 0}
+  bookmarkName: VIEW
+  presetName: LAYERS
+  showAdvanced: 0

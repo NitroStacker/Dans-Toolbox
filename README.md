@@ -109,6 +109,17 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - Ctrl/Cmd+F focuses search, Ctrl/Cmd+L clears, Enter opens source, arrows move selection, and Escape clears the query. Native stack-trace settings, Error Pause, Editor/Player logs, and the stock Console remain available from `...`.
 - Player code may use `DansToolbox.BetterConsole.Log`, `.Warning`, `.Error`, `.Exception`, `.Property`, and `.Tag` for channels and structured values. These calls still write to Unity's normal logger.
 
+## Better Scene
+
+Open it from `Tools > Dans Toolbox > Better Scene` and keep the native Scene view beside it. Better Scene adds four compact workflows without replacing Unity's renderer:
+
+- **Select** provides selection history, focus/isolate/hide/lock actions, active-object alignment, distribution, transform snapping, grounding, deterministic scatter, prefab replacement, reversible visibility bands, layer presets, Scene-camera bookmarks, and camera jumps.
+- **Place** accepts prefabs, model GameObjects, sprites, meshes, and audio clips. Pick an asset or drag it from Better Project into Scene, preview the target, and place with free, grid, surface, or vertex snapping, optional normal alignment, parenting, and repeat placement.
+- **Measure** provides live surface-aware distance and delta measurement with copyable values.
+- **Review** overlays bounds, pivots, missing scripts/references, prefab overrides, inactive objects, and related Better Console diagnostics directly in Scene.
+
+Alt+1 through Alt+4 switch modes. F frames the selection and Escape exits an active spatial mode. Visibility filters preserve the previous hidden, picking, visible-layer, and locked-layer state so Restore returns to the exact working context.
+
 ## Updating users
 
 Use semantic versions and matching Git tags. For each release:

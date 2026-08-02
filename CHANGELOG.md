@@ -4,6 +4,17 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] - 2026-08-02
+
+### Added
+
+- Add Better Scene with Select, Place, Measure, and Review workflows plus a compact Scene-view overlay.
+- Add selection history, framing, isolation, hide/picking controls, active-object alignment, distribution, transform snapping, grounding, scatter, and Undoable prefab replacement.
+- Add prefab/model, sprite, mesh, and audio placement from Better Project with free, grid, surface, and vertex snapping, normal alignment, parenting, repeat placement, and live previews.
+- Add surface-aware measurement, saved Scene-camera bookmarks, camera jumps, reversible category visibility bands, and saved visible/locked layer presets.
+- Add bounds, pivot, missing-script, missing-reference, prefab-override, inactive-object, and Better Console diagnostic signals in both Better Scene and the Scene view.
+- Add Better Scene to the Toolbox setup catalog, recommended layout, shared themes, shortcuts, documentation, and EditMode coverage.
+
 ## [1.9.0] - 2026-08-02
 
 ### Added

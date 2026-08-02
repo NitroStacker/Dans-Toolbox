@@ -40,6 +40,7 @@ namespace DansToolbox.Editor.Tests
             Assert.That(ids, Does.Contain(DansToolboxTools.BetterInspectorId));
             Assert.That(ids, Does.Contain(DansToolboxTools.BetterProjectId));
             Assert.That(ids, Does.Contain(DansToolboxTools.BetterConsoleId));
+            Assert.That(ids, Does.Contain(DansToolboxTools.BetterSceneId));
         }
 
         [Test]
@@ -56,6 +57,7 @@ namespace DansToolbox.Editor.Tests
             Assert.That(layout, Does.Contain("DansToolbox.BetterInspector.Editor"));
             Assert.That(layout, Does.Contain("DansToolbox.BetterProject.Editor"));
             Assert.That(layout, Does.Contain("DansToolbox.BetterConsole.Editor"));
+            Assert.That(layout, Does.Contain("DansToolbox.BetterScene.Editor"));
             Assert.That(layout, Does.Not.Contain("m_Text: Console"));
             Assert.That(layout, Does.Not.Contain("m_Text: Inspector"));
             Assert.That(layout, Does.Not.Contain("BattleSoccer.EditorTools"));

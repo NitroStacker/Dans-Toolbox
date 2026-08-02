@@ -98,6 +98,12 @@ DansToolbox.BetterConsole.Warning(
 
 The same call still reaches `Debug.unityLogger`, so player logs and Unity's native Console retain the message.
 
+## Better Scene
+
+Open **Tools > Dans Toolbox > Better Scene** beside Unity's native Scene view. Its four modes keep spatial authoring compact: Select handles focus, isolation, alignment, distribution, snapping, grounding, scatter, replacement, visibility, and saved views; Place previews and creates prefabs, models, sprites, meshes, or audio from Better Project; Measure captures surface-aware distance and delta; Review shows bounds, pivots, missing references, prefab changes, inactive objects, and related Better Console signals.
+
+Visibility bands preserve the pre-filter hidden and picking state, along with visible and locked layer masks. Scene-camera bookmarks retain scene path, pivot, rotation, size, projection, and 2D mode. Alt+1 through Alt+4 switch modes, F frames the selection, and Escape leaves an active spatial workflow.
+
 ## Package updates
 
 Releases use the version in `package.json` and a matching Git tag. See the repository README for release and user-update instructions.

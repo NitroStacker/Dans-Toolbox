@@ -71,6 +71,31 @@ Rules stored in `ProjectSettings/BetterProjectSettings.asset` color and badge as
 
 Better Project requests previews only for visible assets and builds its reverse-reference index incrementally. Closed scenes are reported by Impact but intentionally excluded from automatic reference replacement; open and review those scene references explicitly.
 
+## Better Console
+
+Open **Tools > Dans Toolbox > Better Console**. The ToolBox workspace places it where Unity's Console normally lives; the native Console remains available from the `...` menu.
+
+**Live** is a virtualized stream with severity filters, optional timestamps, follow, pause, Error Pause, and signature-based Collapse. **Issues** groups changing instances of the same problem, shows hit rate and session spread, and persists New, Seen, Acknowledged, Muted, or Resolved state with bookmarks and notes. **Sessions** records Editor, compile, Play Mode, build, test-like, and remote activity and compares each selected session with the previous session of its kind.
+
+Search supports plain text, quoted phrases, exclusions prefixed with `-`, and optional `/regex/`. Structured fields include `sev:`, `type:` or `cat:`, `source:`, `device:`, `file:`, `scene:`, `session:`, `channel:`, `tag:`, `has:stack`, `has:file`, `has:context`, `has:properties`, `is:remote`, `is:structured`, `is:bookmarked`, and triage states such as `is:muted`. Use `before:` or `after:` with a local date/time.
+
+The detail pane opens source frames, pings object context, shows structured properties and stack frames, stores issue notes, copies full entries, and creates an evidence-bounded fix prompt only when **FIX** is pressed. Visible results or an individual session can be exported as JSON or Markdown.
+
+Better Console always captures Unity's public threaded log callback. On supported Unity versions, an isolated reflection bridge also imports native Console history such as compiler and importer messages; if Unity changes that internal API, callback capture continues. History is bounded and cached below `Library/DansToolbox/BetterConsole`, while shared saved views, mute rules, triage, bookmarks, and notes live in `ProjectSettings/BetterConsoleSettings.asset`.
+
+Runtime code can opt into channels and properties without depending on UnityEditor:
+
+```csharp
+DansToolbox.BetterConsole.Warning(
+    "Server retry",
+    "NET",
+    gameObject,
+    DansToolbox.BetterConsole.Property("attempt", retryCount),
+    DansToolbox.BetterConsole.Tag("retry"));
+```
+
+The same call still reaches `Debug.unityLogger`, so player logs and Unity's native Console retain the message.
+
 ## Package updates
 
 Releases use the version in `package.json` and a matching Git tag. See the repository README for release and user-update instructions.

@@ -1,0 +1,19 @@
+{
+  "name": "DansToolbox.BetterConsole.Editor",
+  "rootNamespace": "DansToolbox.EditorTools.BetterConsole",
+  "references": [
+    "DansToolbox.Core.Editor",
+    "DansToolbox.BetterConsole.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

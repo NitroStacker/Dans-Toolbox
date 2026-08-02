@@ -2098,17 +2098,17 @@ MonoBehaviour:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
-  m_EditorHideFlags: 1
-  m_Script: {fileID: 12003, guid: 0000000000000000e000000000000000, type: 0}
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c2ba807f9294b709a47422ac8b7a7cb, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
-  m_MinSize: {x: 100, y: 100}
+  m_EditorClassIdentifier: DansToolbox.BetterConsole.Editor::DansToolbox.EditorTools.BetterConsole.BetterConsoleWindow
+  m_MinSize: {x: 420, y: 260}
   m_MaxSize: {x: 4000, y: 4000}
   m_TitleContent:
-    m_Text: Console
+    m_Text: Better Console
     m_Image: {fileID: -4950941429401207979, guid: 0000000000000000d000000000000000, type: 0}
     m_Tooltip: 
-    m_TextWithWhitespace: "Console\u200B"
+    m_TextWithWhitespace: "Better Console\u200B"
   m_Pos:
     serializedVersion: 2
     x: 1.3333334
@@ -2128,6 +2128,17 @@ MonoBehaviour:
     m_DynamicPanelContainerData: []
     m_OverlaysVisible: 1
     m_DynamicPanelBehavior: 0
+  surface: 0
+  queryText: 
+  selectedEntryId: 0
+  selectedSignature: 
+  selectedSessionId: 
+  showLogs: 1
+  showWarnings: 1
+  showErrors: 1
+  includeMuted: 0
+  listScroll: {x: 0, y: 0}
+  detailScroll: {x: 0, y: 0}
 --- !u!114 &24
 MonoBehaviour:
   m_ObjectHideFlags: 52

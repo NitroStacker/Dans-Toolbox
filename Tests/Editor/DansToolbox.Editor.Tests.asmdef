@@ -6,7 +6,8 @@
     "DansToolbox.NativeWindowDock.Editor",
     "DansToolbox.BetterHierarchy.Editor",
     "DansToolbox.BetterInspector.Editor",
-    "DansToolbox.BetterProject.Editor"
+    "DansToolbox.BetterProject.Editor",
+    "DansToolbox.BetterConsole.Editor"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

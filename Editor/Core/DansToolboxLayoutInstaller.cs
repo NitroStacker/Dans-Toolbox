@@ -104,6 +104,8 @@ namespace DansToolbox.Editor
                 DansToolboxTools.BetterInspectorId);
             bool projectEnabled = DansToolboxSettings.IsToolEnabled(
                 DansToolboxTools.BetterProjectId);
+            bool consoleEnabled = DansToolboxSettings.IsToolEnabled(
+                DansToolboxTools.BetterConsoleId);
 
             foreach (EditorWindow window in Resources.FindObjectsOfTypeAll<EditorWindow>())
             {
@@ -117,7 +119,9 @@ namespace DansToolbox.Editor
                     (!inspectorEnabled &&
                      fullName == "DansToolbox.EditorTools.BetterInspector.BetterInspectorWindow") ||
                     (!projectEnabled &&
-                     fullName == "DansToolbox.EditorTools.BetterProject.BetterProjectWindow"))
+                     fullName == "DansToolbox.EditorTools.BetterProject.BetterProjectWindow") ||
+                    (!consoleEnabled &&
+                     fullName == "DansToolbox.EditorTools.BetterConsole.BetterConsoleWindow"))
                 {
                     window.Close();
                 }

@@ -4,6 +4,22 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] - 2026-08-01
+
+### Added
+
+- Add **Better Console** as a sixth selectable tool and replace the stock Console tab in the recommended ToolBox layout.
+- Add responsive Live, Issues, and Sessions surfaces using the flat Retro SFX visual language with virtualized dense rows and adaptive side-or-bottom details.
+- Add advanced field queries, phrases, exclusions, optional regex, saved views, normalized issue grouping, spam rate analysis, triage states, bookmarks, notes, and mute rules.
+- Add persistent bounded history and automatic Editor, compile, Play Mode, build, and remote-aware session lanes with previous-session comparisons.
+- Add clickable structured stacks, first-source navigation, object context, JSON/Markdown export, native Console parity controls, and an explicit evidence-bounded fix-prompt action.
+- Add a player-safe structured logging API with channels and key/value properties while retaining normal Unity logger output.
+
+### Changed
+
+- Extend setup, disabled-tool cleanup, documentation, configuration tests, package metadata, and the recommended layout for Better Console.
+- Isolate optional native Console history reflection behind a durable public callback capture path.
+
 ## [1.7.1] - 2026-08-01
 
 ### Added

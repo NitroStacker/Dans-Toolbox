@@ -1,6 +1,6 @@
 # Dans Toolbox
 
-Dans Toolbox is a Unity 6 Editor package containing five focused tools:
+Dans Toolbox is a Unity 6 package containing six focused tools:
 
 - **Retro SFX** — create, preview, import, process, and render retro sound effects.
 - **Native Window Dock** — place interactive Windows application windows inside resizable Unity tabs, including multi-panel layouts and crop framing.
@@ -9,7 +9,9 @@ Dans Toolbox is a Unity 6 Editor package containing five focused tools:
 
 - **Better Project** — browse assets with visual rules, smart collections, rich previews, health diagnostics, batch actions, and dependency impact tracing.
 
-All tools are Editor-only. Native Window Dock is available only in the Windows Editor.
+- **Better Console** — capture, search, group, triage, compare, and export Editor or player logs without losing Unity Console compatibility.
+
+All visual tools are Editor-only. Better Console also includes an optional player-safe structured logging API. Native Window Dock is available only in the Windows Editor.
 
 ## First-install setup
 
@@ -26,7 +28,7 @@ The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they ca
 After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.7.0
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.8.0
 ```
 
 For local development, use:
@@ -40,7 +42,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.7.0"
+    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.8.0"
   }
 }
 ```
@@ -54,6 +56,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - **Tools > Dans Toolbox > Better Hierarchy**
 - **Tools > Dans Toolbox > Better Inspector**
 - **Tools > Dans Toolbox > Better Project**
+- **Tools > Dans Toolbox > Better Console**
 
 ## Better Hierarchy essentials
 
@@ -94,6 +97,16 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - Impact maps direct dependencies and indexed reverse references, estimates build use, collects or exports dependencies, previews safe deletion impact, and can replace serialized references with a dry-run scan.
 - Batch actions rename with preview, apply labels, move assets, and apply compatible importer presets.
 - Native Project shortcuts are preserved, including F2, Delete, Enter, Backspace, Ctrl/Cmd+A/C/X/V/D/F, and Alt+Left/Right. The stock Project window remains available from `...`.
+
+## Better Console essentials
+
+- **Live / Issues / Sessions** separates the current stream, normalized recurring problems, and compile/play/build/remote timelines.
+- Search accepts text, quoted phrases, optional `/regex/`, exclusions such as `-source:Remote`, and filters including `sev:`, `type:`, `source:`, `file:`, `scene:`, `session:`, `channel:`, `tag:`, `has:stack`, and `is:bookmarked`.
+- Repeated messages group by a stable signature that removes changing numbers, GUIDs, and addresses. Collapse applies the same grouping to Live.
+- Issue state, bookmarks, notes, saved views, and mute rules persist in `ProjectSettings/BetterConsoleSettings.asset`. Bounded session history is cached under `Library/DansToolbox/BetterConsole`.
+- The detail pane exposes the first source frame, clickable stack frames, object context, structured properties, copy/export, and an explicit **FIX** prompt action.
+- Ctrl/Cmd+F focuses search, Ctrl/Cmd+L clears, Enter opens source, arrows move selection, and Escape clears the query. Native stack-trace settings, Error Pause, Editor/Player logs, and the stock Console remain available from `...`.
+- Player code may use `DansToolbox.BetterConsole.Log`, `.Warning`, `.Error`, `.Exception`, `.Property`, and `.Tag` for channels and structured values. These calls still write to Unity's normal logger.
 
 ## Updating users
 

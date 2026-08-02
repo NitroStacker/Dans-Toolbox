@@ -61,6 +61,7 @@ namespace DansToolbox.Editor
         public const string BetterHierarchyId = "better-hierarchy";
         public const string BetterInspectorId = "better-inspector";
         public const string BetterProjectId = "better-project";
+        public const string BetterConsoleId = "better-console";
 
         private static readonly IReadOnlyList<DansToolboxToolDescriptor> descriptors =
             new[]
@@ -93,6 +94,12 @@ namespace DansToolbox.Editor
                     BetterProjectId,
                     "Better Project",
                     "Browse, organize, preview, diagnose, and trace every project asset.",
+                    true,
+                    false),
+                new DansToolboxToolDescriptor(
+                    BetterConsoleId,
+                    "Better Console",
+                    "Find, group, triage, compare, and resolve Unity logs faster.",
                     true,
                     false)
             };

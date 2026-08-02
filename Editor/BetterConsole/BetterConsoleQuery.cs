@@ -148,6 +148,13 @@ namespace DansToolbox.EditorTools.BetterConsole
                 case "file":
                     value = entry.file;
                     break;
+                case "context":
+                    value = entry.contextName;
+                    break;
+                case "ctxid":
+                    return MatchContextIds(term.value, entry.contextInstanceId);
+                case "target":
+                    return MatchTarget(term.value, entry);
                 case "scene":
                     value = entry.scene;
                     break;
@@ -199,6 +206,39 @@ namespace DansToolbox.EditorTools.BetterConsole
                 case "channel": return !string.IsNullOrEmpty(entry.channel);
                 default: return false;
             }
+        }
+
+        private static bool MatchContextIds(string value, int contextInstanceId)
+        {
+            foreach (string candidate in (value ?? string.Empty).Split('|'))
+            {
+                if (int.TryParse(candidate, out int parsed) && parsed == contextInstanceId) return true;
+            }
+            return false;
+        }
+
+        private static bool MatchTarget(string value, BetterConsoleEntry entry)
+        {
+            string entryFile = BetterConsoleDiagnosticBridge.NormalizeAssetPath(entry.file);
+            foreach (string selector in (value ?? string.Empty).Split('|'))
+            {
+                if (selector.StartsWith("id=", StringComparison.OrdinalIgnoreCase) &&
+                    int.TryParse(selector.Substring(3), out int id) &&
+                    id == entry.contextInstanceId)
+                {
+                    return true;
+                }
+
+                if (!selector.StartsWith("file=", StringComparison.OrdinalIgnoreCase)) continue;
+                string file = BetterConsoleDiagnosticBridge.NormalizeAssetPath(selector.Substring(5));
+                if (file.EndsWith("/", StringComparison.Ordinal)
+                    ? entryFile.StartsWith(file, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(entryFile, file, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static bool MatchState(string value, BetterConsoleEntry entry, BetterConsoleIssueState state)

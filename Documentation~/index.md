@@ -81,6 +81,8 @@ Search supports plain text, quoted phrases, exclusions prefixed with `-`, and op
 
 The detail pane opens source frames, pings object context, shows structured properties and stack frames, stores issue notes, copies full entries, and creates an evidence-bounded fix prompt only when **FIX** is pressed. Visible results or an individual session can be exported as JSON or Markdown.
 
+Diagnostics are linked across the toolbox. Better Project assets and Better Hierarchy objects show compact clickable `W/E` badges, while Better Inspector offers a selection-aware console action. Their context menus can open a precise multi-target Better Console view. Better Console's `@` action filters to the current Unity selection, and a source asset can be revealed back in Better Project without replacing source-line opening in the external code editor.
+
 Better Console always captures Unity's public threaded log callback. On supported Unity versions, an isolated reflection bridge also imports native Console history such as compiler and importer messages; if Unity changes that internal API, callback capture continues. History is bounded and cached below `Library/DansToolbox/BetterConsole`, while shared saved views, mute rules, triage, bookmarks, and notes live in `ProjectSettings/BetterConsoleSettings.asset`.
 
 Runtime code can opt into channels and properties without depending on UnityEditor:

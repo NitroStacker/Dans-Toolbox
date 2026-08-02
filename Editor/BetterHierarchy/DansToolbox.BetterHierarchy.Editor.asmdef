@@ -2,7 +2,8 @@
   "name": "DansToolbox.BetterHierarchy.Editor",
   "rootNamespace": "DansToolbox.EditorTools.BetterHierarchy",
   "references": [
-    "DansToolbox.Core.Editor"
+    "DansToolbox.Core.Editor",
+    "DansToolbox.BetterConsole.Editor"
   ],
   "includePlatforms": [
     "Editor"

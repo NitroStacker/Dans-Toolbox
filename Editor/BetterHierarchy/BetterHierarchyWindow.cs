@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using DansToolbox.Editor;
+using DansToolbox.EditorTools.BetterConsole;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEditor.SceneManagement;
@@ -82,6 +83,8 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             Undo.undoRedoPerformed += OnUndoRedo;
             BetterHierarchyProjectSettings.Changed -= OnProjectSettingsChanged;
             BetterHierarchyProjectSettings.Changed += OnProjectSettingsChanged;
+            BetterConsoleDiagnosticBridge.Changed -= OnConsoleDiagnosticsChanged;
+            BetterConsoleDiagnosticBridge.Changed += OnConsoleDiagnosticsChanged;
             DansToolboxTheme.Changed -= OnThemeChanged;
             DansToolboxTheme.Changed += OnThemeChanged;
 
@@ -96,6 +99,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             EditorApplication.projectChanged -= OnProjectChanged;
             Undo.undoRedoPerformed -= OnUndoRedo;
             BetterHierarchyProjectSettings.Changed -= OnProjectSettingsChanged;
+            BetterConsoleDiagnosticBridge.Changed -= OnConsoleDiagnosticsChanged;
             DansToolboxTheme.Changed -= OnThemeChanged;
             atlas?.Dispose();
             DestroySearchTextures();
@@ -741,6 +745,9 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             BetterHierarchyCollection virtualCollection)
         {
             const string objectPrefix = "Better Hierarchy/";
+            menu.AddItem(new GUIContent(objectPrefix + "Diagnostics/Show in Better Console"), false, () =>
+                BetterConsoleDiagnosticBridge.OpenForTargets(
+                    Selection.gameObjects.Contains(context) ? Selection.gameObjects : new[] { context }));
             menu.AddItem(new GUIContent(objectPrefix + "Frame"), false, () =>
             {
                 Selection.activeGameObject = context;
@@ -963,6 +970,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 
         private void OnUndoRedo() => RefreshAll();
         private void OnProjectSettingsChanged() => RefreshAll();
+        private void OnConsoleDiagnosticsChanged() => Repaint();
         private void OnThemeChanged() { styledThemeRevision = -1; Repaint(); }
 
         private void EnsureStyles()

@@ -4,6 +4,19 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] - 2026-08-02
+
+### Added
+
+- Add a revision-cached diagnostic bridge that relates Better Console entries to scene objects, components, assets, and source paths without scanning history during every row repaint.
+- Add clickable warning and error badges to Better Hierarchy and Better Project, plus selection-aware Better Console actions in Better Inspector.
+- Add two-way navigation: filter Better Console from Project, Hierarchy, or Inspector; filter it to the current Unity selection; and reveal source assets back in Better Project.
+- Add `context:`, `ctxid:`, and multi-target query support for precise cross-tool diagnostic views.
+
+### Changed
+
+- Refresh Project, Hierarchy, and Inspector diagnostic signals when Better Console capture or issue state changes.
+
 ## [1.8.0] - 2026-08-01
 
 ### Added

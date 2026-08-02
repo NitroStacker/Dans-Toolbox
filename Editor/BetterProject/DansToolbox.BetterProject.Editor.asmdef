@@ -2,7 +2,8 @@
   "name": "DansToolbox.BetterProject.Editor",
   "rootNamespace": "DansToolbox.EditorTools.BetterProject",
   "references": [
-    "DansToolbox.Core.Editor"
+    "DansToolbox.Core.Editor",
+    "DansToolbox.BetterConsole.Editor"
   ],
   "includePlatforms": [
     "Editor"

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using DansToolbox.Editor;
+using DansToolbox.EditorTools.BetterConsole;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -90,6 +91,8 @@ namespace DansToolbox.EditorTools.BetterInspector
             EditorApplication.projectChanged += OnObjectsChanged;
             DansToolboxTheme.Changed -= OnThemeChanged;
             DansToolboxTheme.Changed += OnThemeChanged;
+            BetterConsoleDiagnosticBridge.Changed -= OnConsoleDiagnosticsChanged;
+            BetterConsoleDiagnosticBridge.Changed += OnConsoleDiagnosticsChanged;
 
             if (!targetLocked)
             {
@@ -105,6 +108,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             EditorApplication.hierarchyChanged -= OnObjectsChanged;
             EditorApplication.projectChanged -= OnObjectsChanged;
             DansToolboxTheme.Changed -= OnThemeChanged;
+            BetterConsoleDiagnosticBridge.Changed -= OnConsoleDiagnosticsChanged;
             DisposeEditors();
             DestroyStyleTextures();
         }
@@ -142,7 +146,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 position.width,
                 Mathf.Max(1f, status.y - targetHeader.yMax));
 
-            DrawToolbar(toolbar, palette);
+            DrawToolbar(toolbar, palette, targets);
             DrawTargetHeader(targetHeader, targets, palette);
             DrawContent(content, targets, palette);
             HandleContentContextClick(content, targets);
@@ -174,7 +178,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             }
         }
 
-        private void DrawToolbar(Rect rect, DansToolboxPalette palette)
+        private void DrawToolbar(Rect rect, DansToolboxPalette palette, Object[] targets)
         {
             EditorGUI.DrawRect(rect, palette.Panel);
             EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), palette.Border);
@@ -192,7 +196,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             }
             x += 29f;
 
-            float actionWidth = narrow ? 82f : 108f;
+            float actionWidth = narrow ? 106f : 132f;
             float searchWidth = Mathf.Max(72f, rect.width - x - actionWidth - 8f);
             GUI.SetNextControlName(SearchControlName);
             string updated = GUI.TextField(
@@ -215,6 +219,20 @@ namespace DansToolbox.EditorTools.BetterInspector
                     favoritesOnly))
             {
                 favoritesOnly = !favoritesOnly;
+            }
+            x += 24f;
+            BetterConsoleDiagnosticSummary consoleSummary = BetterConsoleDiagnosticBridge.GetSummary(targets);
+            string consoleLabel = consoleSummary.HasSignals ? consoleSummary.Badge : "@";
+            string consoleTooltip = consoleSummary.HasSignals ? consoleSummary.Tooltip : "Show selected target logs in Better Console";
+            if (DrawIconButton(
+                    new Rect(x, 8f, 22f, 22f),
+                    consoleLabel,
+                    consoleTooltip,
+                    targets.Length > 0,
+                    palette,
+                    consoleSummary.HasSignals))
+            {
+                BetterConsoleDiagnosticBridge.OpenForTargets(targets);
             }
             x += 24f;
             if (DrawIconButton(
@@ -432,6 +450,17 @@ namespace DansToolbox.EditorTools.BetterInspector
             });
 
             menu.AddSeparator(prefix);
+            if (targets.Length > 0)
+            {
+                menu.AddItem(new GUIContent(prefix + "Diagnostics/Show in Better Console"), false, () =>
+                    BetterConsoleDiagnosticBridge.OpenForTargets(targets));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent(prefix + "Diagnostics/Show in Better Console"));
+            }
+
+            menu.AddSeparator(prefix);
             if (targets.Length > 0 || targetLocked)
             {
                 menu.AddItem(new GUIContent(prefix + (targetLocked ? "Unlock Target" : "Lock Target")), false, ToggleLock);
@@ -518,6 +547,9 @@ namespace DansToolbox.EditorTools.BetterInspector
                 Repaint();
             });
 
+            menu.AddSeparator(prefix);
+            menu.AddItem(new GUIContent(prefix + "Diagnostics/Show in Better Console"), false, () =>
+                BetterConsoleDiagnosticBridge.OpenForTargets(entry.Targets));
             menu.AddSeparator(prefix);
             menu.AddItem(new GUIContent(prefix + "Refresh Editors"), false, OnObjectsChanged);
         }
@@ -1563,6 +1595,11 @@ namespace DansToolbox.EditorTools.BetterInspector
         {
             editorSignature = string.Empty;
             editorsDirty = true;
+            Repaint();
+        }
+
+        private void OnConsoleDiagnosticsChanged()
+        {
             Repaint();
         }
 

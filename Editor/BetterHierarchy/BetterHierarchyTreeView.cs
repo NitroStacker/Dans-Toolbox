@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DansToolbox.EditorTools.BetterConsole;
 using DansToolbox.Editor;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
@@ -709,6 +710,11 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             GameObject gameObject = item.GameObject;
             float right = row.xMax - 4f;
             bool hovered = row.Contains(Event.current.mousePosition);
+            BetterConsoleDiagnosticSummary consoleSummary = BetterConsoleDiagnosticBridge.GetSummary(gameObject);
+            if (consoleSummary.HasSignals)
+            {
+                right = DrawConsoleBadge(row, right, consoleSummary, gameObject, palette);
+            }
 
             if (hovered && BetterHierarchyCollections.IsTransformCollection(gameObject))
             {
@@ -872,6 +878,35 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 fontSize = 8,
                 normal = { textColor = color }
             });
+            return right;
+        }
+
+        private static float DrawConsoleBadge(
+            Rect row,
+            float right,
+            BetterConsoleDiagnosticSummary summary,
+            GameObject context,
+            DansToolboxPalette palette)
+        {
+            Color color = summary.Errors > 0 ? palette.Danger : palette.Warning;
+            string label = summary.Badge;
+            float width = Mathf.Clamp(label.Length * 6f + 8f, 20f, 44f);
+            right -= width + 3f;
+            Rect rect = new Rect(right, row.y + 4f, width, row.height - 8f);
+            bool hover = rect.Contains(Event.current.mousePosition);
+            EditorGUI.DrawRect(rect, new Color(color.r, color.g, color.b, hover ? 0.3f : 0.18f));
+            GUIStyle style = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 8,
+                normal = { textColor = color }
+            };
+            GUI.Label(rect, new GUIContent(label, summary.Tooltip), style);
+            if (GUI.Button(rect, new GUIContent(string.Empty, summary.Tooltip), GUIStyle.none))
+            {
+                BetterConsoleDiagnosticBridge.OpenForTargets(new UnityEngine.Object[] { context });
+                Event.current.Use();
+            }
             return right;
         }
 

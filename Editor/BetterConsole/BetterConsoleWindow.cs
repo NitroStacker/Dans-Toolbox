@@ -55,6 +55,18 @@ namespace DansToolbox.EditorTools.BetterConsole
             window.Show();
         }
 
+        internal static void OpenQuery(string query)
+        {
+            Open();
+            BetterConsoleWindow window = GetWindow<BetterConsoleWindow>();
+            window.surface = BetterConsoleSurface.Live;
+            window.queryText = query ?? string.Empty;
+            window.listScroll = Vector2.zero;
+            window.Invalidate();
+            window.Focus();
+            window.Repaint();
+        }
+
         [MenuItem(MenuPath, true)]
         private static bool ValidateOpen()
         {
@@ -119,7 +131,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             x += 5f;
 
             float severityWidth = compact ? 36f : 52f;
-            int rightButtons = roomy ? 4 : 3;
+            int rightButtons = roomy ? 5 : 4;
             float rightWidth = 3f * (severityWidth + 3f) + rightButtons * 31f + 7f;
             float searchWidth = Mathf.Max(90f, rect.width - x - rightWidth);
             lastSearchRect = new Rect(x, y, searchWidth, height);
@@ -137,6 +149,19 @@ namespace DansToolbox.EditorTools.BetterConsole
             if (BetterConsoleGui.Button(new Rect(x, y, 27f, height), new GUIContent("*", "Saved views")))
             {
                 ShowSavedViewsMenu();
+            }
+            x += 31f;
+            if (BetterConsoleGui.Button(new Rect(x, y, 27f, height), new GUIContent("@", "Show logs for current selection")))
+            {
+                string selectionQuery = BetterConsoleDiagnosticBridge.BuildTargetQuery(Selection.objects, null);
+                if (string.IsNullOrEmpty(selectionQuery)) Flash("NO SELECTION");
+                else
+                {
+                    queryText = selectionQuery;
+                    surface = BetterConsoleSurface.Live;
+                    listScroll = Vector2.zero;
+                    Invalidate();
+                }
             }
             x += 31f;
             if (roomy)
@@ -490,7 +515,13 @@ namespace DansToolbox.EditorTools.BetterConsole
             if (!string.IsNullOrEmpty(entry.file))
             {
                 Rect source = new Rect(10f, y, contentWidth - 20f, 22f);
-                if (BetterConsoleGui.Button(source, new GUIContent(Path.GetFileName(entry.file) + ":" + entry.line, entry.file))) OpenSource(entry);
+                bool canReveal = BetterConsoleDiagnosticBridge.CanRevealAssetPath(entry.file);
+                Rect openSource = canReveal ? new Rect(source.x, source.y, source.width - 29f, source.height) : source;
+                if (BetterConsoleGui.Button(openSource, new GUIContent(Path.GetFileName(entry.file) + ":" + entry.line, entry.file))) OpenSource(entry);
+                if (canReveal && BetterConsoleGui.Button(new Rect(source.xMax - 25f, source.y, 25f, source.height), new GUIContent("@", "Reveal source in Better Project")))
+                {
+                    BetterConsoleDiagnosticBridge.RevealAssetPath(entry.file);
+                }
                 y += 30f;
             }
             if (entry.contextInstanceId != 0)
@@ -822,6 +853,10 @@ namespace DansToolbox.EditorTools.BetterConsole
             BetterConsoleIssueState state = BetterConsoleSettings.GetIssueState(entry.signature);
             GenericMenu menu = new GenericMenu();
             menu.AddItem(new GUIContent("Open Source"), false, () => OpenSource(entry));
+            if (BetterConsoleDiagnosticBridge.CanRevealAssetPath(entry.file))
+            {
+                menu.AddItem(new GUIContent("Reveal Source Asset"), false, () => BetterConsoleDiagnosticBridge.RevealAssetPath(entry.file));
+            }
             if (entry.contextInstanceId != 0) menu.AddItem(new GUIContent("Ping Context"), false, () => PingContext(entry));
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Copy/Message"), false, () => EditorGUIUtility.systemCopyBuffer = entry.message);

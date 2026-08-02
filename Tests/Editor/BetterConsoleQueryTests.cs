@@ -82,6 +82,34 @@ namespace DansToolbox.Editor.Tests
                 Is.False);
         }
 
+        [Test]
+        public void TargetQuery_MatchesContextComponentsAndAssetPathsAsAlternatives()
+        {
+            GameObject context = new GameObject("Diagnostic Target");
+            BoxCollider component = context.AddComponent<BoxCollider>();
+            try
+            {
+                BetterConsoleEntry contextEntry = Entry();
+                contextEntry.contextInstanceId = component.GetInstanceID();
+                string contextQuery = BetterConsoleDiagnosticBridge.BuildTargetQuery(
+                    new UnityEngine.Object[] { context },
+                    null);
+                Assert.That(BetterConsoleQuery.Compile(contextQuery).Matches(contextEntry), Is.True);
+
+                BetterConsoleEntry assetEntry = Entry();
+                assetEntry.file = "Assets/Client.cs";
+                string assetQuery = BetterConsoleDiagnosticBridge.BuildTargetQuery(
+                    null,
+                    new[] { "Assets/Client.cs", "Assets/Other.asset" });
+                Assert.That(BetterConsoleQuery.Compile(assetQuery).Matches(assetEntry), Is.True);
+                Assert.That(BetterConsoleQuery.Compile("target:\"file=Assets/\"").Matches(assetEntry), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(context);
+            }
+        }
+
         private static BetterConsoleEntry Entry()
         {
             return new BetterConsoleEntry

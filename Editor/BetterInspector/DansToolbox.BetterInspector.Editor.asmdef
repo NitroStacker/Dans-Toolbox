@@ -2,7 +2,8 @@
   "name": "DansToolbox.BetterInspector.Editor",
   "rootNamespace": "DansToolbox.EditorTools.BetterInspector",
   "references": [
-    "DansToolbox.Core.Editor"
+    "DansToolbox.Core.Editor",
+    "DansToolbox.BetterConsole.Editor"
   ],
   "includePlatforms": [
     "Editor"

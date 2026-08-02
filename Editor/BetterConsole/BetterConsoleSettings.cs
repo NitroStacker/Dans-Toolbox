@@ -71,6 +71,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             if (bookmarked.HasValue) state.bookmarked = bookmarked.Value;
             if (note != null) state.note = note;
             instance.Save(true);
+            BetterConsoleDiagnosticBridge.Invalidate();
         }
 
         public static BetterConsoleSavedView AddSavedView(string name, string query)
@@ -103,6 +104,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             };
             instance.muteRules.Add(rule);
             instance.Save(true);
+            BetterConsoleDiagnosticBridge.Invalidate();
             return rule;
         }
 
@@ -110,6 +112,7 @@ namespace DansToolbox.EditorTools.BetterConsole
         {
             instance.muteRules.RemoveAll(rule => string.Equals(rule.id, id, StringComparison.Ordinal));
             instance.Save(true);
+            BetterConsoleDiagnosticBridge.Invalidate();
         }
 
         public static bool IsMuted(BetterConsoleEntry entry)

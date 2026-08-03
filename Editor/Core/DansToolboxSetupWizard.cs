@@ -50,34 +50,31 @@ namespace DansToolbox.Editor
         private const float OverlayEdgeMargin = 36f;
         private const double SplashDuration = 0.82d;
         private const double StepTransitionDuration = 0.24d;
-        private const double LayoutHandoffDuration = 1.65d;
-        private const double LayoutSettleDuration = 0.52d;
         private const float InstallFadeStart = 0.72f;
-        private static readonly string[] StepLabels = { "01  THEME", "02  TOOLS", "03  LAYOUT" };
+        private static readonly string[] StepLabels = { "01  THEME", "02  TOOLS", "03  WORKSPACE" };
 
         [SerializeField] private DansToolboxSetupStep currentStep;
         [SerializeField] private DansToolboxThemeId selectedTheme;
         [SerializeField] private List<string> enabledToolIds = new List<string>();
         [SerializeField] private bool useRecommendedLayout;
+        [SerializeField] private bool seamlessToolSurfaces = true;
         [SerializeField] private bool stagedStateLoaded;
         [SerializeField] private Vector2 scrollPosition;
         [SerializeField] private bool showSplash;
         [SerializeField] private double splashStartedAt;
         [SerializeField] private double stepTransitionStartedAt;
         [SerializeField] private int stepTransitionDirection = 1;
-        [SerializeField] private bool layoutHandoffActive;
-        [SerializeField] private double layoutHandoffStartedAt;
-        [SerializeField] private bool layoutApplyStarted;
 
         private WizardStyles styles;
         private DansToolboxThemeId styledTheme = (DansToolboxThemeId)(-1);
+        private bool styledSeamlessToolSurfaces;
         [System.NonSerialized] private Texture2D backdrop;
         [System.NonSerialized] private float surfaceWidth;
         [System.NonSerialized] private float surfaceHeight;
 
         internal DansToolboxSetupStep CurrentStep => currentStep;
 
-        [MenuItem("Tools/Dans Toolbox/Setup Wizard", false, -100)]
+        [MenuItem("Tools/Dans Toolbox/Setup Wizard", false, -80)]
         internal static void Open()
         {
             foreach (DansToolboxSetupWizard existing in
@@ -128,8 +125,11 @@ namespace DansToolbox.Editor
         {
             selectedTheme = DansToolboxSettings.Theme;
             useRecommendedLayout =
-                DansToolboxSettings.RecommendedLayoutSelected &&
-                DansToolboxLayoutInstaller.IsLayoutAvailable;
+                !DansToolboxSettings.IsInitialized ||
+                DansToolboxSettings.RecommendedLayoutSelected;
+            seamlessToolSurfaces =
+                !DansToolboxSettings.IsInitialized ||
+                DansToolboxSettings.SeamlessToolSurfaces;
             enabledToolIds ??= new List<string>();
             enabledToolIds.Clear();
             foreach (DansToolboxToolDescriptor tool in DansToolboxTools.All)
@@ -148,8 +148,6 @@ namespace DansToolbox.Editor
             splashStartedAt = EditorApplication.timeSinceStartup;
             stepTransitionStartedAt = splashStartedAt + SplashDuration;
             stepTransitionDirection = 1;
-            layoutHandoffActive = false;
-            layoutApplyStarted = false;
             Repaint();
         }
 
@@ -157,7 +155,9 @@ namespace DansToolbox.Editor
         {
             HandleKeyboard();
 
-            DansToolboxPalette palette = DansToolboxTheme.GetPalette(selectedTheme);
+            DansToolboxPalette palette = DansToolboxTheme.GetPalette(
+                selectedTheme,
+                seamlessToolSurfaces);
             EnsureStyles(palette);
             Rect canvas = new Rect(0f, 0f, position.width, position.height);
             DrawBackdrop(canvas, palette, 1f);
@@ -165,8 +165,7 @@ namespace DansToolbox.Editor
             Rect panel = CalculatePanelRect(canvas.size);
 
             Event current = Event.current;
-            if (!layoutHandoffActive &&
-                current.type == EventType.MouseDown &&
+            if (current.type == EventType.MouseDown &&
                 !panel.Contains(current.mousePosition))
             {
                 Close();
@@ -193,12 +192,9 @@ namespace DansToolbox.Editor
             surfaceWidth = width;
             surfaceHeight = height;
             EditorGUI.DrawRect(new Rect(0f, 0f, surfaceWidth, surfaceHeight), palette.Canvas);
-            EditorGUI.DrawRect(new Rect(0f, 0f, surfaceWidth, 2f), palette.Accent);
-
-            if (layoutHandoffActive)
+            if (!seamlessToolSurfaces)
             {
-                DrawLayoutHandoff(palette);
-                return;
+                EditorGUI.DrawRect(new Rect(0f, 0f, surfaceWidth, 2f), palette.Accent);
             }
 
             if (showSplash)
@@ -295,33 +291,6 @@ namespace DansToolbox.Editor
             if (StepTransitionProgress < 1f)
             {
                 repaint = true;
-            }
-
-            if (layoutHandoffActive)
-            {
-                repaint = true;
-                if (!layoutApplyStarted &&
-                    now - layoutHandoffStartedAt >= LayoutHandoffDuration)
-                {
-                    layoutApplyStarted = true;
-                    DansToolboxThemeId successTheme = selectedTheme;
-                    if (!DansToolboxLayoutInstaller.ApplyRecommendedLayoutNow())
-                    {
-                        layoutHandoffActive = false;
-                        Close();
-                        return;
-                    }
-
-                    DansToolboxInstallSuccessOverlay.ShowAfter(
-                        successTheme,
-                        LayoutSettleDuration);
-                    if (this != null)
-                    {
-                        layoutHandoffActive = false;
-                        Close();
-                    }
-                    return;
-                }
             }
 
             if (repaint)
@@ -497,7 +466,7 @@ namespace DansToolbox.Editor
 
         private void DrawLayoutStep(DansToolboxPalette palette)
         {
-            DrawScreenTitle("Choose a layout");
+            DrawScreenTitle("Choose workspace behavior");
             GUILayout.Space(16f);
 
             Rect row = GUILayoutUtility.GetRect(1f, 174f, GUILayout.ExpandWidth(true));
@@ -506,6 +475,53 @@ namespace DansToolbox.Editor
             Rect currentRect = new Rect(row.x + cardWidth + Gap, row.y, cardWidth, row.height);
             DrawLayoutCard(toolboxRect, true, palette);
             DrawLayoutCard(currentRect, false, palette);
+
+            GUILayout.Space(12f);
+            Rect seamlessRect = GUILayoutUtility.GetRect(
+                1f,
+                92f,
+                GUILayout.ExpandWidth(true));
+            DrawSeamlessSurfaceCard(seamlessRect, palette);
+        }
+
+        private void DrawSeamlessSurfaceCard(Rect rect, DansToolboxPalette palette)
+        {
+            bool hovered = rect.Contains(Event.current.mousePosition);
+            DrawPanel(
+                rect,
+                hovered ? palette.Raised : palette.Panel,
+                seamlessToolSurfaces ? palette.Accent : palette.Border);
+
+            Rect preview = new Rect(rect.x + 14f, rect.y + 14f, 126f, rect.height - 28f);
+            DrawSeamlessSurfacePreview(preview, palette, seamlessToolSurfaces);
+
+            float copyX = preview.xMax + 16f;
+            float statusWidth = 50f;
+            GUI.Label(
+                new Rect(copyX, rect.y + 14f, rect.xMax - copyX - statusWidth - 18f, 22f),
+                "SEAMLESS TOOL SURFACES",
+                styles.CardTitle);
+            GUI.Label(
+                new Rect(copyX, rect.y + 36f, rect.xMax - copyX - statusWidth - 18f, 40f),
+                "Visual only: shared Toolbox surfaces and softer internal dividers. Native tabs and docking never change.",
+                styles.CardBody);
+            GUI.Label(
+                new Rect(rect.xMax - statusWidth - 14f, rect.y + 14f, statusWidth, 22f),
+                seamlessToolSurfaces ? "ON" : "OFF",
+                seamlessToolSurfaces ? styles.Badge : styles.DangerBadge);
+
+            if (seamlessToolSurfaces)
+            {
+                DrawChoiceMark(
+                    new Rect(rect.xMax - 32f, rect.yMax - 32f, 18f, 18f),
+                    palette);
+            }
+
+            if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+            {
+                seamlessToolSurfaces = !seamlessToolSurfaces;
+                Repaint();
+            }
         }
 
         private void DrawLayoutCard(Rect rect, bool recommended, DansToolboxPalette palette)
@@ -524,7 +540,7 @@ namespace DansToolbox.Editor
                 recommended);
             GUI.Label(
                 new Rect(rect.x + 14f, rect.yMax - 48f, rect.width - 48f, 28f),
-                recommended ? "TOOLBOX" : "KEEP CURRENT",
+                recommended ? "ORGANIZED" : "KEEP OPEN WINDOWS",
                 styles.CardTitle);
 
             if (selected)
@@ -620,18 +636,11 @@ namespace DansToolbox.Editor
 
         private void ApplySelection()
         {
-            bool applyLayout =
-                useRecommendedLayout && DansToolboxLayoutInstaller.IsLayoutAvailable;
-            DansToolboxSettings.Apply(selectedTheme, enabledToolIds, applyLayout);
-            if (applyLayout)
-            {
-                layoutHandoffActive = true;
-                layoutHandoffStartedAt = EditorApplication.timeSinceStartup;
-                layoutApplyStarted = false;
-                Repaint();
-                return;
-            }
-
+            DansToolboxSettings.Apply(
+                selectedTheme,
+                enabledToolIds,
+                useRecommendedLayout,
+                seamlessToolSurfaces);
             DansToolboxInstallSuccessOverlay.ShowAfter(selectedTheme, 0.08d);
             Close();
         }
@@ -647,12 +656,6 @@ namespace DansToolbox.Editor
             if (current.keyCode == KeyCode.Escape)
             {
                 Close();
-                current.Use();
-                return;
-            }
-
-            if (layoutHandoffActive)
-            {
                 current.Use();
                 return;
             }
@@ -738,65 +741,6 @@ namespace DansToolbox.Editor
                 palette.Accent);
         }
 
-        private void DrawLayoutHandoff(DansToolboxPalette palette)
-        {
-            float progress = Mathf.Clamp01((float)(
-                (EditorApplication.timeSinceStartup - layoutHandoffStartedAt) /
-                LayoutHandoffDuration));
-            Rect stage = new Rect(
-                Margin + 30f,
-                surfaceHeight * 0.5f - 92f,
-                surfaceWidth - Margin * 2f - 60f,
-                126f);
-
-            float panelWidth = Mathf.Max(80f, (stage.width - Gap * 2f) / 3f);
-            for (int index = 0; index < 3; index++)
-            {
-                float staggered = Mathf.Clamp01((progress - index * 0.07f) / 0.86f);
-                float panelEase = EaseInOutCubic(staggered);
-                float destination = stage.x + index * (panelWidth + Gap);
-                float origin = surfaceWidth * 0.5f - panelWidth * 0.5f;
-                float x = Mathf.Lerp(origin, destination, panelEase);
-                float arc = Mathf.Sin(panelEase * Mathf.PI) * (index == 1 ? -24f : -40f);
-                float yOffset = (index - 1) * (1f - panelEase) * 30f + arc;
-                Rect panel = new Rect(x, stage.y + yOffset, panelWidth, 78f);
-                DrawPanel(
-                    panel,
-                    index == 1 ? palette.Raised : palette.Panel,
-                    index == 1 ? palette.Accent : palette.BorderStrong);
-                EditorGUI.DrawRect(
-                    new Rect(panel.x + 8f, panel.y + 8f, panel.width - 16f, 3f),
-                    index == 1 ? palette.Signal : palette.AccentSoft);
-
-                float settle = Mathf.Clamp01((progress - 0.68f - index * 0.035f) / 0.22f);
-                if (settle > 0f)
-                {
-                    Color pulse = index == 1 ? palette.Signal : palette.Accent;
-                    pulse.a = Mathf.Sin(settle * Mathf.PI) * 0.75f;
-                    EditorGUI.DrawRect(
-                        new Rect(panel.x + 1f, panel.yMax - 3f, panel.width - 2f, 2f),
-                        pulse);
-                }
-            }
-
-            Rect labelRect = new Rect(
-                Margin,
-                stage.yMax + 12f,
-                surfaceWidth - Margin * 2f,
-                28f);
-            Rect clip = new Rect(
-                labelRect.x,
-                labelRect.y,
-                labelRect.width * EaseOutCubic(progress),
-                labelRect.height);
-            GUI.BeginGroup(clip);
-            GUI.Label(
-                new Rect(0f, 0f, labelRect.width, labelRect.height),
-                "ARRANGING WORKSPACE",
-                styles.Splash);
-            GUI.EndGroup();
-        }
-
         internal static float CalculateInstallIconScale(float progress)
         {
             progress = Mathf.Clamp01(progress);
@@ -825,14 +769,6 @@ namespace DansToolbox.Editor
         {
             float inverse = 1f - Mathf.Clamp01(value);
             return 1f - inverse * inverse * inverse;
-        }
-
-        private static float EaseInOutCubic(float value)
-        {
-            value = Mathf.Clamp01(value);
-            return value < 0.5f
-                ? 4f * value * value * value
-                : 1f - Mathf.Pow(-2f * value + 2f, 3f) * 0.5f;
         }
 
         private static void DrawToggleIndicator(Rect rect, bool enabled, DansToolboxPalette palette)
@@ -869,27 +805,42 @@ namespace DansToolbox.Editor
             float gap = 5f;
             if (recommended)
             {
-                Rect left = new Rect(
+                Rect editor = new Rect(
                     rect.x + 8f,
                     rect.y + 8f,
-                    rect.width * 0.48f,
+                    rect.width - 16f,
                     rect.height - 16f);
-                Rect right = new Rect(
-                    left.xMax + gap,
-                    left.y,
-                    rect.xMax - left.xMax - gap - 8f,
-                    left.height);
-                Rect leftTop = new Rect(left.x, left.y, left.width, left.height * 0.58f - 2f);
-                Rect leftBottom = new Rect(
-                    left.x,
-                    leftTop.yMax + gap,
-                    left.width,
-                    left.height - leftTop.height - gap);
-                DrawPanel(leftTop, palette.Raised, palette.Border);
-                DrawPanel(leftBottom, palette.Panel, palette.AccentSoft);
-                DrawPanel(right, palette.Panel, palette.Accent);
+                DrawPanel(editor, palette.Panel, palette.BorderStrong);
+                Rect toolbar = new Rect(editor.x + 1f, editor.y + 1f, editor.width - 2f, 12f);
+                EditorGUI.DrawRect(toolbar, palette.Inset);
+                EditorGUI.DrawRect(new Rect(toolbar.x + 6f, toolbar.y + 4f, 30f, 4f), palette.Accent);
+                Rect launcher = new Rect(
+                    editor.x + 12f,
+                    toolbar.yMax + 7f,
+                    editor.width * 0.47f,
+                    editor.height - toolbar.height - 20f);
+                DrawPanel(launcher, palette.Raised, palette.AccentSoft);
+                for (int index = 0; index < 3; index++)
+                {
+                    Rect card = new Rect(
+                        launcher.x + 6f,
+                        launcher.y + 7f + index * 14f,
+                        launcher.width - 12f,
+                        9f);
+                    DrawPanel(card, palette.Panel, index == 0 ? palette.Accent : palette.Border);
+                }
+                Rect floatingTool = new Rect(
+                    launcher.xMax + gap,
+                    toolbar.yMax + 15f,
+                    editor.xMax - launcher.xMax - gap - 8f,
+                    editor.height - toolbar.height - 31f);
+                DrawPanel(floatingTool, palette.Panel, palette.Accent);
                 EditorGUI.DrawRect(
-                    new Rect(right.x + 5f, right.y + 5f, right.width - 10f, 3f),
+                    new Rect(
+                        floatingTool.x + 5f,
+                        floatingTool.y + 5f,
+                        floatingTool.width - 10f,
+                        3f),
                     palette.Signal);
             }
             else
@@ -904,6 +855,37 @@ namespace DansToolbox.Editor
                     new Rect(main.x + 6f, main.y + 6f, main.width - 12f, 3f),
                     palette.Muted);
             }
+        }
+
+        private static void DrawSeamlessSurfacePreview(
+            Rect rect,
+            DansToolboxPalette palette,
+            bool seamless)
+        {
+            DrawPanel(rect, palette.Inset, palette.Border);
+            Rect window = new Rect(rect.x + 7f, rect.y + 7f, rect.width - 14f, rect.height - 14f);
+            Color surface = seamless ? palette.Panel : palette.Canvas;
+            Color divider = seamless ? palette.Border : palette.BorderStrong;
+            DrawPanel(window, surface, divider);
+
+            Rect left = new Rect(window.x + 1f, window.y + 10f, window.width * 0.48f, window.height - 11f);
+            Rect right = new Rect(left.xMax, left.y, window.xMax - left.xMax - 1f, left.height);
+            EditorGUI.DrawRect(left, surface);
+            EditorGUI.DrawRect(right, seamless ? surface : palette.Panel);
+            EditorGUI.DrawRect(
+                new Rect(left.xMax, left.y, 1f, left.height),
+                divider);
+
+            Rect leftTab = new Rect(window.x + 6f, window.y + 3f, 30f, 7f);
+            Rect rightTab = new Rect(left.xMax + 6f, window.y + 3f, 30f, 7f);
+            EditorGUI.DrawRect(leftTab, palette.Raised);
+            EditorGUI.DrawRect(rightTab, palette.Raised);
+            EditorGUI.DrawRect(
+                new Rect(leftTab.x + 4f, leftTab.yMax - 2f, leftTab.width - 8f, 1f),
+                palette.Accent);
+            EditorGUI.DrawRect(
+                new Rect(rightTab.x + 4f, rightTab.yMax - 2f, rightTab.width - 8f, 1f),
+                palette.Muted);
         }
 
         private static bool DrawFlatButton(
@@ -954,12 +936,15 @@ namespace DansToolbox.Editor
 
         private void EnsureStyles(DansToolboxPalette palette)
         {
-            if (styles != null && styledTheme == selectedTheme)
+            if (styles != null &&
+                styledTheme == selectedTheme &&
+                styledSeamlessToolSurfaces == seamlessToolSurfaces)
             {
                 return;
             }
 
             styledTheme = selectedTheme;
+            styledSeamlessToolSurfaces = seamlessToolSurfaces;
             styles = new WizardStyles
             {
                 ScreenTitle = MakeLabel(palette.Text, 17, FontStyle.Bold),
@@ -968,6 +953,10 @@ namespace DansToolbox.Editor
                 StepComplete = MakeLabel(palette.Accent, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 StepInactive = MakeLabel(palette.Muted, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 CardTitle = MakeLabel(palette.Text, 11, FontStyle.Bold),
+                CardBody = new GUIStyle(MakeLabel(palette.Muted, 10, FontStyle.Normal))
+                {
+                    wordWrap = true
+                },
                 Badge = MakeLabel(palette.Accent, 8, FontStyle.Bold, TextAnchor.MiddleRight),
                 DangerBadge = MakeLabel(palette.Danger, 8, FontStyle.Bold, TextAnchor.MiddleRight)
             };
@@ -997,6 +986,7 @@ namespace DansToolbox.Editor
             internal GUIStyle StepComplete;
             internal GUIStyle StepInactive;
             internal GUIStyle CardTitle;
+            internal GUIStyle CardBody;
             internal GUIStyle Badge;
             internal GUIStyle DangerBadge;
         }

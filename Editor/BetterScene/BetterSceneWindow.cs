@@ -11,7 +11,6 @@ namespace DansToolbox.EditorTools.BetterScene
     {
         private const string MenuPath = "Tools/Dans Toolbox/Better Scene";
         private const float ToolbarHeight = 38f;
-        private const float StatusHeight = 22f;
         [SerializeField] private Vector2 scroll;
         [SerializeField] private bool showActiveTool = true;
         [SerializeField] private bool showSavedViews;
@@ -22,7 +21,9 @@ namespace DansToolbox.EditorTools.BetterScene
         internal static void Open()
         {
             BetterSceneWindow window = GetWindow<BetterSceneWindow>();
-            window.titleContent = new GUIContent("Better Scene", EditorGUIUtility.IconContent("UnityEditor.SceneView").image, "Better Scene");
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                window,
+                DansToolboxTools.BetterSceneId);
             window.minSize = new Vector2(300f, 300f);
             window.Show();
             window.Focus();
@@ -36,7 +37,9 @@ namespace DansToolbox.EditorTools.BetterScene
 
         private void OnEnable()
         {
-            titleContent = new GUIContent("Better Scene", EditorGUIUtility.IconContent("UnityEditor.SceneView").image);
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                this,
+                DansToolboxTools.BetterSceneId);
             minSize = new Vector2(300f, 300f);
             wantsMouseMove = true;
             revealStartedAt = EditorApplication.timeSinceStartup;
@@ -80,11 +83,9 @@ namespace DansToolbox.EditorTools.BetterScene
 
             HandleKeyboard();
             Rect toolbar = new Rect(0f, 0f, position.width, ToolbarHeight);
-            Rect status = new Rect(0f, position.height - StatusHeight, position.width, StatusHeight);
-            Rect content = new Rect(0f, toolbar.yMax, position.width, Mathf.Max(0f, status.y - toolbar.yMax));
+            Rect content = new Rect(0f, toolbar.yMax, position.width, Mathf.Max(0f, position.height - toolbar.yMax));
             DrawToolbar(toolbar, palette);
             DrawContent(content, palette);
-            DrawStatus(status, palette);
             if (DansToolboxMotion.DrawWindowReveal(canvas, revealStartedAt)) Repaint();
         }
 
@@ -297,17 +298,6 @@ namespace DansToolbox.EditorTools.BetterScene
             GUI.Label(new Rect(rect.x + 10f, rect.y + 5f, rect.width - 20f, rect.height - 10f), message, wrapped);
         }
 
-        private void DrawStatus(Rect rect, DansToolboxPalette palette)
-        {
-            EditorGUI.DrawRect(rect, palette.Inset);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), palette.Border);
-            string left = Selection.gameObjects.Length == 0 ? "READY" : Selection.gameObjects.Length + " SELECTED";
-            GUI.Label(new Rect(8f, rect.y + 1f, rect.width - 160f, rect.height - 2f), left, BetterSceneGui.Tiny);
-            GUIStyle right = new GUIStyle(BetterSceneGui.Tiny) { alignment = TextAnchor.MiddleRight, normal = { textColor = palette.Accent } };
-            GUI.Label(new Rect(rect.xMax - 178f, rect.y + 1f, 170f, rect.height - 2f),
-                (BetterSceneController.PanelExpanded ? BetterSceneController.ActivePanel.ToString().ToUpperInvariant() : "TOOLS COLLAPSED") + "  |  " + BetterSceneController.SnapMode.ToString().ToUpperInvariant(), right);
-        }
-
         private void ShowOptionsMenu(Rect activator)
         {
             var menu = new GenericMenu();
@@ -321,7 +311,7 @@ namespace DansToolbox.EditorTools.BetterScene
             menu.AddItem(new GUIContent("Show and unlock all"), false, BetterSceneVisibility.ShowAndUnlockAll);
             menu.AddItem(new GUIContent("Clear selection history"), false, BetterSceneSelectionHistory.Clear);
             menu.AddSeparator(string.Empty);
-            menu.AddItem(new GUIContent("Toolbox Setup"), false, () => EditorApplication.ExecuteMenuItem("Tools/Dans Toolbox/Setup Wizard"));
+            menu.AddItem(new GUIContent("Toolbox Hub"), false, () => EditorApplication.ExecuteMenuItem("Tools/Dans Toolbox/Toolbox Hub"));
             menu.DropDown(activator);
         }
 

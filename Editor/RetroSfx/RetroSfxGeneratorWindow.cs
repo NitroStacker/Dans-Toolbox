@@ -83,9 +83,7 @@ namespace DansToolbox.EditorTools.Audio
         [MenuItem("Tools/Dans Toolbox/Retro SFX")]
         public static void OpenWindow()
         {
-            RetroSfxGeneratorWindow window = GetWindow<RetroSfxGeneratorWindow>();
-            window.titleContent = new GUIContent("Retro SFX");
-            window.minSize = new Vector2(620f, 680f);
+            DansToolboxToolHub.Open(DansToolboxTools.RetroSfxId);
         }
 
         [MenuItem("Tools/Dans Toolbox/Retro SFX", true)]
@@ -96,6 +94,9 @@ namespace DansToolbox.EditorTools.Audio
 
         private void OnEnable()
         {
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                this,
+                DansToolboxTools.RetroSfxId);
             revealStartedAt = EditorApplication.timeSinceStartup;
             wantsMouseMove = true;
             previewIsActive = false;
@@ -105,9 +106,9 @@ namespace DansToolbox.EditorTools.Audio
             effectList = null;
             statusMessage = sourceMode == AudioSourceMode.Imported
                 ? importedAudio.SourceClip == null
-                    ? "READY  ·  select or drop an AudioClip"
-                    : $"READY  ·  editing {importedAudio.SourceClip.name}"
-                : "READY  ·  select a family or shape a patch";
+                    ? "Select or drop an AudioClip"
+                    : $"Editing {importedAudio.SourceClip.name}"
+                : "Select a family or shape a patch";
             CleanupPreviewAsset();
             EditorApplication.update += UpdatePreviewState;
             EnsureWaveformIsCurrent();
@@ -1959,7 +1960,7 @@ namespace DansToolbox.EditorTools.Audio
             {
                 previewIsActive = false;
                 CleanupPreviewAsset();
-                statusMessage = "READY  ·  preview finished";
+                statusMessage = "Preview finished";
             }
 
             Repaint();

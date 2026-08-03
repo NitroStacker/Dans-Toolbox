@@ -74,7 +74,9 @@ namespace DansToolbox.Editor
         public static int Revision { get; private set; }
 
         public static DansToolboxPalette Current =>
-            GetPalette(DansToolboxSettings.Theme);
+            GetPalette(
+                DansToolboxSettings.Theme,
+                DansToolboxSettings.SeamlessToolSurfaces);
 
         public static string GetDisplayName(DansToolboxThemeId theme)
         {
@@ -90,6 +92,19 @@ namespace DansToolbox.Editor
         }
 
         public static DansToolboxPalette GetPalette(DansToolboxThemeId theme)
+        {
+            return GetPalette(theme, false);
+        }
+
+        internal static DansToolboxPalette GetPalette(
+            DansToolboxThemeId theme,
+            bool seamlessToolSurfaces)
+        {
+            DansToolboxPalette palette = GetBasePalette(theme);
+            return seamlessToolSurfaces ? MakeSeamless(palette) : palette;
+        }
+
+        private static DansToolboxPalette GetBasePalette(DansToolboxThemeId theme)
         {
             switch (theme)
             {
@@ -148,6 +163,31 @@ namespace DansToolbox.Editor
                         new Color32(240, 180, 72, 255),
                         new Color32(235, 98, 105, 255));
             }
+        }
+
+        private static DansToolboxPalette MakeSeamless(DansToolboxPalette palette)
+        {
+            Color surface = Color.Lerp(palette.Canvas, palette.Panel, 0.72f);
+            Color inset = Color.Lerp(palette.Inset, surface, 0.12f);
+            Color border = Color.Lerp(surface, palette.Border, 0.38f);
+            Color borderStrong = Color.Lerp(surface, palette.BorderStrong, 0.62f);
+            return new DansToolboxPalette(
+                surface,
+                surface,
+                inset,
+                palette.Raised,
+                palette.Hover,
+                border,
+                borderStrong,
+                palette.Text,
+                palette.Muted,
+                palette.Accent,
+                palette.AccentHover,
+                palette.AccentSoft,
+                palette.Signal,
+                palette.Success,
+                palette.Warning,
+                palette.Danger);
         }
 
         internal static void NotifyChanged()

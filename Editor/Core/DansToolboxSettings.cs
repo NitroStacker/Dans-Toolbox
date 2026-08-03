@@ -83,7 +83,7 @@ namespace DansToolbox.Editor
                 new DansToolboxToolDescriptor(
                     NativeWindowDockId,
                     "Native Window Dock",
-                    "Embed interactive Windows applications in resizable Unity tabs.",
+                    "Embed interactive Windows applications in independently placed panels.",
                     true,
                     true),
                 new DansToolboxToolDescriptor(
@@ -148,6 +148,7 @@ namespace DansToolbox.Editor
         [UnityEngine.SerializeField] private List<string> enabledToolIds = new List<string>();
         [UnityEngine.SerializeField] private List<string> knownToolIds = new List<string>();
         [UnityEngine.SerializeField] private bool recommendedLayoutSelected;
+        [UnityEngine.SerializeField] private bool seamlessToolSurfaces = true;
 
         public static bool IsInitialized => instance.initialized;
         public static bool ShouldOfferSetup => ShouldOfferSetupForVersion(
@@ -159,6 +160,7 @@ namespace DansToolbox.Editor
             CurrentPackageVersion);
         public static DansToolboxThemeId Theme => instance.theme;
         public static bool RecommendedLayoutSelected => instance.recommendedLayoutSelected;
+        public static bool SeamlessToolSurfaces => instance.seamlessToolSurfaces;
 
         internal static string CurrentPackageVersion
         {
@@ -216,7 +218,8 @@ namespace DansToolbox.Editor
         public static void Apply(
             DansToolboxThemeId selectedTheme,
             IEnumerable<string> enabledTools,
-            bool useRecommendedLayout)
+            bool useRecommendedLayout,
+            bool useSeamlessToolSurfaces)
         {
             DansToolboxSettings settings = instance;
             settings.initialized = true;
@@ -232,6 +235,7 @@ namespace DansToolbox.Editor
                 settings.knownToolIds.Add(tool.Id);
             }
             settings.recommendedLayoutSelected = useRecommendedLayout;
+            settings.seamlessToolSurfaces = useSeamlessToolSurfaces;
             settings.Save(true);
             DansToolboxTheme.NotifyChanged();
             EditorApplication.delayCall += DansToolboxLayoutInstaller.CloseDisabledToolWindows;

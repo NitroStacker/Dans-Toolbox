@@ -4,6 +4,34 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.14.0] - 2026-08-03
+
+### Added
+
+- Add a searchable Toolbox Hub with job-based groups, favorites, recents, enabled/open status, keyboard launch, and direct access from Unity's main toolbar.
+- Add automatic launch placement with per-tool defaults and explicit floating recovery positions.
+- Add exact Native Dock panel targeting through a numbered live-region overlay.
+- Add a guarded clean-workspace action that closes only Dans Toolbox windows and safely detaches Native Dock applications.
+- Add a default-on Seamless Tool Surfaces appearance option that unifies Toolbox content surfaces and softens internal dividers without modifying native tabs or dock geometry.
+- Add real Unity dock targeting: Retro SFX and Retro VFX join the Inspector dock automatically, while Native Dock uses a numbered full-Editor region picker.
+
+### Changed
+
+- Replace the eager eight-tab ToolBox layout with an organized launcher workflow that preserves the user's existing Unity layout.
+- Turn the setup workspace choice into a Hub-first preference that preserves currently open windows and dock regions.
+- Route in-tool Toolbox actions to the Hub while keeping the Setup Wizard focused on project-wide configuration.
+- Redesign the Hub as a responsive thumbnail card grid with category filters, native tool imagery, hover explanations and actions, a neutral initial search state, and fully scrollable content at short window heights.
+- Replace the Hub's decorative tool motifs with cached native Unity icons that communicate each tool's purpose at a glance.
+- Replace long Toolbox dock-tab names with compact native icons and full-name tooltips; Native Dock uses Unity's standalone-computer icon with its panel number retained in the tooltip.
+
+### Fixed
+
+- Remove Unity 6.3 deprecation warnings by using the typed hierarchy tree APIs and Entity ID object lookup while preserving Unity 6.0 compatibility.
+- Remove redundant READY footers from the core workspace tools and reserve status chrome for actionable progress, guidance, and failures.
+- Make Hub card hover immediate by repainting only on hover-state changes, caching the visible tool order and icons, and eliminating unchanged periodic repaints.
+- Keep compact dock tabs genuinely narrow and give every tool an isolated native icon and tooltip identity instead of sharing Unity's empty-title cache entry.
+- Decouple seamless appearance from workspace cleanup so applying it can never collapse dock regions or expand the center view.
+
 ## [1.13.0] - 2026-08-03
 
 ### Added

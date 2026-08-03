@@ -2,9 +2,13 @@
 
 ## Setup
 
-The setup wizard opens over a blurred view of Unity on first install, after reinstalling the package, and once after every package-version update. It selects the shared color theme, enabled tools, and optional recommended workspace. Settings are saved per project. Reopen it from the Dans Toolbox toolbar icon or with **Tools > Dans Toolbox > Setup Wizard**.
+The setup wizard opens over a blurred view of Unity on first install, after reinstalling the package, and once after every package-version update. It selects the shared color theme, enabled tools, workspace behavior, and whether Toolbox windows use seamless surfaces. Settings are saved per project. Reopen it with **Tools > Dans Toolbox > Setup Wizard**.
 
-The available themes are **Signal Orange**, **Neon Cyan**, and **Arcade Violet**. Disabling a tool prevents its menu command from opening and closes any existing instance. Applying **ToolBox** replaces the current Unity window arrangement without recreating the main Unity window, then removes panes for disabled tools.
+The available themes are **Signal Orange**, **Neon Cyan**, and **Arcade Violet**. Disabling a tool prevents its menu command from opening and closes any existing instance. Choosing **Organized** enables the Hub-first workflow while preserving every open window and dock region. **Seamless Tool Surfaces** is strictly visual: it unifies Toolbox content surfaces and softens redundant internal dividers while leaving Unity's native tab chrome, hover, selection, and dock geometry unchanged.
+
+## Toolbox Hub
+
+The Dans Toolbox icon in Unity's main toolbar opens the searchable Toolbox Hub. Its responsive visual gallery has direct All Tools, Workspace, Create, and Integrate filters; tiles can be pinned, recent tools stay one click away, and open windows are identified in place. Click a tile for its recommended dock or position. Retro SFX and Retro VFX automatically join the Inspector-side dock. Native Window Dock presents numbered overlays on the live Unity panes so each new panel can be docked exactly where it belongs; explicit floating positions remain in the tile menu. **Close Tool Windows** closes only Dans Toolbox windows and safely detaches embedded applications.
 
 ## Retro SFX
 
@@ -22,7 +26,7 @@ See the [complete Retro VFX guide](retro-vfx.md) and [third-party notices](../TH
 
 ## Native Window Dock
 
-Open **Tools > Dans Toolbox > Native Window Dock**. Choose an application from the thumbnail gallery and attach it. Create additional panels to place different applications in separate Unity dock regions. Use Frame to crop the visible portion with draggable borders.
+Open **Tools > Dans Toolbox > Native Window Dock** or launch a panel from the Hub, then select one of the numbered live dock regions. Choose an application from the thumbnail gallery and attach it. Every additional panel uses the same region picker, allowing different applications to live in independently selected Unity panes. Use Frame to crop the visible portion with draggable borders.
 
 Detach applications before closing Unity. The recovery guard also attempts to restore attached windows during script reloads.
 
@@ -51,7 +55,7 @@ Better Hierarchy follows Unity's normal Hierarchy shortcuts: **Delete/Backspace*
 
 ## Better Inspector
 
-Open **Tools > Dans Toolbox > Better Inspector**. Better Inspector follows the live Unity selection and renders the same native or third-party custom editors inside compact, themed component cards. The ToolBox workspace places it in the former Inspector dock beside Retro SFX and Native Window Dock.
+Open **Tools > Dans Toolbox > Better Inspector** or launch it from the Hub. Better Inspector follows the live Unity selection and renders the same native or third-party custom editors inside compact, themed component cards.
 
 Native `.mat` and `.asset` files render through their real Unity custom editors. Imported textures, models, audio, scripts, and other source files render through Unity's importer inspectors, including platform overrides and their normal Apply/Revert workflows. A fixed preview host below the scrolling properties preserves each editor's native preview settings, interaction, and information without interfering with the rest of the Editor surface.
 
@@ -73,7 +77,7 @@ Right-click a component card to open that component's complete Unity context men
 
 ## Better Project
 
-Open **Tools > Dans Toolbox > Better Project**. Browse assets in compact list, visual grid, sortable details, or split-pane views. The ToolBox workspace places Better Project in the stock Project dock and keeps **Unity Project Window** available from the `...` menu.
+Open **Tools > Dans Toolbox > Better Project** or launch it from the Hub. Browse assets in compact list, visual grid, sortable details, or split-pane views. The stock Project window remains available from the `...` menu.
 
 Use **Browse** for folders, history, pinned locations, previews, sub-assets, drag/drop, and familiar file operations. Use **Library** for favorites, recents, saved searches, smart or manual collections, exact-content duplicates, oversized assets, issues, and unused candidates. Use **Impact** to navigate dependencies and reverse references, assess likely build use, collect or export a dependency set, replace serialized references, or inspect deletion impact.
 
@@ -83,7 +87,7 @@ Better Project requests previews only for visible assets and builds its reverse-
 
 ## Better Console
 
-Open **Tools > Dans Toolbox > Better Console**. The ToolBox workspace places it where Unity's Console normally lives; the native Console remains available from the `...` menu.
+Open **Tools > Dans Toolbox > Better Console** or launch it from the Hub. The native Console remains available from the `...` menu.
 
 **Live** is a virtualized stream with severity filters, optional timestamps, follow, pause, Error Pause, and signature-based Collapse. **Issues** groups changing instances of the same problem, shows hit rate and session spread, and persists New, Seen, Acknowledged, Muted, or Resolved state with bookmarks and notes. **Sessions** records Editor, compile, Play Mode, build, test-like, and remote activity and compares each selected session with the previous session of its kind.
 

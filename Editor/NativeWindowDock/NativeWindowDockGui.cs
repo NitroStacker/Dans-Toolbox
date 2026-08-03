@@ -266,7 +266,8 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         internal static void DrawSignalRail(Rect rect)
         {
-            if (Event.current.type == EventType.Repaint)
+            if (!DansToolboxSettings.SeamlessToolSurfaces &&
+                Event.current.type == EventType.Repaint)
             {
                 EditorGUI.DrawRect(rect, Accent);
             }

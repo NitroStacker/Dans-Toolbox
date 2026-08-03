@@ -423,7 +423,11 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             if (value.StartsWith(InstancePrefix, StringComparison.Ordinal) &&
                 int.TryParse(value.Substring(InstancePrefix.Length), out int instanceId))
             {
+#if UNITY_6000_3_OR_NEWER
+                return EditorUtility.EntityIdToObject(instanceId) as GameObject;
+#else
                 return EditorUtility.InstanceIDToObject(instanceId) as GameObject;
+#endif
             }
 
             if (!GlobalObjectId.TryParse(value, out GlobalObjectId id))

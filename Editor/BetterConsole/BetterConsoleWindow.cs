@@ -50,7 +50,9 @@ namespace DansToolbox.EditorTools.BetterConsole
         internal static void Open()
         {
             BetterConsoleWindow window = GetWindow<BetterConsoleWindow>();
-            window.titleContent = new GUIContent("Better Console", EditorGUIUtility.IconContent("UnityEditor.ConsoleWindow").image);
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                window,
+                DansToolboxTools.BetterConsoleId);
             window.minSize = new Vector2(420f, 260f);
             window.Show();
         }
@@ -75,7 +77,9 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         private void OnEnable()
         {
-            titleContent = new GUIContent("Better Console", EditorGUIUtility.IconContent("UnityEditor.ConsoleWindow").image);
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                this,
+                DansToolboxTools.BetterConsoleId);
             minSize = new Vector2(420f, 260f);
             wantsMouseMove = true;
             BetterConsoleStore.Changed -= OnStoreChanged;
@@ -844,7 +848,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             menu.AddItem(new GUIContent("Open Editor Log"), false, InternalEditorUtility.OpenEditorConsole);
             menu.AddItem(new GUIContent("Open Player Log"), false, InternalEditorUtility.OpenPlayerConsole);
             menu.AddItem(new GUIContent("Unity Console"), false, () => EditorApplication.ExecuteMenuItem("Window/General/Console"));
-            menu.AddItem(new GUIContent("Toolbox Setup"), false, () => EditorApplication.ExecuteMenuItem("Tools/Dans Toolbox/Setup Wizard"));
+            menu.AddItem(new GUIContent("Toolbox Hub"), false, () => EditorApplication.ExecuteMenuItem("Tools/Dans Toolbox/Toolbox Hub"));
             menu.ShowAsContext();
         }
 

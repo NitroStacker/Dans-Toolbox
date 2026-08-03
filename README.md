@@ -4,7 +4,7 @@ Dans Toolbox is a Unity 6 package containing eight focused tools:
 
 - **Retro SFX** — create, preview, import, process, and render retro sound effects.
 - **Retro VFX** — forge deterministic particle effects, import flipbooks, attach advanced rendering, and export editable prefabs or baked sprite sheets.
-- **Native Window Dock** — place interactive Windows application windows inside resizable Unity tabs, including multi-panel layouts and crop framing.
+- **Native Window Dock** — place interactive Windows application windows inside independently positioned panels, including multi-panel layouts and crop framing.
 - **Better Hierarchy** — replace Unity's hierarchy with rule styling, collections, diagnostics, visual search, batch actions, and the thumbnail-based Object Atlas.
 - **Better Inspector** — inspect scene objects and assets with searchable component cards, pinned targets, favorites, multi-editing, and diagnostics.
 - **Better Project** — browse assets with visual rules, smart collections, rich previews, health diagnostics, batch actions, and dependency impact tracing.
@@ -19,16 +19,17 @@ The setup wizard opens as a focused, blurred overlay after the package is instal
 
 - Signal Orange, Neon Cyan, or Arcade Violet color themes.
 - Which Dans Toolbox tools are enabled.
-- Whether to apply the packaged **ToolBox** workspace.
+- Whether to use the organized, Hub-first launcher workflow while preserving the current dock layout.
+- Whether Toolbox windows use visually seamless shared surfaces and softer internal dividers. Native tabs and dock geometry remain unchanged.
 
-The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they can be shared with the project. Reopen the wizard at any time from the Dans Toolbox icon in Unity's main toolbar or from **Tools > Dans Toolbox > Setup Wizard**.
+The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they can be shared with the project. The toolbar icon now opens the **Toolbox Hub** for everyday use; project themes and enabled tools remain available from **Tools > Dans Toolbox > Setup Wizard**.
 
 ## Install from Git
 
 After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.12.0
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.14.0
 ```
 
 For local development, use:
@@ -42,7 +43,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.12.0"
+    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.14.0"
   }
 }
 ```
@@ -50,6 +51,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ## Open the tools
 
 - **Dans Toolbox icon in the Unity main toolbar**
+- **Tools > Dans Toolbox > Toolbox Hub**
 - **Tools > Dans Toolbox > Setup Wizard**
 - **Tools > Dans Toolbox > Retro SFX**
 - **Tools > Dans Toolbox > Retro VFX**
@@ -59,6 +61,8 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - **Tools > Dans Toolbox > Better Project**
 - **Tools > Dans Toolbox > Better Console**
 - **Tools > Dans Toolbox > Better Scene**
+
+The Toolbox Hub presents tools as a responsive visual gallery with direct All Tools, Workspace, Create, and Integrate filters. It searches names and jobs, remembers favorites and recent tools, and reports which tools are already open. Click a tile to use its recommended dock or position. Retro SFX and Retro VFX automatically join the Inspector-side dock. Native Window Dock opens a numbered full-Editor picker so each new panel can be attached to a specific Unity pane; floating positions remain available from the tile menu. **Close Tool Windows** closes only Dans Toolbox windows and leaves the user's Unity layout untouched.
 
 ## Retro VFX essentials
 

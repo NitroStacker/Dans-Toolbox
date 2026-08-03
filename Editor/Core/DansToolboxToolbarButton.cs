@@ -9,8 +9,8 @@ namespace DansToolbox.Editor
 {
     internal static class DansToolboxToolbarButton
     {
-        internal const string ElementPath = "Dans Toolbox/Setup Wizard";
-        private const string Tooltip = "Open Dans Toolbox Setup Wizard";
+        internal const string ElementPath = "Dans Toolbox/Toolbox Hub";
+        private const string Tooltip = "Open Dans Toolbox Hub";
 
         [MainToolbarElement(
             ElementPath,
@@ -20,7 +20,7 @@ namespace DansToolbox.Editor
         {
             return new MainToolbarButton(
                 new MainToolbarContent(LoadIcon(), Tooltip),
-                DansToolboxSetupWizard.Open);
+                DansToolboxHubWindow.Open);
         }
 
         internal static Texture2D LoadIcon()
@@ -44,7 +44,7 @@ namespace DansToolbox.Editor
     [InitializeOnLoad]
     internal static class DansToolboxToolbarVisibility
     {
-        private const string MigrationVersion = "1.2.1";
+        private const string MigrationVersion = "1.14.0";
         private const double RetrySeconds = 10d;
         private static double retryDeadline;
 

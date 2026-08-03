@@ -49,10 +49,7 @@ namespace DansToolbox.EditorTools.RetroVfx
         [MenuItem("Tools/Dans Toolbox/Retro VFX")]
         internal static void Open()
         {
-            RetroVfxGeneratorWindow window = GetWindow<RetroVfxGeneratorWindow>();
-            window.titleContent = new GUIContent("Retro VFX");
-            window.minSize = new Vector2(760f, 720f);
-            window.Show();
+            DansToolboxToolHub.Open(DansToolboxTools.RetroVfxId);
         }
 
         [MenuItem("Tools/Dans Toolbox/Retro VFX", true)]
@@ -63,7 +60,9 @@ namespace DansToolbox.EditorTools.RetroVfx
 
         private void OnEnable()
         {
-            titleContent = new GUIContent("Retro VFX");
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                this,
+                DansToolboxTools.RetroVfxId);
             minSize = new Vector2(760f, 720f);
             preview ??= new RetroVfxPreviewStage();
             if (workingRecipe == null)

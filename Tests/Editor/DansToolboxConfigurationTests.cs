@@ -25,6 +25,23 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void SeamlessPalette_UnifiesOuterSurfaceWithoutRemovingHierarchy()
+        {
+            DansToolboxPalette standard = DansToolboxTheme.GetPalette(
+                DansToolboxThemeId.SignalOrange,
+                false);
+            DansToolboxPalette seamless = DansToolboxTheme.GetPalette(
+                DansToolboxThemeId.SignalOrange,
+                true);
+
+            Assert.That(standard.Canvas, Is.Not.EqualTo(standard.Panel));
+            Assert.That(seamless.Canvas, Is.EqualTo(seamless.Panel));
+            Assert.That(seamless.Inset, Is.Not.EqualTo(seamless.Panel));
+            Assert.That(seamless.Border, Is.Not.EqualTo(standard.Border));
+            Assert.That(seamless.Accent, Is.EqualTo(standard.Accent));
+        }
+
+        [Test]
         public void ToolCatalog_UsesUniqueIds()
         {
             var ids = new HashSet<string>();
@@ -45,51 +62,186 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
-        public void RecommendedLayout_ReferencesPackagedToolAssemblies()
+        public void ToolboxHub_NativeToolIconsResolve()
         {
-            string path = DansToolboxLayoutInstaller.GetLayoutPath();
-            Assert.That(File.Exists(path), Is.True, path);
-            Assert.That(Path.GetFileName(path), Is.EqualTo("ToolBox.wlt"));
-
-            string layout = File.ReadAllText(path);
-            Assert.That(layout, Does.Contain("DansToolbox.RetroSfx.Editor"));
-            Assert.That(layout, Does.Contain("DansToolbox.RetroVfx.Editor"));
-            Assert.That(layout, Does.Contain("DansToolbox.NativeWindowDock.Editor"));
-            Assert.That(layout, Does.Contain("DansToolbox.BetterHierarchy.Editor"));
-            Assert.That(layout, Does.Contain("DansToolbox.BetterInspector.Editor"));
-            Assert.That(layout, Does.Contain("DansToolbox.BetterProject.Editor"));
-            Assert.That(layout, Does.Contain("DansToolbox.BetterConsole.Editor"));
-            Assert.That(layout, Does.Contain("DansToolbox.BetterScene.Editor"));
-            Assert.That(layout, Does.Not.Contain("m_Text: Console"));
-            Assert.That(layout, Does.Not.Contain("m_Text: Inspector"));
-            Assert.That(layout, Does.Not.Contain("BattleSoccer.EditorTools"));
-            Assert.That(layout, Does.Not.Contain("RetroSongArrangerWindow"));
+            foreach (DansToolboxLaunchDescriptor descriptor in DansToolboxToolLauncher.All)
+            {
+                Assert.That(
+                    EditorGUIUtility.IconContent(descriptor.IconName).image,
+                    Is.Not.Null,
+                    "Missing Unity icon: " + descriptor.IconName);
+            }
         }
 
         [Test]
-        public void RecommendedLayout_UnityLoaderContractIsAvailable()
+        public void ToolboxWindows_UseDistinctIconOnlyCompactTitles()
         {
-            System.Type type = typeof(EditorWindow).Assembly.GetType("UnityEditor.WindowLayout");
-            Assert.That(type, Is.Not.Null);
+            var cacheKeys = new HashSet<string>();
+            var iconIds = new HashSet<int>();
+            foreach (DansToolboxLaunchDescriptor descriptor in DansToolboxToolLauncher.All)
+            {
+                GUIContent title = DansToolboxWindowChrome.CreateCompactTitle(
+                    descriptor.Id);
+                Assert.That(
+                    DansToolboxWindowChrome.StripInvisibleCacheKey(title.text),
+                    Is.Empty,
+                    descriptor.Id);
+                Assert.That(cacheKeys.Add(title.text), Is.True, descriptor.Id);
+                Assert.That(title.image, Is.Not.Null, descriptor.Id);
+                Assert.That(
+                    iconIds.Add(title.image.GetInstanceID()),
+                    Is.True,
+                    "Duplicate Unity icon: " + descriptor.IconName);
+                Assert.That(
+                    title.tooltip,
+                    Is.EqualTo(DansToolboxTools.Find(descriptor.Id).Name),
+                    descriptor.Id);
+            }
 
-            MethodInfo loader = type.GetMethods(
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-                .FirstOrDefault(method =>
-                {
-                    if (method.Name != "TryLoadWindowLayout")
-                    {
-                        return false;
-                    }
+            GUIContent nativeDockPanel = DansToolboxWindowChrome.CreateCompactTitle(
+                DansToolboxTools.NativeWindowDockId,
+                null,
+                "Native Dock 3");
+            Assert.That(
+                DansToolboxWindowChrome.StripInvisibleCacheKey(nativeDockPanel.text),
+                Is.Empty);
+            Assert.That(nativeDockPanel.image, Is.Not.Null);
+            Assert.That(nativeDockPanel.tooltip, Is.EqualTo("Native Dock 3"));
+        }
 
-                    ParameterInfo[] parameters = method.GetParameters();
-                    return parameters.Length == 5 &&
-                           parameters[0].ParameterType == typeof(string) &&
-                           parameters[1].ParameterType == typeof(bool) &&
-                           parameters[2].ParameterType == typeof(bool) &&
-                           parameters[3].ParameterType == typeof(bool) &&
-                           parameters[4].ParameterType == typeof(bool);
-                });
-            Assert.That(loader, Is.Not.Null);
+        [Test]
+        public void ToolboxWindowChrome_ResolvesInteractiveTabStyleInternals()
+        {
+            System.Type dockArea = typeof(EditorWindow).Assembly.GetType(
+                "UnityEditor.DockArea",
+                true);
+            System.Type styles = typeof(EditorWindow).Assembly.GetType(
+                "UnityEditor.DockArea+Styles",
+                true);
+
+            Assert.That(
+                dockArea.GetField(
+                    "tabStyle",
+                    BindingFlags.Instance |
+                    BindingFlags.Public |
+                    BindingFlags.NonPublic)?.FieldType,
+                Is.EqualTo(typeof(GUIStyle)));
+            foreach (string fieldName in new[]
+                     {
+                         "dragTab",
+                         "dragTabFirst",
+                         "tabLabel"
+                     })
+            {
+                Assert.That(
+                    styles.GetField(
+                        fieldName,
+                        BindingFlags.Static |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic)?.FieldType,
+                    Is.EqualTo(typeof(GUIStyle)),
+                    fieldName);
+            }
+        }
+
+        [Test]
+        public void OrganizedWorkspace_CatalogsEveryToolWindowWithoutLoadingALayout()
+        {
+            Assert.That(DansToolboxLayoutInstaller.IsLayoutAvailable, Is.True);
+            Assert.That(
+                DansToolboxToolLauncher.KnownWindowTypeNames.Count(),
+                Is.EqualTo(DansToolboxTools.All.Count));
+            foreach (DansToolboxToolDescriptor tool in DansToolboxTools.All)
+            {
+                Assert.That(
+                    DansToolboxToolLauncher.Find(tool.Id).TypeName,
+                    Is.Not.Empty,
+                    "No launcher registration for " + tool.Id);
+            }
+            Assert.That(
+                DansToolboxToolLauncher.KnownWindowTypeNames.Any(name =>
+                    name.Contains("DansToolbox.RetroSfx.Editor")),
+                Is.True);
+            Assert.That(
+                DansToolboxToolLauncher.KnownWindowTypeNames.Any(name =>
+                    name.Contains("DansToolbox.NativeWindowDock.Editor")),
+                Is.True);
+            Assert.That(
+                DansToolboxToolLauncher.KnownWindowTypeNames.Any(name =>
+                    name.Contains("DansToolbox.BetterScene.Editor")),
+                Is.True);
+        }
+
+        [Test]
+        public void ToolPlacement_StaysInsideTheEditorWorkArea()
+        {
+            Rect main = new Rect(100f, 50f, 1600f, 900f);
+            foreach (DansToolboxPlacement placement in
+                     (DansToolboxPlacement[])System.Enum.GetValues(typeof(DansToolboxPlacement)))
+            {
+                Rect result = DansToolboxToolLauncher.CalculateRect(
+                    main,
+                    placement,
+                    new Vector2(900f, 700f));
+                Assert.That(result.xMin, Is.GreaterThanOrEqualTo(main.xMin));
+                Assert.That(result.yMin, Is.GreaterThanOrEqualTo(main.yMin));
+                Assert.That(result.xMax, Is.LessThanOrEqualTo(main.xMax));
+                Assert.That(result.yMax, Is.LessThanOrEqualTo(main.yMax));
+            }
+        }
+
+        [Test]
+        public void ToolDefaults_UseRealDockTargets()
+        {
+            DansToolboxLaunchDescriptor nativeDock = DansToolboxToolLauncher.Find(
+                DansToolboxTools.NativeWindowDockId);
+            DansToolboxLaunchDescriptor retroSfx = DansToolboxToolLauncher.Find(
+                DansToolboxTools.RetroSfxId);
+            DansToolboxLaunchDescriptor retroVfx = DansToolboxToolLauncher.Find(
+                DansToolboxTools.RetroVfxId);
+
+            Assert.That(nativeDock.AllowsMultiple, Is.True);
+            Assert.That(
+                nativeDock.DefaultPlacement,
+                Is.EqualTo(DansToolboxPlacement.DockPicker));
+            Assert.That(
+                retroSfx.DefaultPlacement,
+                Is.EqualTo(DansToolboxPlacement.InspectorDock));
+            Assert.That(
+                retroVfx.DefaultPlacement,
+                Is.EqualTo(DansToolboxPlacement.InspectorDock));
+        }
+
+        [Test]
+        public void UnityDockingAdapter_ResolvesRequiredUnityInternals()
+        {
+            Assert.That(DansToolboxDocking.IsSupported, Is.True);
+        }
+
+        [Test]
+        public void ToolboxHub_UsesResponsiveThumbnailColumns()
+        {
+            Assert.That(DansToolboxHubWindow.CalculateColumnCount(320f), Is.EqualTo(1));
+            Assert.That(DansToolboxHubWindow.CalculateColumnCount(340f), Is.EqualTo(2));
+            Assert.That(DansToolboxHubWindow.CalculateColumnCount(539f), Is.EqualTo(2));
+            Assert.That(DansToolboxHubWindow.CalculateColumnCount(540f), Is.EqualTo(3));
+            Assert.That(DansToolboxHubWindow.CalculateColumnCount(899f), Is.EqualTo(3));
+            Assert.That(DansToolboxHubWindow.CalculateColumnCount(900f), Is.EqualTo(4));
+        }
+
+        [TestCase(440f, 480f)]
+        [TestCase(680f, 480f)]
+        [TestCase(680f, 650f)]
+        public void ToolboxHub_GalleryNeverRunsUnderTheFooter(float width, float height)
+        {
+            DansToolboxHubWindow.HubLayoutRegions layout =
+                DansToolboxHubWindow.CalculateLayout(new Vector2(width, height));
+
+            Assert.That(layout.Search.yMin, Is.GreaterThanOrEqualTo(layout.Header.yMax));
+            Assert.That(layout.Filter.yMin, Is.GreaterThanOrEqualTo(layout.Search.yMax));
+            Assert.That(layout.Gallery.yMin, Is.GreaterThanOrEqualTo(layout.Filter.yMax));
+            Assert.That(layout.Gallery.yMax, Is.LessThanOrEqualTo(layout.Footer.yMin));
+            Assert.That(layout.Footer.yMax, Is.LessThanOrEqualTo(height));
         }
 
         [Test]
@@ -176,6 +328,9 @@ namespace DansToolbox.Editor.Tests
                 factory?.GetCustomAttribute<MainToolbarElementAttribute>();
 
             Assert.That(attribute, Is.Not.Null);
+            Assert.That(
+                DansToolboxToolbarButton.ElementPath,
+                Is.EqualTo("Dans Toolbox/Toolbox Hub"));
             Assert.That(attribute.path, Is.EqualTo(DansToolboxToolbarButton.ElementPath));
             Assert.That(attribute.defaultDockPosition, Is.EqualTo(MainToolbarDockPosition.Left));
             Assert.That(attribute.defaultDockIndex, Is.EqualTo(2));

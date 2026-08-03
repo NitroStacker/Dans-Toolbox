@@ -8,6 +8,15 @@ using UnityEditor.IMGUI.Controls;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if UNITY_6000_3_OR_NEWER
+using HierarchyTreeView = UnityEditor.IMGUI.Controls.TreeView<int>;
+using HierarchyTreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
+using HierarchyTreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
+#else
+using HierarchyTreeView = UnityEditor.IMGUI.Controls.TreeView;
+using HierarchyTreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem;
+using HierarchyTreeViewState = UnityEditor.IMGUI.Controls.TreeViewState;
+#endif
 
 namespace DansToolbox.EditorTools.BetterHierarchy
 {
@@ -27,7 +36,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         [SerializeField] internal List<int> BeforeSearch = new List<int>();
     }
 
-    internal sealed class BetterHierarchyTreeItem : TreeViewItem
+    internal sealed class BetterHierarchyTreeItem : HierarchyTreeViewItem
     {
         internal BetterHierarchyTreeItem(int id, int depth, string name) : base(id, depth, name)
         {
@@ -41,7 +50,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         internal bool IsVirtualMember { get; set; }
     }
 
-    internal sealed class BetterHierarchyTreeView : TreeView
+    internal sealed class BetterHierarchyTreeView : HierarchyTreeView
     {
         private readonly BetterHierarchyWindow host;
         private readonly Dictionary<int, BetterHierarchyTreeItem> items =
@@ -54,7 +63,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         private double lastItemContextClickAt = double.NegativeInfinity;
 
         internal BetterHierarchyTreeView(
-            TreeViewState state,
+            HierarchyTreeViewState state,
             BetterHierarchyWindow host,
             BetterHierarchyExpansionState expansionState) : base(state)
         {
@@ -112,8 +121,9 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
 
             List<int> selection = new List<int>();
-            foreach (int instanceId in Selection.instanceIDs)
+            foreach (UnityEngine.Object selectedObject in Selection.objects)
             {
+                int instanceId = selectedObject.GetInstanceID();
                 if (objectItemIds.TryGetValue(instanceId, out List<int> ids) && ids.Count > 0)
                 {
                     int preferredId = ChoosePreferredSelectionId(ids, items);
@@ -196,7 +206,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                     continue;
                 }
 
-                for (TreeViewItem parent = item.parent; parent != null && parent.id != 0; parent = parent.parent)
+                for (HierarchyTreeViewItem parent = item.parent; parent != null && parent.id != 0; parent = parent.parent)
                 {
                     SetExpanded(parent.id, true);
                 }
@@ -234,7 +244,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             return true;
         }
 
-        protected override TreeViewItem BuildRoot()
+        protected override HierarchyTreeViewItem BuildRoot()
         {
             items.Clear();
             objectItemIds.Clear();
@@ -437,7 +447,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             SceneView.lastActiveSceneView?.FrameSelected();
         }
 
-        protected override bool CanRename(TreeViewItem item)
+        protected override bool CanRename(HierarchyTreeViewItem item)
         {
             return item is BetterHierarchyTreeItem better && better.GameObject != null;
         }
@@ -975,7 +985,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         {
             item = null;
             Event current = Event.current;
-            IList<TreeViewItem> rows = GetRows();
+            IList<HierarchyTreeViewItem> rows = GetRows();
             if (current == null || rows == null || rows.Count == 0)
             {
                 return false;
@@ -1046,7 +1056,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
 
             bool overRow = false;
-            IList<TreeViewItem> rows = GetRows();
+            IList<HierarchyTreeViewItem> rows = GetRows();
             for (int row = 0; rows != null && row < rows.Count; row++)
             {
                 if (GetRowRect(row).Contains(current.mousePosition))

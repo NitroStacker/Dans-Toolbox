@@ -65,7 +65,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private string attachedLabel = string.Empty;
         private string cropProfileKey = string.Empty;
         private string statusMessage =
-            "READY  ·  choose a running window or launch an application";
+            "Choose a running window or launch an application";
         private Color statusColor;
         private bool pendingLaunch;
         private int launchedProcessId;
@@ -113,7 +113,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         [MenuItem("Tools/Dans Toolbox/Native Window Dock")]
         private static void Open()
         {
-            CreatePanel();
+            DansToolboxToolHub.OpenNewNativeDock();
         }
 
         [MenuItem("Tools/Dans Toolbox/Native Window Dock", true)]
@@ -121,16 +121,6 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         {
             return DansToolboxSettings.IsToolEnabled(
                 DansToolboxTools.NativeWindowDockId);
-        }
-
-        private static NativeWindowDockWindow CreatePanel()
-        {
-            NativeWindowDockWindow window = CreateWindow<NativeWindowDockWindow>();
-            window.EnsurePanelIdentity();
-            window.minSize = new Vector2(520f, 340f);
-            window.Show();
-            window.Focus();
-            return window;
         }
 
         private void OnEnable()
@@ -302,30 +292,33 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             NativeWindowDockGui.DrawSignalRail(
                 new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, 2f));
 
-            string state = session != null ? "ATTACHED" : pendingLaunch ? "WAITING" : "READY";
-            Color stateColor = session != null
-                ? NativeWindowDockGui.Accent
-                : pendingLaunch ? NativeWindowDockGui.Warning : NativeWindowDockGui.Muted;
             if (GUI.Button(
                     new Rect(rect.xMax - 108, rect.y + 4, 92, 28),
                     "NEW PANEL",
                     NativeWindowDockGui.Button))
             {
-                CreatePanel();
+                DansToolboxToolHub.OpenNewNativeDock();
             }
 
-            Rect stateRect = new Rect(rect.x + 8, rect.y + 4, 104, 28);
-            NativeWindowDockGui.DrawPanel(
-                stateRect,
-                NativeWindowDockGui.Inset,
-                NativeWindowDockGui.Border);
-            NativeWindowDockGui.DrawStatusDot(
-                new Vector2(stateRect.x + 15, stateRect.center.y),
-                stateColor);
-            GUI.Label(
-                new Rect(stateRect.x + 26, stateRect.y, stateRect.width - 30, stateRect.height),
-                state,
-                NativeWindowDockGui.Status);
+            if (session != null || pendingLaunch)
+            {
+                string state = session != null ? "ATTACHED" : "WAITING";
+                Color stateColor = session != null
+                    ? NativeWindowDockGui.Accent
+                    : NativeWindowDockGui.Warning;
+                Rect stateRect = new Rect(rect.x + 8, rect.y + 4, 104, 28);
+                NativeWindowDockGui.DrawPanel(
+                    stateRect,
+                    NativeWindowDockGui.Inset,
+                    NativeWindowDockGui.Border);
+                NativeWindowDockGui.DrawStatusDot(
+                    new Vector2(stateRect.x + 15, stateRect.center.y),
+                    stateColor);
+                GUI.Label(
+                    new Rect(stateRect.x + 26, stateRect.y, stateRect.width - 30, stateRect.height),
+                    state,
+                    NativeWindowDockGui.Status);
+            }
         }
 
         private void DrawToolbar(Rect rect)
@@ -844,7 +837,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                         NativeWindowDockGui.DangerButton))
                 {
                     pendingLaunch = false;
-                    SetStatus("READY  ·  launch wait cancelled", NativeWindowDockGui.Muted);
+                    SetStatus("Launch wait cancelled", NativeWindowDockGui.Muted);
                 }
             }
             else if (GUI.Button(
@@ -941,7 +934,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     SetStatus(
                         candidates.Count == 0
                             ? "EMPTY  ·  no interactive top-level application windows found"
-                            : $"READY  ·  {candidates.Count} application window(s) available",
+                            : $"{candidates.Count} application window(s) available",
                         candidates.Count == 0
                             ? NativeWindowDockGui.Warning
                             : NativeWindowDockGui.Muted);
@@ -1284,7 +1277,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             cropProfileKey ??= string.Empty;
             launchPath ??= string.Empty;
             launchArguments ??= string.Empty;
-            statusMessage ??= "READY  ·  choose a running window or launch an application";
+            statusMessage ??= "Choose a running window or launch an application";
         }
 
         private bool IsSelectedDockTab()
@@ -1335,7 +1328,12 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         private void UpdateTitle(string processName = null)
         {
-            titleContent = new GUIContent(ComposePanelTitle(panelNumber, processName));
+            string fullTitle = ComposePanelTitle(panelNumber, processName);
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                this,
+                DansToolboxTools.NativeWindowDockId,
+                null,
+                fullTitle);
         }
 
         internal static string ComposePanelTitle(int number, string processName)

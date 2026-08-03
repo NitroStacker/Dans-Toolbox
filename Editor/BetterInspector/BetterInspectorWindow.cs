@@ -22,7 +22,6 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal const string MetadataSeparator = "\u00B7";
         private const float ToolbarHeight = 38f;
         private const float TargetHeaderHeight = 84f;
-        private const float StatusHeight = 22f;
 
         [SerializeField] private bool targetLocked;
         [SerializeField] private Object[] lockedTargets = Array.Empty<Object>();
@@ -54,10 +53,9 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal static void Open()
         {
             BetterInspectorWindow window = GetWindow<BetterInspectorWindow>();
-            window.titleContent = new GUIContent(
-                "Better Inspector",
-                EditorGUIUtility.IconContent("UnityEditor.InspectorWindow").image,
-                "Better Inspector");
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                window,
+                DansToolboxTools.BetterInspectorId);
             window.minSize = new Vector2(300f, 260f);
             window.Show();
             window.Focus();
@@ -77,9 +75,9 @@ namespace DansToolbox.EditorTools.BetterInspector
             collapsedPreviewKeys ??= new List<string>();
             expandedReferenceKeys ??= new List<string>();
             lockedTargets ??= Array.Empty<Object>();
-            titleContent = new GUIContent(
-                "Better Inspector",
-                EditorGUIUtility.IconContent("UnityEditor.InspectorWindow").image);
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                this,
+                DansToolboxTools.BetterInspectorId);
             minSize = new Vector2(300f, 260f);
             wantsMouseMove = true;
             favoriteTypes = LoadFavorites();
@@ -142,18 +140,16 @@ namespace DansToolbox.EditorTools.BetterInspector
             Object[] targets = GetTargets();
             Rect toolbar = new Rect(0f, 0f, position.width, ToolbarHeight);
             Rect targetHeader = new Rect(0f, toolbar.yMax, position.width, TargetHeaderHeight);
-            Rect status = new Rect(0f, position.height - StatusHeight, position.width, StatusHeight);
             Rect content = new Rect(
                 0f,
                 targetHeader.yMax,
                 position.width,
-                Mathf.Max(1f, status.y - targetHeader.yMax));
+                Mathf.Max(1f, position.height - targetHeader.yMax));
 
             DrawToolbar(toolbar, palette, targets);
             DrawTargetHeader(targetHeader, targets, palette);
             DrawContent(content, targets, palette);
             HandleContentContextClick(content, targets);
-            DrawStatus(status, targets, palette);
 
             if (DansToolboxMotion.DrawWindowReveal(canvas, revealStartedAt))
             {
@@ -1022,21 +1018,6 @@ namespace DansToolbox.EditorTools.BetterInspector
             }
         }
 
-        private void DrawStatus(Rect rect, Object[] targets, DansToolboxPalette palette)
-        {
-            EditorGUI.DrawRect(rect, palette.Inset);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), palette.Border);
-            int visible = diagnosticsOnly
-                ? issues.Count
-                : entries.Count(ShouldShowEntry);
-            string left = targets.Length == 0
-                ? "READY"
-                : targets.Length + (targets.Length == 1 ? " TARGET" : " TARGETS") + "  ·  " +
-                  visible + (diagnosticsOnly ? " ISSUES" : " CARDS");
-            GUI.Label(new Rect(8f, rect.y + 1f, rect.width - 150f, rect.height - 2f), left, styles.Status);
-            GUI.Label(new Rect(rect.xMax - 142f, rect.y + 1f, 134f, rect.height - 2f), targetLocked ? "TARGET LOCKED" : "LIVE SELECTION", styles.StatusAccent);
-        }
-
         private void DrawEmptyState(DansToolboxPalette palette)
         {
             GUILayout.Space(30f);
@@ -1678,13 +1659,6 @@ namespace DansToolbox.EditorTools.BetterInspector
                 WarningBadge = CenteredLabel(palette.Warning, 8, FontStyle.Bold),
                 CenteredTitle = CenteredLabel(palette.Text, 12, FontStyle.Bold),
                 CenteredMuted = CenteredLabel(palette.Muted, 10, FontStyle.Normal),
-                Status = Label(palette.Muted, 8, FontStyle.Normal),
-                StatusAccent = new GUIStyle(EditorStyles.miniBoldLabel)
-                {
-                    alignment = TextAnchor.MiddleRight,
-                    fontSize = 8,
-                    normal = { textColor = palette.Accent }
-                },
                 SmallButton = new GUIStyle(EditorStyles.miniButton)
                 {
                     fontSize = 8,
@@ -1911,8 +1885,6 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal GUIStyle WarningBadge;
         internal GUIStyle CenteredTitle;
         internal GUIStyle CenteredMuted;
-        internal GUIStyle Status;
-        internal GUIStyle StatusAccent;
         internal GUIStyle SmallButton;
         internal GUIStyle PrimaryButton;
         internal GUIStyle PreviewBackground;

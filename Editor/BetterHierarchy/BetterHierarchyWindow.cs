@@ -8,20 +8,24 @@ using UnityEditor.IMGUI.Controls;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if UNITY_6000_3_OR_NEWER
+using HierarchyTreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
+#else
+using HierarchyTreeViewState = UnityEditor.IMGUI.Controls.TreeViewState;
+#endif
 
 namespace DansToolbox.EditorTools.BetterHierarchy
 {
     public sealed class BetterHierarchyWindow : EditorWindow
     {
         private const float ToolbarHeight = 38f;
-        private const float StatusHeight = 22f;
         private const string MenuPath = "Tools/Dans Toolbox/Better Hierarchy";
         private const string SearchControlName = "BetterHierarchySearch";
         internal const string NativeGameObjectMenuPath = "GameObject/";
 
-        internal static readonly Color CanvasColor = new Color32(0x1B, 0x1C, 0x1D, 0xFF);
+        internal static Color CanvasColor => DansToolboxTheme.Current.Canvas;
 
-        [SerializeField] private TreeViewState treeState;
+        [SerializeField] private HierarchyTreeViewState treeState;
         [SerializeField] private BetterHierarchyExpansionState treeExpansionState;
         [SerializeField] private BetterHierarchySurface surface;
         [SerializeField] private BetterHierarchyAtlasSource atlasSource;
@@ -45,10 +49,9 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         internal static void Open()
         {
             BetterHierarchyWindow window = GetWindow<BetterHierarchyWindow>();
-            window.titleContent = new GUIContent(
-                "Better Hierarchy",
-                EditorGUIUtility.IconContent("UnityEditor.HierarchyWindow").image,
-                "Better Hierarchy");
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                window,
+                DansToolboxTools.BetterHierarchyId);
             window.minSize = new Vector2(260f, 240f);
             window.Show();
             window.Focus();
@@ -63,13 +66,13 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         private void OnEnable()
         {
             revealStartedAt = EditorApplication.timeSinceStartup;
-            treeState ??= new TreeViewState();
+            treeState ??= new HierarchyTreeViewState();
             treeExpansionState ??= new BetterHierarchyExpansionState();
             tree = new BetterHierarchyTreeView(treeState, this, treeExpansionState);
             atlas = new BetterHierarchyAtlasView(this);
-            titleContent = new GUIContent(
-                "Better Hierarchy",
-                EditorGUIUtility.IconContent("UnityEditor.HierarchyWindow").image);
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                this,
+                DansToolboxTools.BetterHierarchyId);
             minSize = new Vector2(260f, 240f);
             wantsMouseMove = true;
 
@@ -125,9 +128,8 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 
             HandleKeyboard();
             Rect toolbar = new Rect(0f, 0f, position.width, ToolbarHeight);
-            Rect status = new Rect(0f, position.height - StatusHeight, position.width, StatusHeight);
             Rect content = new Rect(0f, toolbar.yMax, position.width,
-                Mathf.Max(1f, status.y - toolbar.yMax));
+                Mathf.Max(1f, position.height - toolbar.yMax));
 
             DrawToolbar(toolbar, palette);
             EditorGUI.DrawRect(content, CanvasColor);
@@ -140,7 +142,6 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 atlas.Draw(content, ref atlasScroll, search, ref atlasSource, ref atlasTileSize, palette);
             }
 
-            DrawStatus(status, palette);
             if (AssetPreview.IsLoadingAssetPreviews())
             {
                 Repaint();
@@ -249,33 +250,6 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 surface = target;
                 GUI.FocusControl(null);
             }
-        }
-
-        private void DrawStatus(Rect rect, DansToolboxPalette palette)
-        {
-            EditorGUI.DrawRect(rect, palette.Inset);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), palette.Border);
-
-            string left = Selection.gameObjects.Length == 0
-                ? "READY"
-                : Selection.gameObjects.Length == 1
-                    ? BetterHierarchyQuery.GetPath(Selection.activeGameObject.transform)
-                    : Selection.gameObjects.Length + " SELECTED";
-            GUI.Label(new Rect(8f, rect.y + 1f, rect.width - 150f, rect.height - 2f), left,
-                new GUIStyle(EditorStyles.miniLabel)
-                {
-                    clipping = TextClipping.Clip,
-                    normal = { textColor = palette.Muted }
-                });
-
-            string mode = BetterHierarchyUserSettings.Mode.ToString().ToUpperInvariant();
-            GUI.Label(new Rect(rect.xMax - 132f, rect.y + 1f, 124f, rect.height - 2f), mode,
-                new GUIStyle(EditorStyles.miniBoldLabel)
-                {
-                    alignment = TextAnchor.MiddleRight,
-                    fontSize = 8,
-                    normal = { textColor = palette.Accent }
-                });
         }
 
         private void DrawDisabled(Rect canvas, DansToolboxPalette palette)

@@ -358,14 +358,11 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
-        public void Visuals_UseRetroSfxHierarchyCanvas()
+        public void Visuals_UseSharedToolboxCanvas()
         {
             Color canvas = BetterHierarchyWindow.CanvasColor;
 
-            Assert.That(canvas.r, Is.EqualTo(0x1B / 255f).Within(0.0001f));
-            Assert.That(canvas.g, Is.EqualTo(0x1C / 255f).Within(0.0001f));
-            Assert.That(canvas.b, Is.EqualTo(0x1D / 255f).Within(0.0001f));
-            Assert.That(canvas.a, Is.EqualTo(1f));
+            Assert.That(canvas, Is.EqualTo(DansToolboxTheme.Current.Canvas));
         }
 
         [Test]

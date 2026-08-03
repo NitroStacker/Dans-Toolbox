@@ -84,7 +84,9 @@ namespace DansToolbox.EditorTools.BetterProject
         internal static void Open()
         {
             BetterProjectWindow window = GetWindow<BetterProjectWindow>();
-            window.titleContent = new GUIContent("Better Project", EditorGUIUtility.IconContent("Project").image);
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                window,
+                DansToolboxTools.BetterProjectId);
             window.minSize = new Vector2(620f, 320f);
             window.Show();
         }
@@ -97,7 +99,9 @@ namespace DansToolbox.EditorTools.BetterProject
 
         private void OnEnable()
         {
-            titleContent = new GUIContent("Better Project", EditorGUIUtility.IconContent("Project").image);
+            DansToolboxWindowChrome.ApplyCompactTitle(
+                this,
+                DansToolboxTools.BetterProjectId);
             minSize = new Vector2(620f, 320f);
             revealStartedAt = EditorApplication.timeSinceStartup;
             wantsMouseMove = true;
@@ -1370,7 +1374,7 @@ namespace DansToolbox.EditorTools.BetterProject
             GUI.Label(new Rect(rect.x + 8f, rect.y, rect.width * 0.5f, rect.height), left, BetterProjectGui.Tiny);
             string right = BetterProjectIndex.IsReferenceIndexing
                 ? "INDEX  " + Mathf.RoundToInt(BetterProjectIndex.ReferenceIndexProgress * 100f) + "%"
-                : BetterProjectIndex.IsReferenceIndexReady ? "INDEX READY" : "INDEX IDLE";
+                : BetterProjectIndex.IsReferenceIndexReady ? "INDEXED" : "INDEX IDLE";
             GUI.Label(new Rect(rect.xMax - 130f, rect.y, 122f, rect.height), right, BetterProjectGui.Tiny);
         }
 
@@ -2041,7 +2045,7 @@ namespace DansToolbox.EditorTools.BetterProject
             menu.AddItem(new GUIContent("Rebuild Asset Index"), false, BetterProjectIndex.Refresh);
             menu.AddItem(new GUIContent("Rebuild Reference Index"), false, BetterProjectIndex.StartReferenceIndex);
             menu.AddItem(new GUIContent("Unity Project Window"), false, OpenUnityProjectWindow);
-            menu.AddItem(new GUIContent("Toolbox Setup"), false, () => EditorApplication.ExecuteMenuItem("Tools/Dans Toolbox/Setup Wizard"));
+            menu.AddItem(new GUIContent("Toolbox Hub"), false, () => EditorApplication.ExecuteMenuItem("Tools/Dans Toolbox/Toolbox Hub"));
             menu.ShowAsContext();
         }
 

@@ -620,7 +620,11 @@ namespace DansToolbox.EditorTools.BetterInspector
             if (command.StartsWith("SCRIPT", StringComparison.Ordinal) &&
                 int.TryParse(command.Substring(6), out int scriptId))
             {
+#if UNITY_6000_3_OR_NEWER
+                MonoScript script = EditorUtility.EntityIdToObject(scriptId) as MonoScript;
+#else
                 MonoScript script = EditorUtility.InstanceIDToObject(scriptId) as MonoScript;
+#endif
                 return script?.GetClass();
             }
 

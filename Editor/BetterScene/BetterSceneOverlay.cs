@@ -17,9 +17,15 @@ namespace DansToolbox.EditorTools.BetterScene
         private static bool transformExtras;
         private static bool savedViews;
         private static bool layerPresets;
+        private static BetterScenePanel scrollPanel;
 
         internal static void DrawPanel(Rect panelRect, BetterScenePanel panel)
         {
+            if (scrollPanel != panel)
+            {
+                scrollPanel = panel;
+                panelScroll = Vector2.zero;
+            }
             DansToolboxPalette palette = DansToolboxTheme.Current;
             BetterSceneGui.Panel(panelRect, false, true);
             EditorGUI.DrawRect(new Rect(panelRect.x, panelRect.y, 3f, panelRect.height), palette.Accent);
@@ -104,7 +110,11 @@ namespace DansToolbox.EditorTools.BetterScene
                 Tile("MIRROR", "Mirror around the active object", IconFor(typeof(Transform)), () => BetterSceneOperations.MirrorSelection(transformAxis), align)
             });
             GUILayout.Space(6f);
-            if (DrawDisclosure("TRANSFORM EXTRAS", transformExtras)) transformExtras = !transformExtras;
+            if (DrawDisclosure("TRANSFORM EXTRAS", transformExtras))
+            {
+                transformExtras = !transformExtras;
+                NotifyContentSizeChanged();
+            }
             if (transformExtras)
             {
                 GUILayout.Space(4f);
@@ -136,7 +146,24 @@ namespace DansToolbox.EditorTools.BetterScene
             GUI.Label(new Rect(assetCard.x + 64f, assetCard.y + 8f, assetCard.width - 72f, 18f), current == null ? "CHOOSE AN ASSET" : current.name, BetterSceneGui.Label);
             Rect objectRect = new Rect(assetCard.x + 64f, assetCard.y + 31f, assetCard.width - 72f, 22f);
             UnityEngine.Object next = EditorGUI.ObjectField(objectRect, current, typeof(UnityEngine.Object), false);
-            if (next != current && (next == null || BetterSceneController.CanPlaceAsset(next))) BetterSceneSettings.PlacementAsset = next;
+            if (next != current)
+            {
+                if (next == null)
+                {
+                    BetterSceneSettings.PlacementAsset = null;
+                }
+                else if (BetterSceneController.CanPlaceAsset(next) &&
+                         BetterSceneSettings.CanPersistPlacementAsset(next))
+                {
+                    BetterSceneSettings.PlacementAsset = next;
+                }
+                else
+                {
+                    SceneView.lastActiveSceneView?.ShowNotification(
+                        new GUIContent("Place needs a prefab, model, sprite, mesh, or AudioClip from the Project."),
+                        2.5d);
+                }
+            }
 
             UnityEngine.Object[] recent = BetterSceneSettings.GetRecentPlacementAssets();
             if (recent.Length > 0)
@@ -145,6 +172,13 @@ namespace DansToolbox.EditorTools.BetterScene
                 GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "RECENT", BetterSceneGui.Tiny);
                 DrawAssetStrip(recent.Take(5).ToArray());
             }
+            GUILayout.Space(6f);
+            GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "ACTION", BetterSceneGui.Tiny);
+            DrawSegmented(new[]
+            {
+                Segment("PLACE", !BetterSceneController.EraseMode, () => BetterSceneController.SetEraseMode(false)),
+                Segment("ERASE CURRENT", BetterSceneController.EraseMode, () => BetterSceneController.SetEraseMode(true), current != null)
+            });
             GUILayout.Space(6f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "SNAP TARGET", BetterSceneGui.Tiny);
             DrawSegmented(Enum.GetValues(typeof(BetterSceneSnapMode)).Cast<BetterSceneSnapMode>()
@@ -157,7 +191,11 @@ namespace DansToolbox.EditorTools.BetterScene
                 Segment("REPEAT", BetterSceneSettings.KeepPlacing, () => BetterSceneSettings.KeepPlacing = !BetterSceneSettings.KeepPlacing)
             });
             GUILayout.Space(7f);
-            DrawHint(current == null ? "Choose or drag a prefab, model, sprite, mesh, or AudioClip." : "Move in Scene to preview. Click to place. Escape exits cleanly.");
+            DrawHint(current == null
+                ? "Choose or drag a prefab, model, sprite, mesh, or AudioClip."
+                : BetterSceneController.EraseMode
+                    ? "Only matching instances highlight red. Click to erase. Undo restores."
+                    : "Move to preview. Hold Shift for centered smart snap. Click to place. Escape exits.");
         }
 
         private static void DrawView()
@@ -178,6 +216,19 @@ namespace DansToolbox.EditorTools.BetterScene
                 Tile("LEFT", "Left orthographic view", IconFor(typeof(Camera)), () => BetterSceneOperations.SetView(BetterSceneViewDirection.Left)),
                 Tile("CAMERA", "Create a Camera matching this Scene view", IconFor(typeof(Camera)), () => BetterSceneOperations.CreateCameraFromView())
             });
+            GUILayout.Space(6f);
+            GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "VIEW BEHAVIOR", BetterSceneGui.Tiny);
+            DrawSegmented(new[]
+            {
+                Segment(
+                    "ACCOUNT FOR ZOOM",
+                    BetterSceneSettings.AccountForViewZoom,
+                    () => BetterSceneSettings.AccountForViewZoom = !BetterSceneSettings.AccountForViewZoom)
+            });
+            GUILayout.Space(4f);
+            DrawHint(BetterSceneSettings.AccountForViewZoom
+                ? "Directional views preserve the current zoom and framing scale."
+                : "Directional views use a consistent 10-unit framing scale.");
             GUILayout.Space(5f);
             DrawSegmented(new[]
             {
@@ -186,7 +237,11 @@ namespace DansToolbox.EditorTools.BetterScene
                 Segment("SAVE VIEW", false, () => BetterSceneOperations.CaptureBookmark(bookmarkName), SceneView.lastActiveSceneView != null)
             });
             GUILayout.Space(6f);
-            if (DrawDisclosure("SAVED VIEWS  " + BetterSceneSettings.Bookmarks.Count, savedViews)) savedViews = !savedViews;
+            if (DrawDisclosure("SAVED VIEWS  " + BetterSceneSettings.Bookmarks.Count, savedViews))
+            {
+                savedViews = !savedViews;
+                NotifyContentSizeChanged();
+            }
             if (savedViews)
             {
                 GUILayout.Space(4f);
@@ -236,7 +291,11 @@ namespace DansToolbox.EditorTools.BetterScene
             GUILayout.Space(5f);
             DrawSegmented(new[] { Segment("SHOW + UNLOCK ALL", false, BetterSceneVisibility.ShowAndUnlockAll) });
             GUILayout.Space(6f);
-            if (DrawDisclosure("LAYER PRESETS  " + BetterSceneSettings.LayerPresets.Count, layerPresets)) layerPresets = !layerPresets;
+            if (DrawDisclosure("LAYER PRESETS  " + BetterSceneSettings.LayerPresets.Count, layerPresets))
+            {
+                layerPresets = !layerPresets;
+                NotifyContentSizeChanged();
+            }
             if (layerPresets)
             {
                 GUILayout.Space(4f);
@@ -315,18 +374,48 @@ namespace DansToolbox.EditorTools.BetterScene
 
         internal static float DesiredHeight(BetterScenePanel panel)
         {
+            return CalculateDesiredHeight(
+                panel,
+                transformExtras,
+                savedViews,
+                BetterSceneSettings.Bookmarks.Count,
+                layerPresets,
+                BetterSceneSettings.LayerPresets.Count,
+                BetterSceneSettings.GetRecentPlacementAssets().Length > 0);
+        }
+
+        internal static float CalculateDesiredHeight(
+            BetterScenePanel panel,
+            bool showTransformExtras,
+            bool showSavedViews,
+            int savedViewCount,
+            bool showLayerPresets,
+            int layerPresetCount,
+            bool hasRecentPlacementAssets)
+        {
             float height;
             switch (panel)
             {
                 case BetterScenePanel.Create: height = 270f; break;
-                case BetterScenePanel.Transform: height = transformExtras ? 455f : 335f; break;
-                case BetterScenePanel.Place: height = BetterSceneSettings.GetRecentPlacementAssets().Length > 0 ? 355f : 285f; break;
-                case BetterScenePanel.View: height = savedViews ? 450f : 330f; break;
-                case BetterScenePanel.Visibility: height = layerPresets ? 470f : 355f; break;
+                case BetterScenePanel.Transform: height = showTransformExtras ? 455f : 335f; break;
+                case BetterScenePanel.Place: height = hasRecentPlacementAssets ? 405f : 335f; break;
+                case BetterScenePanel.View:
+                    height = 400f + (showSavedViews ? 28f + Mathf.Min(8, Mathf.Max(0, savedViewCount)) * 24f : 0f);
+                    break;
+                case BetterScenePanel.Visibility:
+                    height = 355f + (showLayerPresets ? 28f + Mathf.Min(8, Mathf.Max(0, layerPresetCount)) * 24f : 0f);
+                    break;
                 case BetterScenePanel.Measure: height = 280f; break;
                 default: height = 290f; break;
             }
             return height;
+        }
+
+        private static void NotifyContentSizeChanged()
+        {
+            panelScroll = Vector2.zero;
+            BetterSceneNativeOverlayUtility.SchedulePanelResize();
+            SceneView.RepaintAll();
         }
 
         private static void DrawTileRow(TileAction[] tiles)

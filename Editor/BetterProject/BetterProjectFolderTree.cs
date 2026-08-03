@@ -110,20 +110,19 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 return DragAndDropVisualMode.Rejected;
             }
-            string[] dragged = DragAndDrop.paths;
-            if (dragged == null || dragged.Length == 0 || destination.StartsWith("Packages/", StringComparison.Ordinal))
-            {
-                return DragAndDropVisualMode.Rejected;
-            }
-            if (!dragged.Any(path => BetterProjectOperations.CanMoveToFolder(path, destination)))
-            {
-                return DragAndDropVisualMode.Rejected;
-            }
+            DragAndDropVisualMode visualMode = BetterProjectOperations.GetDropVisualMode(
+                DragAndDrop.paths,
+                DragAndDrop.objectReferences,
+                destination);
+            if (visualMode == DragAndDropVisualMode.Rejected) return visualMode;
             if (args.performDrop)
             {
-                BetterProjectOperations.Move(dragged, destination);
+                BetterProjectOperations.PerformDrop(
+                    DragAndDrop.paths,
+                    DragAndDrop.objectReferences,
+                    destination);
             }
-            return DragAndDropVisualMode.Move;
+            return visualMode;
         }
 
         internal static int StableId(string value)

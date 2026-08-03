@@ -4,6 +4,31 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.15.0] - 2026-08-03
+
+### Added
+
+- Add render-accurate ghost previews to Better Scene placement without creating temporary scene objects.
+- Add bounds-centered smart snapping while Shift is held, including dynamically repeated footprint-sized slots across larger surfaces.
+- Add an exact-asset erase painter that removes only instances matching the current Place asset while the mouse is held and groups each stroke into one Undo action.
+- Add an Account for Zoom directional-view option and preserve exact Scene view zoom in saved views.
+- Add Better Project support for dragging Hierarchy objects into asset panes to create connected prefabs with unique paths.
+
+### Changed
+
+- Ground Surface-mode placements by their rendered bounds so prefab transform offsets do not lift objects above the contacted surface.
+- Persist Better Scene placement assets by GUID and local file ID, including built-in and sub-assets, and show clear feedback for unsupported transient selections.
+- Make Better Scene mega-panels dynamically resize and reclamp as saved views and other expandable content change.
+- Treat external Better Project drops as copy imports with unique destination paths while preserving Move semantics for project-internal assets.
+
+### Fixed
+
+- Prevent the Better Scene Place asset field from immediately clearing supported mesh, sprite, audio, prefab, and model selections.
+- Prevent Better Project from sending absolute external paths to `AssetDatabase.MoveAsset`.
+- Restore default Project-window parity for external file imports and Hierarchy-to-prefab drops.
+- Eliminate small Shift-snap placement offsets caused by root pivots and near-integral mesh bounds.
+- Keep placement preview and final placement transforms identical across surface contact and smart snapping.
+
 ## [1.14.0] - 2026-08-03
 
 ### Added

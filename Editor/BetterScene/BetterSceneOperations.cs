@@ -11,6 +11,8 @@ namespace DansToolbox.EditorTools.BetterScene
 {
     internal static class BetterSceneOperations
     {
+        internal const float DefaultViewZoom = 10f;
+
         internal static GameObject Create(BetterSceneCreateKind kind)
         {
             if (kind == BetterSceneCreateKind.Group && Selection.gameObjects.Length > 0)
@@ -137,9 +139,21 @@ namespace DansToolbox.EditorTools.BetterScene
                     orthographic = false;
                     break;
             }
+            float zoom = ResolveDirectionalViewZoom(
+                BetterSceneSettings.AccountForViewZoom,
+                view.size);
             view.in2DMode = false;
-            view.LookAt(view.pivot, rotation, Mathf.Max(0.1f, view.size), orthographic, false);
+            view.LookAt(view.pivot, rotation, zoom, orthographic, true);
+            view.size = zoom;
+            view.Repaint();
             view.Focus();
+        }
+
+        internal static float ResolveDirectionalViewZoom(bool accountForZoom, float currentZoom)
+        {
+            return accountForZoom
+                ? Mathf.Max(0.1f, currentZoom)
+                : DefaultViewZoom;
         }
 
         internal static Camera CreateCameraFromView()
@@ -183,6 +197,96 @@ namespace DansToolbox.EditorTools.BetterScene
             return true;
         }
 
+        internal static bool TryCalculatePlacementContactOffset(
+            BetterSceneSnapMode snapMode,
+            GameObject gameObject,
+            Vector3 surfacePoint,
+            Vector3 surfaceNormal,
+            out Vector3 offset)
+        {
+            offset = Vector3.zero;
+            return snapMode == BetterSceneSnapMode.Surface &&
+                   TryCalculateSurfaceContactOffset(gameObject, surfacePoint, surfaceNormal, out offset);
+        }
+
+        private static bool TryCalculateSurfaceContactOffset(
+            GameObject gameObject,
+            Vector3 surfacePoint,
+            Vector3 surfaceNormal,
+            out Vector3 offset)
+        {
+            offset = Vector3.zero;
+            if (gameObject == null || surfaceNormal.sqrMagnitude <= 0.001f) return false;
+
+            Vector3 normal = surfaceNormal.normalized;
+            float minimumProjection = float.PositiveInfinity;
+            bool found = false;
+            foreach (Renderer renderer in gameObject.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                float candidate = CalculateMinimumProjection(renderer.localBounds, renderer.localToWorldMatrix, normal);
+                if (float.IsNaN(candidate) || float.IsInfinity(candidate)) continue;
+                minimumProjection = Mathf.Min(minimumProjection, candidate);
+                found = true;
+            }
+
+            // Renderer-local bounds retain their orientation and give accurate contact on
+            // slopes. Colliders are a useful fallback for invisible placement helpers.
+            if (!found)
+            {
+                foreach (Collider collider in gameObject.GetComponentsInChildren<Collider>(true))
+                {
+                    if (collider == null || !collider.enabled || !collider.gameObject.activeInHierarchy) continue;
+                    float candidate = CalculateMinimumProjection(collider.bounds, Matrix4x4.identity, normal);
+                    minimumProjection = Mathf.Min(minimumProjection, candidate);
+                    found = true;
+                }
+                foreach (Collider2D collider in gameObject.GetComponentsInChildren<Collider2D>(true))
+                {
+                    if (collider == null || !collider.enabled || !collider.gameObject.activeInHierarchy) continue;
+                    float candidate = CalculateMinimumProjection(collider.bounds, Matrix4x4.identity, normal);
+                    minimumProjection = Mathf.Min(minimumProjection, candidate);
+                    found = true;
+                }
+            }
+
+            if (!found) minimumProjection = Vector3.Dot(gameObject.transform.position, normal);
+            offset = CalculateSurfaceContactOffset(minimumProjection, surfacePoint, normal);
+            return true;
+        }
+
+        internal static Vector3 CalculateSurfaceContactOffset(
+            float minimumProjection,
+            Vector3 surfacePoint,
+            Vector3 surfaceNormal)
+        {
+            if (surfaceNormal.sqrMagnitude <= 0.001f) return Vector3.zero;
+            Vector3 normal = surfaceNormal.normalized;
+            return normal * (Vector3.Dot(surfacePoint, normal) - minimumProjection);
+        }
+
+        internal static float CalculateMinimumProjection(
+            Bounds localBounds,
+            Matrix4x4 localToWorld,
+            Vector3 surfaceNormal)
+        {
+            if (surfaceNormal.sqrMagnitude <= 0.001f) return 0f;
+            Vector3 normal = surfaceNormal.normalized;
+            Vector3 min = localBounds.min;
+            Vector3 max = localBounds.max;
+            float minimumProjection = float.PositiveInfinity;
+            for (int corner = 0; corner < 8; corner++)
+            {
+                Vector3 local = new Vector3(
+                    (corner & 1) == 0 ? min.x : max.x,
+                    (corner & 2) == 0 ? min.y : max.y,
+                    (corner & 4) == 0 ? min.z : max.z);
+                float projection = Vector3.Dot(localToWorld.MultiplyPoint3x4(local), normal);
+                minimumProjection = Mathf.Min(minimumProjection, projection);
+            }
+            return minimumProjection;
+        }
+
         internal static Bounds GetCombinedBounds(IEnumerable<GameObject> gameObjects)
         {
             bool found = false;
@@ -207,6 +311,174 @@ namespace DansToolbox.EditorTools.BetterScene
                 SnapValue(value.x, Mathf.Abs(increment.x)),
                 SnapValue(value.y, Mathf.Abs(increment.y)),
                 SnapValue(value.z, Mathf.Abs(increment.z)));
+        }
+
+        internal static Vector3 SnapPointToSurface(
+            Vector3 point,
+            Vector3 surfaceNormal,
+            Vector3 increment)
+        {
+            Vector3 snapped = SnapVector(point, increment);
+            if (surfaceNormal.sqrMagnitude <= 0.001f) return snapped;
+
+            Vector3 normal = surfaceNormal.normalized;
+            return snapped + normal * Vector3.Dot(point - snapped, normal);
+        }
+
+        internal static Vector3 SnapPlacementPointToTarget(
+            Vector3 placementPoint,
+            Vector3 surfaceNormal,
+            Bounds targetBounds,
+            Bounds placedBounds,
+            Vector3 increment)
+        {
+            if (surfaceNormal.sqrMagnitude <= 0.001f)
+            {
+                return SnapPlacementPointToGridAnchor(
+                    placementPoint,
+                    surfaceNormal,
+                    placedBounds,
+                    increment);
+            }
+
+            Vector3 normal = surfaceNormal.normalized;
+            int normalAxis = DominantAxis(normal);
+            Vector3 offset = Vector3.zero;
+            for (int axis = 0; axis < 3; axis++)
+            {
+                if (axis == normalAxis) continue;
+                float step = ResolveSmartSnapStep(
+                    placedBounds.size[axis],
+                    Mathf.Abs(increment[axis]));
+                float slot = CalculateCenteredSnapSlot(
+                    placementPoint[axis],
+                    targetBounds.min[axis],
+                    targetBounds.max[axis],
+                    step);
+                offset[axis] = slot - placedBounds.center[axis];
+            }
+
+            // Preserve contact with the hit plane even when its normal is not axis-aligned.
+            offset -= normal * Vector3.Dot(offset, normal);
+            return placementPoint + offset;
+        }
+
+        internal static Vector3 SnapPlacementPointToGridAnchor(
+            Vector3 placementPoint,
+            Vector3 surfaceNormal,
+            Bounds placedBounds,
+            Vector3 increment)
+        {
+            Vector3 center = placedBounds.center;
+            Vector3 snappedCenter = SnapPointToSurface(center, surfaceNormal, increment);
+            Vector3 offset = snappedCenter - center;
+            if (surfaceNormal.sqrMagnitude > 0.001f)
+            {
+                Vector3 normal = surfaceNormal.normalized;
+                offset -= normal * Vector3.Dot(offset, normal);
+            }
+            return placementPoint + offset;
+        }
+
+        internal static float ResolveSmartSnapStep(float footprint, float increment)
+        {
+            footprint = Mathf.Abs(footprint);
+            increment = Mathf.Abs(increment);
+            if (footprint <= 0.001f) return increment;
+            if (increment <= 0.001f) return footprint;
+
+            float normalized = Mathf.Max(increment, Mathf.Round(footprint / increment) * increment);
+            float tolerance = Mathf.Max(0.001f, increment * 0.05f);
+            return Mathf.Abs(footprint - normalized) <= tolerance ? normalized : footprint;
+        }
+
+        internal static float CalculateCenteredSnapSlot(
+            float cursor,
+            float minimum,
+            float maximum,
+            float step)
+        {
+            float center = (minimum + maximum) * 0.5f;
+            float span = Mathf.Max(0f, maximum - minimum);
+            if (step <= 0.001f || span <= 0.001f) return center;
+
+            int slotCount = Mathf.Clamp(Mathf.FloorToInt(span / step + 0.05f), 1, 10000);
+            float first = center - (slotCount - 1) * step * 0.5f;
+            int index = Mathf.Clamp(Mathf.RoundToInt((cursor - first) / step), 0, slotCount - 1);
+            return first + index * step;
+        }
+
+        private static int DominantAxis(Vector3 value)
+        {
+            float x = Mathf.Abs(value.x);
+            float y = Mathf.Abs(value.y);
+            float z = Mathf.Abs(value.z);
+            if (x >= y && x >= z) return 0;
+            return y >= z ? 1 : 2;
+        }
+
+        internal static GameObject FindPlacementAssetTarget(
+            GameObject pickedObject,
+            UnityEngine.Object placementAsset)
+        {
+            if (pickedObject == null || placementAsset == null) return null;
+            for (Transform current = pickedObject.transform; current != null; current = current.parent)
+            {
+                GameObject candidate = current.gameObject;
+                if (placementAsset is GameObject gameObjectAsset)
+                {
+                    GameObject source = PrefabUtility.GetCorrespondingObjectFromSource(candidate);
+                    if (source == gameObjectAsset) return candidate;
+                }
+                else if (placementAsset is Mesh mesh)
+                {
+                    MeshFilter filter = candidate.GetComponent<MeshFilter>();
+                    SkinnedMeshRenderer skinned = candidate.GetComponent<SkinnedMeshRenderer>();
+                    if ((filter != null && filter.sharedMesh == mesh) ||
+                        (skinned != null && skinned.sharedMesh == mesh))
+                    {
+                        return candidate;
+                    }
+                }
+                else if (placementAsset is Sprite sprite)
+                {
+                    SpriteRenderer renderer = candidate.GetComponent<SpriteRenderer>();
+                    if (renderer != null && renderer.sprite == sprite) return candidate;
+                }
+                else if (placementAsset is AudioClip clip)
+                {
+                    AudioSource source = candidate.GetComponent<AudioSource>();
+                    if (source != null && source.clip == clip) return candidate;
+                }
+            }
+            return null;
+        }
+
+        internal static bool ErasePlacementAssetTarget(
+            GameObject pickedObject,
+            UnityEngine.Object placementAsset)
+        {
+            GameObject target = FindPlacementAssetTarget(pickedObject, placementAsset);
+            if (target == null) return false;
+            Scene scene = target.scene;
+            Undo.SetCurrentGroupName("Erase " + placementAsset.name);
+            Undo.DestroyObjectImmediate(target);
+            if (scene.IsValid()) EditorSceneManager.MarkSceneDirty(scene);
+            BetterSceneDiagnostics.Invalidate();
+            return true;
+        }
+
+        internal static int BeginEraseUndoGroup(UnityEngine.Object placementAsset)
+        {
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Erase " + (placementAsset == null ? "Placed Objects" : placementAsset.name));
+            return group;
+        }
+
+        internal static void EndEraseUndoGroup(int group)
+        {
+            if (group >= 0) Undo.CollapseUndoOperations(group);
         }
 
         internal static Vector3 CalculateAlignedPosition(
@@ -420,8 +692,11 @@ namespace DansToolbox.EditorTools.BetterScene
             }
             SceneView view = SceneView.lastActiveSceneView;
             if (view == null) return false;
+            float zoom = Mathf.Max(0.01f, bookmark.Size);
             view.in2DMode = bookmark.In2DMode;
-            view.LookAt(bookmark.Pivot, bookmark.Rotation, bookmark.Size, bookmark.Orthographic, false);
+            view.LookAt(bookmark.Pivot, bookmark.Rotation, zoom, bookmark.Orthographic, true);
+            view.size = zoom;
+            view.Repaint();
             view.Focus();
             return true;
         }

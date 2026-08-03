@@ -158,8 +158,7 @@ namespace DansToolbox.EditorTools.BetterProject
 
         internal static bool Move(IEnumerable<string> sourcePaths, string destinationFolder)
         {
-            if (!AssetDatabase.IsValidFolder(destinationFolder) ||
-                destinationFolder.StartsWith("Packages/", StringComparison.Ordinal))
+            if (!IsWritableAssetFolder(destinationFolder))
             {
                 return false;
             }
@@ -169,13 +168,14 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 foreach (string source in (sourcePaths ?? Array.Empty<string>()).Distinct())
                 {
-                    if (!CanMoveToFolder(source, destinationFolder))
+                    if (!TryGetProjectAssetPath(source, out string assetPath) ||
+                        !CanMoveToFolder(assetPath, destinationFolder))
                     {
                         continue;
                     }
                     string destination = AssetDatabase.GenerateUniqueAssetPath(
-                        destinationFolder + "/" + Path.GetFileName(source));
-                    changed |= string.IsNullOrEmpty(AssetDatabase.MoveAsset(source, destination));
+                        destinationFolder + "/" + Path.GetFileName(assetPath));
+                    changed |= string.IsNullOrEmpty(AssetDatabase.MoveAsset(assetPath, destination));
                 }
             }
             finally
@@ -194,14 +194,264 @@ namespace DansToolbox.EditorTools.BetterProject
                 return false;
             }
 
-            string source = sourcePath.Replace('\\', '/').TrimEnd('/');
+            if (!TryGetProjectAssetPath(sourcePath, out string source) ||
+                !IsAssetFolderPath(destinationFolder))
+            {
+                return false;
+            }
             string destination = destinationFolder.Replace('\\', '/').TrimEnd('/');
             return !string.Equals(source, "Assets", StringComparison.OrdinalIgnoreCase) &&
-                   !source.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) &&
-                   !destination.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) &&
                    !string.Equals(source, destination, StringComparison.OrdinalIgnoreCase) &&
                    !IsSameFolder(source, destination) &&
                    !destination.StartsWith(source + "/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static DragAndDropVisualMode GetDropVisualMode(
+            IEnumerable<string> sourcePaths,
+            IEnumerable<UnityEngine.Object> objectReferences,
+            string destinationFolder)
+        {
+            if (!IsWritableAssetFolder(destinationFolder))
+            {
+                return DragAndDropVisualMode.Rejected;
+            }
+
+            string[] paths = (sourcePaths ?? Array.Empty<string>())
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            UnityEngine.Object[] objects = (objectReferences ?? Array.Empty<UnityEngine.Object>())
+                .Where(item => item != null)
+                .Distinct()
+                .ToArray();
+
+            if (paths.Any(CanImportExternalPath) || objects.Any(CanCreatePrefabFrom))
+            {
+                return DragAndDropVisualMode.Copy;
+            }
+            return paths.Any(path => CanMoveToFolder(path, destinationFolder))
+                ? DragAndDropVisualMode.Move
+                : DragAndDropVisualMode.Rejected;
+        }
+
+        internal static bool PerformDrop(
+            IEnumerable<string> sourcePaths,
+            IEnumerable<UnityEngine.Object> objectReferences,
+            string destinationFolder)
+        {
+            if (!IsWritableAssetFolder(destinationFolder)) return false;
+
+            string[] paths = (sourcePaths ?? Array.Empty<string>())
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            UnityEngine.Object[] objects = (objectReferences ?? Array.Empty<UnityEngine.Object>())
+                .Where(item => item != null)
+                .Distinct()
+                .ToArray();
+
+            bool changed = false;
+            if (paths.Any(path => CanMoveToFolder(path, destinationFolder)))
+            {
+                changed |= Move(paths, destinationFolder);
+            }
+            if (paths.Any(CanImportExternalPath))
+            {
+                changed |= ImportExternal(paths, destinationFolder);
+            }
+            if (objects.Any(CanCreatePrefabFrom))
+            {
+                changed |= CreatePrefabs(objects, destinationFolder);
+            }
+            return changed;
+        }
+
+        internal static bool CanImportExternalPath(string sourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath) ||
+                string.Equals(Path.GetExtension(sourcePath), ".meta", StringComparison.OrdinalIgnoreCase) ||
+                TryGetProjectAssetPath(sourcePath, out _))
+            {
+                return false;
+            }
+
+            try
+            {
+                return Path.IsPathRooted(sourcePath) &&
+                       (File.Exists(sourcePath) || Directory.Exists(sourcePath));
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        internal static bool ImportExternal(IEnumerable<string> sourcePaths, string destinationFolder)
+        {
+            if (!IsWritableAssetFolder(destinationFolder)) return false;
+
+            bool changed = false;
+            var importedAssets = new List<UnityEngine.Object>();
+            foreach (string source in (sourcePaths ?? Array.Empty<string>())
+                         .Where(CanImportExternalPath)
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                string trimmedSource = source.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string fileName = Path.GetFileName(trimmedSource);
+                if (string.IsNullOrWhiteSpace(fileName)) continue;
+
+                string destination = AssetDatabase.GenerateUniqueAssetPath(destinationFolder + "/" + fileName);
+                string destinationAbsolute = AssetPathToAbsolute(destination);
+                try
+                {
+                    FileUtil.CopyFileOrDirectory(source, destinationAbsolute);
+                    RemoveCopiedMetaFiles(destinationAbsolute);
+                    AssetDatabase.ImportAsset(destination, ImportAssetOptions.ForceSynchronousImport);
+                    UnityEngine.Object imported = AssetDatabase.LoadMainAssetAtPath(destination);
+                    if (imported != null) importedAssets.Add(imported);
+                    changed = true;
+                }
+                catch (Exception exception)
+                {
+                    if (File.Exists(destinationAbsolute) || Directory.Exists(destinationAbsolute))
+                    {
+                        FileUtil.DeleteFileOrDirectory(destinationAbsolute);
+                    }
+                    Debug.LogError("Better Project could not import '" + source + "': " + exception.Message);
+                }
+            }
+            if (changed)
+            {
+                AssetDatabase.SaveAssets();
+                if (importedAssets.Count > 0) Selection.objects = importedAssets.ToArray();
+            }
+            return changed;
+        }
+
+        internal static bool CanCreatePrefabFrom(UnityEngine.Object source)
+        {
+            return source is GameObject gameObject &&
+                   !EditorUtility.IsPersistent(gameObject) &&
+                   gameObject.scene.IsValid() &&
+                   (gameObject.hideFlags & HideFlags.DontSave) == 0;
+        }
+
+        internal static bool CreatePrefabs(
+            IEnumerable<UnityEngine.Object> objectReferences,
+            string destinationFolder)
+        {
+            if (!IsWritableAssetFolder(destinationFolder)) return false;
+
+            GameObject[] candidates = (objectReferences ?? Array.Empty<UnityEngine.Object>())
+                .Where(CanCreatePrefabFrom)
+                .Cast<GameObject>()
+                .Distinct()
+                .ToArray();
+            var candidateTransforms = new HashSet<Transform>(candidates.Select(item => item.transform));
+            GameObject[] roots = candidates
+                .Where(item => !HasDraggedAncestor(item.transform.parent, candidateTransforms))
+                .ToArray();
+            var createdAssets = new List<UnityEngine.Object>();
+            foreach (GameObject source in roots)
+            {
+                string name = SanitizeAssetFileName(source.name);
+                string destination = AssetDatabase.GenerateUniqueAssetPath(
+                    destinationFolder + "/" + name + ".prefab");
+                GameObject prefab = PrefabUtility.SaveAsPrefabAssetAndConnect(
+                    source,
+                    destination,
+                    InteractionMode.UserAction,
+                    out bool success);
+                if (success && prefab != null) createdAssets.Add(prefab);
+            }
+
+            if (createdAssets.Count == 0) return false;
+            AssetDatabase.SaveAssets();
+            Selection.objects = createdAssets.ToArray();
+            return true;
+        }
+
+        private static bool IsWritableAssetFolder(string path)
+        {
+            return IsAssetFolderPath(path) &&
+                   AssetDatabase.IsValidFolder(path.Replace('\\', '/').TrimEnd('/'));
+        }
+
+        private static bool IsAssetFolderPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            string normalized = path.Replace('\\', '/').TrimEnd('/');
+            return string.Equals(normalized, "Assets", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryGetProjectAssetPath(string sourcePath, out string assetPath)
+        {
+            assetPath = string.Empty;
+            if (string.IsNullOrWhiteSpace(sourcePath)) return false;
+
+            string normalized = sourcePath.Replace('\\', '/').TrimEnd('/');
+            if (string.Equals(normalized, "Assets", StringComparison.OrdinalIgnoreCase) ||
+                normalized.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            {
+                assetPath = normalized;
+                return true;
+            }
+            if (!Path.IsPathRooted(sourcePath)) return false;
+
+            try
+            {
+                string assetsRoot = Path.GetFullPath(Application.dataPath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string absolute = Path.GetFullPath(sourcePath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.Equals(absolute, assetsRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    assetPath = "Assets";
+                    return true;
+                }
+                string prefix = assetsRoot + Path.DirectorySeparatorChar;
+                if (!absolute.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+                assetPath = "Assets/" + absolute.Substring(prefix.Length).Replace('\\', '/');
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static string AssetPathToAbsolute(string assetPath)
+        {
+            string projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
+            return Path.GetFullPath(Path.Combine(projectRoot, assetPath.Replace('/', Path.DirectorySeparatorChar)));
+        }
+
+        private static void RemoveCopiedMetaFiles(string destinationAbsolute)
+        {
+            if (File.Exists(destinationAbsolute)) return;
+            if (!Directory.Exists(destinationAbsolute)) return;
+            foreach (string metaFile in Directory.GetFiles(destinationAbsolute, "*.meta", SearchOption.AllDirectories))
+            {
+                File.Delete(metaFile);
+            }
+        }
+
+        private static bool HasDraggedAncestor(Transform parent, HashSet<Transform> candidates)
+        {
+            while (parent != null)
+            {
+                if (candidates.Contains(parent)) return true;
+                parent = parent.parent;
+            }
+            return false;
+        }
+
+        private static string SanitizeAssetFileName(string value)
+        {
+            string name = string.IsNullOrWhiteSpace(value) ? "GameObject" : value.Trim();
+            foreach (char invalid in Path.GetInvalidFileNameChars()) name = name.Replace(invalid, '_');
+            return string.IsNullOrWhiteSpace(name) ? "GameObject" : name;
         }
 
         internal static bool IsSameFolder(string sourcePath, string destinationFolder)

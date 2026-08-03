@@ -267,25 +267,29 @@ namespace DansToolbox.EditorTools.BetterScene
         defaultDockZone = DockZone.Floating,
         defaultWidth = 480f,
         defaultHeight = 335f,
-        minWidth = 320f,
-        minHeight = 170f,
+        minWidth = 280f,
+        minHeight = 150f,
         maxWidth = 720f,
-        maxHeight = 700f)]
+        maxHeight = 1200f)]
     internal sealed class BetterScenePanelOverlay : IMGUIOverlay
     {
         internal const string Id = "DansToolbox.BetterScene.Panel";
         internal const float DefaultPanelWidth = 480f;
+        internal const float MinimumPanelWidth = 280f;
+        internal const float MinimumPanelHeight = 150f;
+        internal const float MaximumPanelWidth = 720f;
+        internal const float MaximumPanelHeight = 1200f;
         private bool synchronizing;
 
         public override void OnCreated()
         {
             base.OnCreated();
             collapsedIcon = EditorGUIUtility.ObjectContent(null, typeof(SceneView))?.image as Texture2D;
-            minSize = new Vector2(320f, 170f);
-            maxSize = new Vector2(720f, 700f);
+            minSize = new Vector2(MinimumPanelWidth, MinimumPanelHeight);
+            maxSize = new Vector2(MaximumPanelWidth, MaximumPanelHeight);
             defaultSize = new Vector2(480f, 335f);
             BetterSceneController.Changed += Sync;
-            BetterSceneSettings.Changed += Repaint;
+            BetterSceneSettings.Changed += OnContentChanged;
             DansToolboxTheme.Changed += Repaint;
             displayedChanged += OnDisplayedChanged;
             collapsedChanged += OnCollapsedChanged;
@@ -295,7 +299,7 @@ namespace DansToolbox.EditorTools.BetterScene
         public override void OnWillBeDestroyed()
         {
             BetterSceneController.Changed -= Sync;
-            BetterSceneSettings.Changed -= Repaint;
+            BetterSceneSettings.Changed -= OnContentChanged;
             DansToolboxTheme.Changed -= Repaint;
             displayedChanged -= OnDisplayedChanged;
             collapsedChanged -= OnCollapsedChanged;
@@ -306,7 +310,7 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             if (!BetterSceneController.PanelExpanded || BetterSceneController.ActivePanel == BetterScenePanel.None) return;
             float height = BetterSceneOverlay.DesiredHeight(BetterSceneController.ActivePanel);
-            Rect rect = GUILayoutUtility.GetRect(320f, height, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            Rect rect = GUILayoutUtility.GetRect(MinimumPanelWidth, height, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             BetterSceneOverlay.DrawPanel(rect, BetterSceneController.ActivePanel);
         }
 
@@ -325,12 +329,7 @@ namespace DansToolbox.EditorTools.BetterScene
             if (shouldDisplay)
             {
                 if (collapsed) collapsed = false;
-                float height = BetterSceneOverlay.DesiredHeight(BetterSceneController.ActivePanel);
-                if (floating)
-                {
-                    float width = size.x > 0f ? Mathf.Clamp(size.x, 320f, 720f) : DefaultPanelWidth;
-                    size = new Vector2(width, height);
-                }
+                if (floating) ApplyResponsiveSize();
                 displayName = "Better Scene - " + BetterSceneController.ActivePanel;
             }
             rootVisualElement?.MarkDirtyRepaint();
@@ -355,10 +354,13 @@ namespace DansToolbox.EditorTools.BetterScene
             try
             {
                 if (!floating) Undock();
-                float height = BetterSceneOverlay.DesiredHeight(BetterSceneController.ActivePanel);
-                float width = size.x > 0f ? Mathf.Clamp(size.x, 320f, 720f) : DefaultPanelWidth;
-                floatingPosition = position;
-                size = new Vector2(width, height);
+                Vector2 responsiveSize = GetResponsiveSize();
+                Rect canvas = GetFloatingCanvasWorldBounds();
+                floatingPosition = canvas.width > 1f && canvas.height > 1f
+                    ? BetterSceneNativeOverlayUtility.ClampPanelPosition(position, canvas.size, responsiveSize)
+                    : position;
+                ApplyResponsiveConstraints(responsiveSize);
+                size = responsiveSize;
                 if (collapsed) collapsed = false;
                 displayName = "Better Scene - " + BetterSceneController.ActivePanel;
                 if (!displayed) displayed = true;
@@ -373,6 +375,50 @@ namespace DansToolbox.EditorTools.BetterScene
         private void Repaint()
         {
             rootVisualElement?.MarkDirtyRepaint();
+        }
+
+        internal Vector2 GetResponsiveSize()
+        {
+            Rect canvas = GetFloatingCanvasWorldBounds();
+            Vector2 viewport = canvas.width > 1f && canvas.height > 1f
+                ? canvas.size
+                : SceneView.lastActiveSceneView != null
+                    ? SceneView.lastActiveSceneView.position.size
+                    : new Vector2(DefaultPanelWidth + 16f, MaximumPanelHeight + 16f);
+            float width = size.x > 0f ? size.x : DefaultPanelWidth;
+            return BetterSceneNativeOverlayUtility.CalculateResponsivePanelSize(
+                width,
+                BetterSceneOverlay.DesiredHeight(BetterSceneController.ActivePanel),
+                viewport);
+        }
+
+        private void ApplyResponsiveSize()
+        {
+            Vector2 responsiveSize = GetResponsiveSize();
+            ApplyResponsiveConstraints(responsiveSize);
+            size = responsiveSize;
+            Rect canvas = GetFloatingCanvasWorldBounds();
+            if (canvas.width > 1f && canvas.height > 1f)
+            {
+                floatingPosition = BetterSceneNativeOverlayUtility.ClampPanelPosition(
+                    floatingPosition,
+                    canvas.size,
+                    responsiveSize);
+            }
+        }
+
+        private void ApplyResponsiveConstraints(Vector2 responsiveSize)
+        {
+            minSize = new Vector2(
+                Mathf.Min(MinimumPanelWidth, responsiveSize.x),
+                Mathf.Min(MinimumPanelHeight, responsiveSize.y));
+            maxSize = new Vector2(MaximumPanelWidth, MaximumPanelHeight);
+        }
+
+        private void OnContentChanged()
+        {
+            Repaint();
+            BetterSceneNativeOverlayUtility.SchedulePanelResize();
         }
 
         private void OnDisplayedChanged(bool value)
@@ -400,6 +446,12 @@ namespace DansToolbox.EditorTools.BetterScene
             EditorApplication.delayCall += ShowPanelNearToolbar;
         }
 
+        internal static void SchedulePanelResize()
+        {
+            EditorApplication.delayCall -= SyncPanelOverlays;
+            EditorApplication.delayCall += SyncPanelOverlays;
+        }
+
         internal static void ShowPanelNearToolbar()
         {
             if (!BetterSceneController.PanelExpanded) return;
@@ -419,15 +471,14 @@ namespace DansToolbox.EditorTools.BetterScene
                 : toolbar.rootVisualElement.worldBound;
             Rect canvasWorldBounds = panel.GetFloatingCanvasWorldBounds();
             Rect toolbarBounds = ConvertWorldBoundsToCanvas(toolbarWorldBounds, canvasWorldBounds);
-            float panelWidth = BetterScenePanelOverlay.DefaultPanelWidth;
-            float panelHeight = BetterSceneOverlay.DesiredHeight(BetterSceneController.ActivePanel);
-            float viewportWidth = Mathf.Max(panelWidth + 16f, canvasWorldBounds.width);
-            float viewportHeight = Mathf.Max(panelHeight + 16f, canvasWorldBounds.height);
+            Vector2 panelSize = panel.GetResponsiveSize();
+            float viewportWidth = canvasWorldBounds.width > 1f ? canvasWorldBounds.width : panelSize.x + 16f;
+            float viewportHeight = canvasWorldBounds.height > 1f ? canvasWorldBounds.height : panelSize.y + 16f;
             bool vertical = toolbar.layout == Layout.VerticalToolbar || toolbarBounds.height > toolbarBounds.width * 1.25f;
             Vector2 position = CalculatePanelPosition(
                 toolbarBounds,
                 new Vector2(viewportWidth, viewportHeight),
-                new Vector2(panelWidth, panelHeight),
+                panelSize,
                 vertical);
 
             panel.ShowAt(position);
@@ -463,6 +514,40 @@ namespace DansToolbox.EditorTools.BetterScene
             return new Vector2(
                 Mathf.Clamp(toolbarBounds.xMin, 8f, viewportWidth - panelSize.x - 8f),
                 Mathf.Clamp(y, 8f, viewportHeight - panelSize.y - 8f));
+        }
+
+        internal static Vector2 CalculateResponsivePanelSize(
+            float currentWidth,
+            float preferredHeight,
+            Vector2 viewportSize)
+        {
+            const float margin = 16f;
+            float availableWidth = viewportSize.x > margin
+                ? viewportSize.x - margin
+                : BetterScenePanelOverlay.MinimumPanelWidth;
+            float availableHeight = viewportSize.y > margin
+                ? viewportSize.y - margin
+                : BetterScenePanelOverlay.MinimumPanelHeight;
+            float minimumWidth = Mathf.Min(BetterScenePanelOverlay.MinimumPanelWidth, availableWidth);
+            float minimumHeight = Mathf.Min(BetterScenePanelOverlay.MinimumPanelHeight, availableHeight);
+            float maximumWidth = Mathf.Min(BetterScenePanelOverlay.MaximumPanelWidth, availableWidth);
+            float maximumHeight = Mathf.Min(BetterScenePanelOverlay.MaximumPanelHeight, availableHeight);
+            float requestedWidth = currentWidth > 0f
+                ? currentWidth
+                : BetterScenePanelOverlay.DefaultPanelWidth;
+            return new Vector2(
+                Mathf.Clamp(requestedWidth, minimumWidth, maximumWidth),
+                Mathf.Clamp(preferredHeight, minimumHeight, maximumHeight));
+        }
+
+        internal static Vector2 ClampPanelPosition(
+            Vector2 position,
+            Vector2 viewportSize,
+            Vector2 panelSize)
+        {
+            return new Vector2(
+                Mathf.Clamp(position.x, 8f, Mathf.Max(8f, viewportSize.x - panelSize.x - 8f)),
+                Mathf.Clamp(position.y, 8f, Mathf.Max(8f, viewportSize.y - panelSize.y - 8f)));
         }
 
         internal static void ShowToolbar()

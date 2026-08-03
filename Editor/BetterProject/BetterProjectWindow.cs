@@ -2150,14 +2150,25 @@ namespace DansToolbox.EditorTools.BetterProject
         {
             Event evt = Event.current;
             if (!rect.Contains(evt.mousePosition) || (evt.type != EventType.DragUpdated && evt.type != EventType.DragPerform)) return;
-            if (DragAndDrop.paths == null || DragAndDrop.paths.Length == 0) return;
             ClearFolderDropHover();
-            bool hasMove = DragAndDrop.paths.Any(path => BetterProjectOperations.CanMoveToFolder(path, folder));
-            DragAndDrop.visualMode = hasMove ? DragAndDropVisualMode.Move : DragAndDropVisualMode.Rejected;
-            if (evt.type == EventType.DragPerform && hasMove)
+            DragAndDropVisualMode visualMode = BetterProjectOperations.GetDropVisualMode(
+                DragAndDrop.paths,
+                DragAndDrop.objectReferences,
+                folder);
+            if (visualMode == DragAndDropVisualMode.Rejected)
+            {
+                DragAndDrop.visualMode = visualMode;
+                evt.Use();
+                return;
+            }
+            DragAndDrop.visualMode = visualMode;
+            if (evt.type == EventType.DragPerform)
             {
                 DragAndDrop.AcceptDrag();
-                BetterProjectOperations.Move(DragAndDrop.paths, folder);
+                BetterProjectOperations.PerformDrop(
+                    DragAndDrop.paths,
+                    DragAndDrop.objectReferences,
+                    folder);
             }
             evt.Use();
         }
@@ -2172,16 +2183,28 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 return;
             }
-            if (DragAndDrop.paths == null || DragAndDrop.paths.Length == 0) return;
-
-            bool hasMove = !folder.IsReadOnly &&
-                           DragAndDrop.paths.Any(path => BetterProjectOperations.CanMoveToFolder(path, folder.Path));
-            DragAndDrop.visualMode = hasMove ? DragAndDropVisualMode.Move : DragAndDropVisualMode.Rejected;
-            SetFolderDropHover(hasMove ? folder.Guid : string.Empty);
-            if (evt.type == EventType.DragPerform && hasMove)
+            DragAndDropVisualMode visualMode = folder.IsReadOnly
+                ? DragAndDropVisualMode.Rejected
+                : BetterProjectOperations.GetDropVisualMode(
+                    DragAndDrop.paths,
+                    DragAndDrop.objectReferences,
+                    folder.Path);
+            if (visualMode == DragAndDropVisualMode.Rejected)
+            {
+                DragAndDrop.visualMode = visualMode;
+                SetFolderDropHover(string.Empty);
+                evt.Use();
+                return;
+            }
+            DragAndDrop.visualMode = visualMode;
+            SetFolderDropHover(folder.Guid);
+            if (evt.type == EventType.DragPerform)
             {
                 DragAndDrop.AcceptDrag();
-                BetterProjectOperations.Move(DragAndDrop.paths, folder.Path);
+                BetterProjectOperations.PerformDrop(
+                    DragAndDrop.paths,
+                    DragAndDrop.objectReferences,
+                    folder.Path);
                 ClearFolderDropHover();
             }
             evt.Use();

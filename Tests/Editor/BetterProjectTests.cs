@@ -87,6 +87,78 @@ namespace DansToolbox.Editor.Tests
             Assert.That(BetterProjectOperations.CanMoveToFolder(
                 "Packages/com.example.tool/Test.mat",
                 "Assets/Art"), Is.False);
+            Assert.That(BetterProjectOperations.CanMoveToFolder(
+                "C:/Users/Test/Downloads/Test.mat",
+                "Assets/Art"), Is.False);
+        }
+
+        [Test]
+        public void ExternalDrop_ImportsFileWithCopySemantics()
+        {
+            const string root = "Assets/__BetterProjectExternalDropTests";
+            string external = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "BetterProject_" + Guid.NewGuid().ToString("N") + ".txt");
+            System.IO.File.WriteAllText(external, "external asset");
+            if (!AssetDatabase.IsValidFolder(root))
+            {
+                AssetDatabase.CreateFolder("Assets", "__BetterProjectExternalDropTests");
+            }
+            try
+            {
+                Assert.That(BetterProjectOperations.GetDropVisualMode(
+                    new[] { external },
+                    Array.Empty<UnityEngine.Object>(),
+                    root), Is.EqualTo(DragAndDropVisualMode.Copy));
+                Assert.That(BetterProjectOperations.PerformDrop(
+                    new[] { external },
+                    Array.Empty<UnityEngine.Object>(),
+                    root), Is.True);
+
+                string imported = root + "/" + System.IO.Path.GetFileName(external);
+                TextAsset importedAsset = AssetDatabase.LoadAssetAtPath<TextAsset>(imported);
+                Assert.That(importedAsset, Is.Not.Null);
+                Assert.That(Selection.objects, Does.Contain(importedAsset));
+            }
+            finally
+            {
+                Selection.objects = Array.Empty<UnityEngine.Object>();
+                AssetDatabase.DeleteAsset(root);
+                AssetDatabase.Refresh();
+                if (System.IO.File.Exists(external)) System.IO.File.Delete(external);
+            }
+        }
+
+        [Test]
+        public void HierarchyDrop_CreatesAndConnectsPrefab()
+        {
+            const string root = "Assets/__BetterProjectHierarchyDropTests";
+            const string prefabPath = root + "/Hierarchy Source.prefab";
+            if (!AssetDatabase.IsValidFolder(root))
+            {
+                AssetDatabase.CreateFolder("Assets", "__BetterProjectHierarchyDropTests");
+            }
+            var source = new GameObject("Hierarchy Source");
+            try
+            {
+                Assert.That(BetterProjectOperations.GetDropVisualMode(
+                    Array.Empty<string>(),
+                    new UnityEngine.Object[] { source },
+                    root), Is.EqualTo(DragAndDropVisualMode.Copy));
+                Assert.That(BetterProjectOperations.PerformDrop(
+                    Array.Empty<string>(),
+                    new UnityEngine.Object[] { source },
+                    root), Is.True);
+                Assert.That(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath), Is.Not.Null);
+                Assert.That(PrefabUtility.IsPartOfPrefabInstance(source), Is.True);
+            }
+            finally
+            {
+                Selection.objects = Array.Empty<UnityEngine.Object>();
+                if (source != null) UnityEngine.Object.DestroyImmediate(source);
+                AssetDatabase.DeleteAsset(root);
+                AssetDatabase.Refresh();
+            }
         }
 
         [Test]

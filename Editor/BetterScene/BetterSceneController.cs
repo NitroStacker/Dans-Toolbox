@@ -30,6 +30,12 @@ namespace DansToolbox.EditorTools.BetterScene
         private static Vector3 hoverNormal = Vector3.up;
         private static GameObject hoverObject;
         private static bool hasHoverPoint;
+        private static bool shiftSnapActive;
+        private static bool eraseMode;
+        private static GameObject eraseHoverObject;
+        private static bool eraseStrokeActive;
+        private static int eraseStrokeUndoGroup = -1;
+        private static int eraseStrokeControlId;
 
         static BetterSceneController()
         {
@@ -66,7 +72,22 @@ namespace DansToolbox.EditorTools.BetterScene
         internal static BetterSceneSnapMode SnapMode => snapMode;
         internal static BetterScenePanel ActivePanel => activePanel;
         internal static bool PanelExpanded => panelExpanded;
+        internal static bool EraseMode => eraseMode && CanPlaceAsset(BetterSceneSettings.PlacementAsset);
         internal static BetterSceneMeasurement Measurement => new BetterSceneMeasurement(measureStart, measureEnd, hasMeasureStart, hasMeasureEnd);
+
+        internal static void SetEraseMode(bool value)
+        {
+            if (value && !CanPlaceAsset(BetterSceneSettings.PlacementAsset)) return;
+            if (!value) EndEraseStroke();
+            eraseMode = value;
+            eraseHoverObject = null;
+            if (value && mode != BetterSceneMode.Place) SetMode(BetterSceneMode.Place);
+            else
+            {
+                Changed?.Invoke();
+                Repaint();
+            }
+        }
 
         internal static void SetMode(BetterSceneMode value)
         {
@@ -214,15 +235,19 @@ namespace DansToolbox.EditorTools.BetterScene
             {
                 created.transform.rotation = Quaternion.FromToRotation(Vector3.up, normal.normalized);
             }
+            if (BetterSceneOperations.TryCalculatePlacementContactOffset(
+                    snapMode,
+                    created,
+                    point,
+                    normal,
+                    out Vector3 contactOffset))
+            {
+                created.transform.position += contactOffset;
+            }
             if (BetterSceneSettings.ParentToSurface && surfaceObject != null &&
                 surfaceObject.scene == created.scene && !surfaceObject.transform.IsChildOf(created.transform))
             {
                 Undo.SetTransformParent(created.transform, surfaceObject.transform, "Parent Placed Object");
-            }
-            if (Mathf.Abs(Vector3.Dot(normal.normalized, Vector3.up)) > 0.92f &&
-                BetterSceneOperations.TryGetBounds(created, out Bounds bounds))
-            {
-                created.transform.position += Vector3.up * (point.y - bounds.min.y);
             }
             GameObjectUtility.EnsureUniqueNameForSibling(created);
             Selection.activeGameObject = created;
@@ -237,6 +262,11 @@ namespace DansToolbox.EditorTools.BetterScene
             if (!DansToolboxSettings.IsToolEnabled(DansToolboxTools.BetterSceneId)) return;
             Event current = Event.current;
             if (current.type == EventType.MouseMove || current.type == EventType.DragUpdated) sceneView.Repaint();
+            if (eraseMode && !CanPlaceAsset(BetterSceneSettings.PlacementAsset))
+            {
+                EndEraseStroke();
+                eraseMode = false;
+            }
 
             if (ownsUnityTool && IsSpatialMode(mode) && Tools.current != Tool.None)
             {
@@ -251,23 +281,51 @@ namespace DansToolbox.EditorTools.BetterScene
                 Repaint();
             }
 
-            hasHoverPoint = TryGetWorldPoint(sceneView, current.mousePosition, out hoverPoint, out hoverNormal, out hoverObject);
+            UnityEngine.Object draggedAsset = DragAndDrop.objectReferences.FirstOrDefault(CanPlaceAsset);
+            bool draggingAsset = draggedAsset != null;
+            bool erasing = mode == BetterSceneMode.Place && EraseMode && !draggingAsset;
+            eraseHoverObject = erasing
+                ? BetterSceneOperations.FindPlacementAssetTarget(
+                    HandleUtility.PickGameObject(current.mousePosition, false),
+                    BetterSceneSettings.PlacementAsset)
+                : null;
+            bool placingAsset = (mode == BetterSceneMode.Place && !erasing) || draggingAsset;
+            UnityEngine.Object placementAsset = draggingAsset
+                ? draggedAsset
+                : placingAsset ? BetterSceneSettings.PlacementAsset : null;
+            bool nextShiftSnap = placingAsset && current.shift && snapMode != BetterSceneSnapMode.Vertex;
+            if (shiftSnapActive != nextShiftSnap) sceneView.Repaint();
+            shiftSnapActive = nextShiftSnap;
+            hasHoverPoint = TryGetWorldPoint(
+                sceneView,
+                current.mousePosition,
+                shiftSnapActive,
+                placementAsset,
+                out hoverPoint,
+                out hoverNormal,
+                out hoverObject);
             HandleEscape(current);
             if (current.type != EventType.Used)
             {
                 HandleAssetDrag(current);
-                if (mode == BetterSceneMode.Place) HandlePlacement(current);
+                if (mode == BetterSceneMode.Place)
+                {
+                    if (erasing) HandleErase(current);
+                    else HandlePlacement(current);
+                }
                 else if (mode == BetterSceneMode.Measure) HandleMeasurement(current);
             }
 
             DrawSpatialFeedback();
             DrawMeasurement();
-            DrawPlacementPreview();
+            DrawPlacementPreview(sceneView);
+            DrawErasePreview(sceneView);
         }
 
         private static void HandleEscape(Event current)
         {
             if (current.type != EventType.KeyDown || current.keyCode != KeyCode.Escape) return;
+            EndEraseStroke();
             if (mode == BetterSceneMode.Measure && (hasMeasureStart || hasMeasureEnd)) ClearMeasurement();
             else if (panelExpanded) CollapsePanel();
             else SetMode(BetterSceneMode.Select);
@@ -283,6 +341,9 @@ namespace DansToolbox.EditorTools.BetterScene
             if (current.type == EventType.DragPerform)
             {
                 DragAndDrop.AcceptDrag();
+                EndEraseStroke();
+                eraseMode = false;
+                eraseHoverObject = null;
                 BetterSceneSettings.PlacementAsset = asset;
                 PlaceAsset(asset, hoverPoint, hoverNormal, hoverObject);
             }
@@ -303,6 +364,75 @@ namespace DansToolbox.EditorTools.BetterScene
                 PlaceAsset(asset, hoverPoint, hoverNormal, hoverObject);
                 current.Use();
             }
+        }
+
+        private static void HandleErase(Event current)
+        {
+            UnityEngine.Object asset = BetterSceneSettings.PlacementAsset;
+            if (!CanPlaceAsset(asset)) return;
+            int controlId = GUIUtility.GetControlID(0x42534552, FocusType.Passive);
+            if (current.type == EventType.Layout)
+            {
+                HandleUtility.AddDefaultControl(controlId);
+                return;
+            }
+
+            if (current.type == EventType.MouseDown && current.button == 0 && !current.alt)
+            {
+                BeginEraseStroke(asset, controlId);
+                EraseHoveredAsset(asset);
+                current.Use();
+                return;
+            }
+
+            if (current.type == EventType.MouseDrag && current.button == 0 &&
+                eraseStrokeActive && !current.alt)
+            {
+                EraseHoveredAsset(asset);
+                current.Use();
+                return;
+            }
+
+            if (current.type == EventType.MouseUp && current.button == 0 && eraseStrokeActive)
+            {
+                EndEraseStroke();
+                current.Use();
+                return;
+            }
+
+            if ((current.type == EventType.Ignore || current.type == EventType.MouseLeaveWindow) &&
+                eraseStrokeActive)
+            {
+                EndEraseStroke();
+            }
+        }
+
+        private static void BeginEraseStroke(UnityEngine.Object asset, int controlId)
+        {
+            EndEraseStroke();
+            eraseStrokeUndoGroup = BetterSceneOperations.BeginEraseUndoGroup(asset);
+            eraseStrokeActive = true;
+            eraseStrokeControlId = controlId;
+            GUIUtility.hotControl = controlId;
+        }
+
+        private static void EraseHoveredAsset(UnityEngine.Object asset)
+        {
+            if (eraseHoverObject == null) return;
+            BetterSceneOperations.ErasePlacementAssetTarget(eraseHoverObject, asset);
+            eraseHoverObject = null;
+            Repaint();
+        }
+
+        private static void EndEraseStroke()
+        {
+            if (!eraseStrokeActive) return;
+            BetterSceneOperations.EndEraseUndoGroup(eraseStrokeUndoGroup);
+            if (GUIUtility.hotControl == eraseStrokeControlId) GUIUtility.hotControl = 0;
+            eraseStrokeActive = false;
+            eraseStrokeUndoGroup = -1;
+            eraseStrokeControlId = 0;
+            Repaint();
         }
 
         private static void HandleMeasurement(Event current)
@@ -334,6 +464,8 @@ namespace DansToolbox.EditorTools.BetterScene
         private static bool TryGetWorldPoint(
             SceneView sceneView,
             Vector2 guiPoint,
+            bool snapToSurfaceGrid,
+            UnityEngine.Object placementAsset,
             out Vector3 point,
             out Vector3 normal,
             out GameObject surfaceObject)
@@ -345,6 +477,7 @@ namespace DansToolbox.EditorTools.BetterScene
                 normal = hit.normal;
                 surfaceObject = hit.collider == null ? null : hit.collider.gameObject;
                 if (snapMode == BetterSceneSnapMode.Vertex) point = FindNearestVertex(guiPoint, hit, point);
+                else if (snapToSurfaceGrid) point = SnapPlacementPoint(placementAsset, point, normal, surfaceObject);
                 else if (snapMode == BetterSceneSnapMode.Grid) point = BetterSceneOperations.SnapVector(point, EditorSnapSettings.move);
                 return true;
             }
@@ -355,7 +488,8 @@ namespace DansToolbox.EditorTools.BetterScene
                 point = hit2D.point;
                 normal = hit2D.normal.sqrMagnitude > 0.001f ? hit2D.normal : Vector3.forward;
                 surfaceObject = hit2D.collider.gameObject;
-                if (snapMode == BetterSceneSnapMode.Grid) point = BetterSceneOperations.SnapVector(point, EditorSnapSettings.move);
+                if (snapToSurfaceGrid) point = SnapPlacementPoint(placementAsset, point, normal, surfaceObject);
+                else if (snapMode == BetterSceneSnapMode.Grid) point = BetterSceneOperations.SnapVector(point, EditorSnapSettings.move);
                 return true;
             }
 
@@ -367,7 +501,8 @@ namespace DansToolbox.EditorTools.BetterScene
                 point = ray.GetPoint(distance);
                 normal = sceneView.in2DMode ? Vector3.forward : Vector3.up;
                 surfaceObject = null;
-                if (snapMode == BetterSceneSnapMode.Grid) point = BetterSceneOperations.SnapVector(point, EditorSnapSettings.move);
+                if (snapToSurfaceGrid) point = SnapPlacementPoint(placementAsset, point, normal, surfaceObject);
+                else if (snapMode == BetterSceneSnapMode.Grid) point = BetterSceneOperations.SnapVector(point, EditorSnapSettings.move);
                 return true;
             }
 
@@ -375,6 +510,42 @@ namespace DansToolbox.EditorTools.BetterScene
             normal = Vector3.up;
             surfaceObject = null;
             return false;
+        }
+
+        private static Vector3 SnapPlacementPoint(
+            UnityEngine.Object placementAsset,
+            Vector3 point,
+            Vector3 normal,
+            GameObject surfaceObject)
+        {
+            if (placementAsset != null &&
+                BetterScenePlacementPreview.TryCalculateWorldBounds(
+                    placementAsset,
+                    point,
+                    normal,
+                    BetterSceneSettings.AlignToSurface,
+                    snapMode == BetterSceneSnapMode.Surface,
+                    out Bounds placedBounds))
+            {
+                if (surfaceObject != null &&
+                    BetterSceneOperations.TryGetBounds(surfaceObject, out Bounds targetBounds))
+                {
+                    return BetterSceneOperations.SnapPlacementPointToTarget(
+                        point,
+                        normal,
+                        targetBounds,
+                        placedBounds,
+                        EditorSnapSettings.move);
+                }
+
+                return BetterSceneOperations.SnapPlacementPointToGridAnchor(
+                    point,
+                    normal,
+                    placedBounds,
+                    EditorSnapSettings.move);
+            }
+
+            return BetterSceneOperations.SnapPointToSurface(point, normal, EditorSnapSettings.move);
         }
 
         private static Vector3 FindNearestVertex(Vector2 guiPoint, RaycastHit hit, Vector3 fallback)
@@ -472,22 +643,85 @@ namespace DansToolbox.EditorTools.BetterScene
                 new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = palette.Text } });
         }
 
-        private static void DrawPlacementPreview()
+        private static void DrawPlacementPreview(SceneView sceneView)
         {
             UnityEngine.Object asset = BetterSceneSettings.PlacementAsset;
             bool dragging = DragAndDrop.objectReferences.Any(CanPlaceAsset);
+            if (EraseMode && !dragging) return;
             if (!hasHoverPoint || (!dragging && (mode != BetterSceneMode.Place || !CanPlaceAsset(asset)))) return;
+            UnityEngine.Object labelAsset = dragging ? DragAndDrop.objectReferences.FirstOrDefault(CanPlaceAsset) : asset;
+            BetterScenePlacementPreview.Draw(
+                labelAsset,
+                sceneView,
+                hoverPoint,
+                hoverNormal,
+                snapMode == BetterSceneSnapMode.Surface);
             DansToolboxPalette palette = DansToolboxTheme.Current;
             float size = HandleUtility.GetHandleSize(hoverPoint) * 0.12f;
             Handles.color = new Color(palette.Signal.r, palette.Signal.g, palette.Signal.b, 0.9f);
             Handles.DrawWireDisc(hoverPoint, hoverNormal, size);
             Handles.DrawLine(hoverPoint, hoverPoint + hoverNormal * size * 1.5f);
-            UnityEngine.Object labelAsset = dragging ? DragAndDrop.objectReferences.FirstOrDefault(CanPlaceAsset) : asset;
             if (labelAsset != null)
             {
-                Handles.Label(hoverPoint + hoverNormal * size * 1.7f, labelAsset.name,
+                string label = shiftSnapActive
+                    ? labelAsset.name + "\nSHIFT  ·  SMART SNAP"
+                    : labelAsset.name;
+                Handles.Label(hoverPoint + hoverNormal * size * 1.7f, label,
                     new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = palette.Signal } });
             }
+        }
+
+        private static void DrawErasePreview(SceneView sceneView)
+        {
+            if (mode != BetterSceneMode.Place || !EraseMode ||
+                DragAndDrop.objectReferences.Any(CanPlaceAsset))
+            {
+                return;
+            }
+
+            UnityEngine.Object asset = BetterSceneSettings.PlacementAsset;
+            DansToolboxPalette palette = DansToolboxTheme.Current;
+            Color previousColor = Handles.color;
+            CompareFunction previousZ = Handles.zTest;
+            if (eraseHoverObject != null &&
+                BetterSceneOperations.TryGetBounds(eraseHoverObject, out Bounds bounds))
+            {
+                Handles.color = new Color(palette.Danger.r, palette.Danger.g, palette.Danger.b, 0.95f);
+                Handles.zTest = CompareFunction.Always;
+                Handles.DrawWireCube(bounds.center, bounds.size);
+            }
+            Handles.color = previousColor;
+            Handles.zTest = previousZ;
+
+            Handles.BeginGUI();
+            string text;
+            if (eraseStrokeActive)
+            {
+                text = eraseHoverObject == null
+                    ? "ERASING " + asset.name + "  ·  MOVE OVER MATCHES"
+                    : "ERASING  ·  " + eraseHoverObject.name;
+            }
+            else
+            {
+                text = eraseHoverObject == null
+                    ? "ERASE " + asset.name + "  ·  NO MATCH"
+                    : "HOLD + DRAG TO ERASE  ·  " + eraseHoverObject.name;
+            }
+            GUIStyle style = new GUIStyle(EditorStyles.helpBox)
+            {
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = eraseHoverObject == null ? palette.Muted : palette.Danger }
+            };
+            GUIContent content = new GUIContent(text);
+            Vector2 labelSize = style.CalcSize(content);
+            Vector2 mouse = Event.current.mousePosition + new Vector2(18f, 18f);
+            float width = labelSize.x + 16f;
+            mouse.x = Mathf.Clamp(mouse.x, 4f, Mathf.Max(4f, sceneView.position.width - width - 4f));
+            mouse.y = Mathf.Clamp(mouse.y, 4f, Mathf.Max(4f, sceneView.position.height - 28f));
+            Rect labelRect = new Rect(mouse.x, mouse.y, width, 24f);
+            GUI.Label(labelRect, content, style);
+            Handles.EndGUI();
         }
 
         private static void EnterMode(BetterSceneMode value)
@@ -503,9 +737,13 @@ namespace DansToolbox.EditorTools.BetterScene
 
         private static void ExitMode(BetterSceneMode value)
         {
+            EndEraseStroke();
             if (value == BetterSceneMode.Measure) ClearMeasurementState();
             hasHoverPoint = false;
             hoverObject = null;
+            shiftSnapActive = false;
+            eraseHoverObject = null;
+            if (value == BetterSceneMode.Place) eraseMode = false;
             if (!IsSpatialMode(value) || !ownsUnityTool) return;
             if (Tools.current == Tool.None) Tools.current = previousUnityTool;
             ownsUnityTool = false;

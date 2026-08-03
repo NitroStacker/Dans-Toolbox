@@ -8,6 +8,9 @@ namespace DansToolbox.EditorTools.BetterScene
     [FilePath("ProjectSettings/BetterSceneSettings.asset", FilePathAttribute.Location.ProjectFolder)]
     internal sealed class BetterSceneSettings : ScriptableSingleton<BetterSceneSettings>
     {
+        private static readonly Dictionary<string, UnityEngine.Object> assetReferenceCache =
+            new Dictionary<string, UnityEngine.Object>(StringComparer.Ordinal);
+
         [SerializeField] private bool drawSelectionBounds = true;
         [SerializeField] private bool drawPivot = true;
         [SerializeField] private bool drawDiagnostics = true;
@@ -16,11 +19,14 @@ namespace DansToolbox.EditorTools.BetterScene
         [SerializeField] private bool keepPlacing = true;
         [SerializeField] private bool includeDescendants = true;
         [SerializeField] private bool groundToZeroWhenNoSurface = true;
+        [SerializeField] private bool accountForViewZoom = true;
         [SerializeField] private float scatterRadius = 2f;
         [SerializeField] private float scatterHeight;
         [SerializeField] private int scatterSeed = 1337;
         [SerializeField] private string placementAssetGuid = string.Empty;
+        [SerializeField] private long placementAssetLocalId;
         [SerializeField] private List<string> recentPlacementGuids = new List<string>();
+        [SerializeField] private List<long> recentPlacementLocalIds = new List<long>();
         [SerializeField] private List<int> toolbarOrder = new List<int>
         {
             (int)BetterScenePanel.Create,
@@ -39,6 +45,11 @@ namespace DansToolbox.EditorTools.BetterScene
 
         internal static event Action Changed;
 
+        static BetterSceneSettings()
+        {
+            EditorApplication.projectChanged += assetReferenceCache.Clear;
+        }
+
         internal static bool DrawSelectionBounds { get => instance.drawSelectionBounds; set => Set(ref instance.drawSelectionBounds, value); }
         internal static bool DrawPivot { get => instance.drawPivot; set => Set(ref instance.drawPivot, value); }
         internal static bool DrawDiagnostics { get => instance.drawDiagnostics; set => Set(ref instance.drawDiagnostics, value); }
@@ -47,6 +58,7 @@ namespace DansToolbox.EditorTools.BetterScene
         internal static bool KeepPlacing { get => instance.keepPlacing; set => Set(ref instance.keepPlacing, value); }
         internal static bool IncludeDescendants { get => instance.includeDescendants; set => Set(ref instance.includeDescendants, value); }
         internal static bool GroundToZeroWhenNoSurface { get => instance.groundToZeroWhenNoSurface; set => Set(ref instance.groundToZeroWhenNoSurface, value); }
+        internal static bool AccountForViewZoom { get => instance.accountForViewZoom; set => Set(ref instance.accountForViewZoom, value); }
         internal static float ScatterRadius { get => instance.scatterRadius; set => Set(ref instance.scatterRadius, Mathf.Max(0f, value)); }
         internal static float ScatterHeight { get => instance.scatterHeight; set => Set(ref instance.scatterHeight, Mathf.Max(0f, value)); }
         internal static int ScatterSeed { get => instance.scatterSeed; set => Set(ref instance.scatterSeed, value); }
@@ -103,41 +115,67 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             get
             {
-                return string.IsNullOrEmpty(instance.placementAssetGuid)
-                    ? null
-                    : AssetDatabase.LoadMainAssetAtPath(
-                        AssetDatabase.GUIDToAssetPath(instance.placementAssetGuid));
+                return LoadAssetReference(
+                    instance.placementAssetGuid,
+                    instance.placementAssetLocalId);
             }
             set
             {
-                string path = value == null ? string.Empty : AssetDatabase.GetAssetPath(value);
-                string guid = string.IsNullOrEmpty(path) ? string.Empty : AssetDatabase.AssetPathToGUID(path);
-                if (string.Equals(instance.placementAssetGuid, guid, StringComparison.Ordinal)) return;
+                string guid = string.Empty;
+                long localId = 0;
+                if (value != null && !TryGetAssetReference(value, out guid, out localId)) return;
+                if (string.Equals(instance.placementAssetGuid, guid, StringComparison.Ordinal) &&
+                    instance.placementAssetLocalId == localId)
+                {
+                    return;
+                }
                 instance.placementAssetGuid = guid;
+                instance.placementAssetLocalId = localId;
+                if (!string.IsNullOrEmpty(guid)) assetReferenceCache[AssetReferenceKey(guid, localId)] = value;
                 if (!string.IsNullOrEmpty(guid))
                 {
-                    instance.recentPlacementGuids.RemoveAll(item => string.Equals(item, guid, StringComparison.Ordinal));
+                    EnsureRecentPlacementReferences();
+                    for (int index = instance.recentPlacementGuids.Count - 1; index >= 0; index--)
+                    {
+                        if (!string.Equals(instance.recentPlacementGuids[index], guid, StringComparison.Ordinal) ||
+                            instance.recentPlacementLocalIds[index] != localId)
+                        {
+                            continue;
+                        }
+                        instance.recentPlacementGuids.RemoveAt(index);
+                        instance.recentPlacementLocalIds.RemoveAt(index);
+                    }
                     instance.recentPlacementGuids.Insert(0, guid);
+                    instance.recentPlacementLocalIds.Insert(0, localId);
                     if (instance.recentPlacementGuids.Count > 8)
                     {
                         instance.recentPlacementGuids.RemoveRange(8, instance.recentPlacementGuids.Count - 8);
+                        instance.recentPlacementLocalIds.RemoveRange(8, instance.recentPlacementLocalIds.Count - 8);
                     }
                 }
                 SaveAndNotify();
             }
         }
 
+        internal static bool CanPersistPlacementAsset(UnityEngine.Object asset)
+        {
+            return TryGetAssetReference(asset, out _, out _);
+        }
+
         internal static UnityEngine.Object[] GetRecentPlacementAssets()
         {
             var assets = new List<UnityEngine.Object>();
             bool changed = false;
+            EnsureRecentPlacementReferences();
             for (int index = instance.recentPlacementGuids.Count - 1; index >= 0; index--)
             {
-                string path = AssetDatabase.GUIDToAssetPath(instance.recentPlacementGuids[index]);
-                UnityEngine.Object asset = string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadMainAssetAtPath(path);
+                UnityEngine.Object asset = LoadAssetReference(
+                    instance.recentPlacementGuids[index],
+                    instance.recentPlacementLocalIds[index]);
                 if (asset == null)
                 {
                     instance.recentPlacementGuids.RemoveAt(index);
+                    instance.recentPlacementLocalIds.RemoveAt(index);
                     changed = true;
                 }
                 else
@@ -147,6 +185,73 @@ namespace DansToolbox.EditorTools.BetterScene
             }
             if (changed) SaveAndNotify();
             return assets.ToArray();
+        }
+
+        private static bool TryGetAssetReference(
+            UnityEngine.Object asset,
+            out string guid,
+            out long localId)
+        {
+            guid = string.Empty;
+            localId = 0;
+            return asset != null &&
+                   EditorUtility.IsPersistent(asset) &&
+                   AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out guid, out localId) &&
+                   !string.IsNullOrEmpty(guid);
+        }
+
+        private static UnityEngine.Object LoadAssetReference(string guid, long localId)
+        {
+            if (string.IsNullOrEmpty(guid)) return null;
+            string key = AssetReferenceKey(guid, localId);
+            if (assetReferenceCache.TryGetValue(key, out UnityEngine.Object cached)) return cached;
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(path))
+            {
+                assetReferenceCache[key] = null;
+                return null;
+            }
+            if (localId == 0)
+            {
+                UnityEngine.Object main = AssetDatabase.LoadMainAssetAtPath(path);
+                assetReferenceCache[key] = main;
+                return main;
+            }
+
+            foreach (UnityEngine.Object asset in AssetDatabase.LoadAllAssetsAtPath(path))
+            {
+                if (asset != null &&
+                    AssetDatabase.TryGetGUIDAndLocalFileIdentifier(asset, out string candidateGuid, out long candidateLocalId) &&
+                    string.Equals(candidateGuid, guid, StringComparison.Ordinal) &&
+                    candidateLocalId == localId)
+                {
+                    assetReferenceCache[key] = asset;
+                    return asset;
+                }
+            }
+            assetReferenceCache[key] = null;
+            return null;
+        }
+
+        private static string AssetReferenceKey(string guid, long localId)
+        {
+            return guid + ":" + localId;
+        }
+
+        private static void EnsureRecentPlacementReferences()
+        {
+            instance.recentPlacementGuids ??= new List<string>();
+            instance.recentPlacementLocalIds ??= new List<long>();
+            while (instance.recentPlacementLocalIds.Count < instance.recentPlacementGuids.Count)
+            {
+                instance.recentPlacementLocalIds.Add(0);
+            }
+            if (instance.recentPlacementLocalIds.Count > instance.recentPlacementGuids.Count)
+            {
+                instance.recentPlacementLocalIds.RemoveRange(
+                    instance.recentPlacementGuids.Count,
+                    instance.recentPlacementLocalIds.Count - instance.recentPlacementGuids.Count);
+            }
         }
 
         private static bool AddHiddenToolbarPanel(int value)

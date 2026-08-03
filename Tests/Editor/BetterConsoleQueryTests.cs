@@ -85,6 +85,45 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void EntrySelection_SupportsRangeAndActionKeyToggling()
+        {
+            long[] visible = { 10, 20, 30, 40, 50 };
+
+            Assert.That(
+                BetterConsoleWindow.CalculateEntrySelection(visible, new long[] { 20 }, 20, 40, true, false),
+                Is.EqualTo(new long[] { 20, 30, 40 }));
+            Assert.That(
+                BetterConsoleWindow.CalculateEntrySelection(visible, new long[] { 20, 30, 40 }, 20, 30, false, true),
+                Is.EqualTo(new long[] { 20, 40 }));
+            Assert.That(
+                BetterConsoleWindow.CalculateEntrySelection(visible, new long[] { 20, 40 }, 20, 50, true, true),
+                Is.EqualTo(new long[] { 20, 30, 40, 50 }));
+        }
+
+        [Test]
+        public void ClipboardFormatting_PreservesVisibleOrderAndFullEntries()
+        {
+            BetterConsoleEntry first = Entry();
+            first.message = "First";
+            first.stackTrace = "First.Frame";
+            BetterConsoleEntry second = Entry();
+            second.message = "Second";
+            second.stackTrace = string.Empty;
+
+            Assert.That(
+                BetterConsoleWindow.FormatEntriesForClipboard(new[] { first, second }),
+                Is.EqualTo("First\nFirst.Frame\n\nSecond"));
+        }
+
+        [Test]
+        public void NativeSnapshot_ReconcilesAfterReloadOrNativeClear()
+        {
+            Assert.That(BetterConsoleNativeBridge.RequiresReconciliation(false, 0, 12), Is.True);
+            Assert.That(BetterConsoleNativeBridge.RequiresReconciliation(true, 12, 0), Is.True);
+            Assert.That(BetterConsoleNativeBridge.RequiresReconciliation(true, 12, 13), Is.False);
+        }
+
+        [Test]
         public void TargetQuery_MatchesContextComponentsAndAssetPathsAsAlternatives()
         {
             GameObject context = new GameObject("Diagnostic Target");

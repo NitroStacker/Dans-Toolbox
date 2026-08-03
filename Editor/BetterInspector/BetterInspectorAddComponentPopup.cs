@@ -79,6 +79,7 @@ namespace DansToolbox.EditorTools.BetterInspector
         private GUIStyle rowTitleStyle;
         private GUIStyle metadataStyle;
         private GUIStyle navigationGlyphStyle;
+        private Rect lastSearchRect;
 
         internal BetterInspectorAddComponentPopup(GameObject[] targets, Action completed)
         {
@@ -108,16 +109,18 @@ namespace DansToolbox.EditorTools.BetterInspector
 
             DansToolboxPalette palette = DansToolboxTheme.Current;
             EnsureStyles(palette);
+            if (DansToolboxSearchField.ReleaseFocusOnPointerDown(lastSearchRect, SearchControlName)) editorWindow.Repaint();
             EditorGUI.DrawRect(rect, palette.Canvas);
             Rect header = new Rect(0f, 0f, rect.width, 42f);
             EditorGUI.DrawRect(header, palette.Panel);
             EditorGUI.DrawRect(new Rect(0f, header.yMax - 1f, rect.width, 1f), palette.Border);
             GUI.Label(new Rect(12f, 6f, 116f, 28f), "ADD COMPONENT", headerStyle);
-            GUI.SetNextControlName(SearchControlName);
-            string updatedQuery = GUI.TextField(
-                new Rect(128f, 10f, rect.width - 140f, 22f),
+            lastSearchRect = new Rect(128f, 10f, rect.width - 140f, DansToolboxSearchField.Height);
+            string updatedQuery = DansToolboxSearchField.Draw(
+                lastSearchRect,
                 query,
-                EditorStyles.toolbarSearchField);
+                SearchControlName,
+                "Search components");
             if (!string.Equals(updatedQuery, query, StringComparison.Ordinal))
             {
                 query = updatedQuery;

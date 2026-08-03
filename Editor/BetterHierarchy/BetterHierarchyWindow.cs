@@ -37,11 +37,9 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 
         private BetterHierarchyTreeView tree;
         private BetterHierarchyAtlasView atlas;
-        private GUIStyle searchStyle;
         private GUIStyle toolbarLabel;
-        private Texture2D searchNormalBackground;
-        private Texture2D searchFocusedBackground;
         private int styledThemeRevision = -1;
+        [NonSerialized] private Rect lastSearchRect;
         private bool navigatingHistory;
         [NonSerialized] private double revealStartedAt;
 
@@ -105,7 +103,6 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             BetterConsoleDiagnosticBridge.Changed -= OnConsoleDiagnosticsChanged;
             DansToolboxTheme.Changed -= OnThemeChanged;
             atlas?.Dispose();
-            DestroySearchTextures();
         }
 
         private void OnGUI()
@@ -126,6 +123,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 return;
             }
 
+            if (DansToolboxSearchField.ReleaseFocusOnPointerDown(lastSearchRect, SearchControlName)) Repaint();
             HandleKeyboard();
             Rect toolbar = new Rect(0f, 0f, position.width, ToolbarHeight);
             Rect content = new Rect(0f, toolbar.yMax, position.width,
@@ -194,8 +192,8 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 
             float actionsWidth = narrow ? 104f : 128f;
             float searchWidth = Mathf.Max(80f, rect.width - x - actionsWidth - 8f);
-            GUI.SetNextControlName(SearchControlName);
-            string updated = GUI.TextField(new Rect(x, 8f, searchWidth, 22f), search, searchStyle);
+            lastSearchRect = new Rect(x, 8f, searchWidth, DansToolboxSearchField.Height);
+            string updated = DansToolboxSearchField.Draw(lastSearchRect, search, SearchControlName);
             if (!string.Equals(updated, search, StringComparison.Ordinal))
             {
                 SetSearch(updated);
@@ -949,50 +947,17 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 
         private void EnsureStyles()
         {
-            if (styledThemeRevision == DansToolboxTheme.Revision && searchStyle != null)
+            if (styledThemeRevision == DansToolboxTheme.Revision && toolbarLabel != null)
             {
                 return;
             }
 
             styledThemeRevision = DansToolboxTheme.Revision;
-            DansToolboxPalette palette = DansToolboxTheme.Current;
-            DestroySearchTextures();
-            searchNormalBackground = MakeTexture(palette.Inset);
-            searchFocusedBackground = MakeTexture(palette.Raised);
-            searchStyle = new GUIStyle(EditorStyles.toolbarSearchField)
-            {
-                fontSize = 10,
-                fixedHeight = 22f,
-                normal = { textColor = palette.Text, background = searchNormalBackground },
-                focused = { textColor = palette.Text, background = searchFocusedBackground }
-            };
             toolbarLabel = new GUIStyle(EditorStyles.miniBoldLabel)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontSize = 8
             };
-        }
-
-        private static Texture2D MakeTexture(Color color)
-        {
-            Texture2D texture = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
-        }
-
-        private void DestroySearchTextures()
-        {
-            if (searchNormalBackground != null)
-            {
-                DestroyImmediate(searchNormalBackground);
-                searchNormalBackground = null;
-            }
-            if (searchFocusedBackground != null)
-            {
-                DestroyImmediate(searchFocusedBackground);
-                searchFocusedBackground = null;
-            }
         }
 
         internal static bool DrawIconButton(Rect rect, string label, string tooltip, bool enabled, DansToolboxPalette palette)

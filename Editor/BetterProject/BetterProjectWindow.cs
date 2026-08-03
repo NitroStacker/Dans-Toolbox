@@ -228,39 +228,7 @@ namespace DansToolbox.EditorTools.BetterProject
 
             Rect searchRect = new Rect(searchX, rect.y + 8f, searchWidth, 22f);
             lastSearchRect = searchRect;
-            bool searchFocused = GUI.GetNameOfFocusedControl() == SearchControlName;
-            bool searchHovered = searchRect.Contains(Event.current.mousePosition);
-            bool showClearSearch = !string.IsNullOrEmpty(search);
-            CalculateSearchControlRects(
-                searchRect,
-                showClearSearch,
-                out Rect searchFieldRect,
-                out Rect clearSearchRect);
-            EditorGUI.DrawRect(
-                searchRect,
-                searchFocused
-                    ? BetterProjectGui.Accent
-                    : searchHovered ? BetterProjectGui.BorderStrong : BetterProjectGui.Border);
-            EditorGUI.DrawRect(
-                new Rect(searchRect.x + 1f, searchRect.y + 1f, searchRect.width - 2f, searchRect.height - 2f),
-                searchFocused || searchHovered ? BetterProjectGui.Raised : BetterProjectGui.Inset);
-            GUI.SetNextControlName(SearchControlName);
-            search = GUI.TextField(
-                searchFieldRect,
-                search,
-                BetterProjectGui.Search);
-            BetterProjectGui.DrawToolbarGlyph(
-                new Rect(searchRect.x + 4f, searchRect.y + 3f, 16f, 16f),
-                BetterProjectToolbarGlyph.Search,
-                searchFocused || searchHovered ? BetterProjectGui.Accent : BetterProjectGui.MutedColor);
-            if (showClearSearch && BetterProjectGui.ToolbarIconButton(
-                    clearSearchRect,
-                    BetterProjectToolbarGlyph.Close,
-                    "Clear"))
-            {
-                search = string.Empty;
-                GUI.FocusControl(SearchControlName);
-            }
+            search = DansToolboxSearchField.Draw(searchRect, search, SearchControlName);
 
             float right = searchRect.xMax + 6f;
             if (BetterProjectGui.ToolbarIconButton(new Rect(right, rect.y + 8f, 22f, 22f), BetterProjectToolbarGlyph.List, "List", view == BetterProjectView.List))
@@ -304,16 +272,7 @@ namespace DansToolbox.EditorTools.BetterProject
 
         private void ReleaseSearchFocusOnPointerDown()
         {
-            Event evt = Event.current;
-            if (evt.type != EventType.MouseDown ||
-                lastSearchRect.Contains(evt.mousePosition) ||
-                GUI.GetNameOfFocusedControl() != SearchControlName)
-            {
-                return;
-            }
-
-            GUI.FocusControl(null);
-            Repaint();
+            if (DansToolboxSearchField.ReleaseFocusOnPointerDown(lastSearchRect, SearchControlName)) Repaint();
         }
 
         internal static void CalculateSearchControlRects(
@@ -322,13 +281,7 @@ namespace DansToolbox.EditorTools.BetterProject
             out Rect fieldRect,
             out Rect clearRect)
         {
-            clearRect = new Rect(searchRect.xMax - 21f, searchRect.y + 2f, 18f, 18f);
-            float fieldRight = showClear ? clearRect.x - 2f : searchRect.xMax - 1f;
-            fieldRect = new Rect(
-                searchRect.x + 1f,
-                searchRect.y + 1f,
-                Mathf.Max(1f, fieldRight - searchRect.x - 1f),
-                Mathf.Max(1f, searchRect.height - 2f));
+            DansToolboxSearchField.CalculateControlRects(searchRect, showClear, out fieldRect, out clearRect);
         }
 
         private void DrawRefinedSurfaceTab(
@@ -423,16 +376,9 @@ namespace DansToolbox.EditorTools.BetterProject
                 DrawBreadcrumbs(new Rect(x, rect.y + 7f, searchX - x - 8f, 27f));
             }
 
-            Rect searchRect = new Rect(searchX, rect.y + 7f, searchWidth, 28f);
-            GUI.SetNextControlName(SearchControlName);
-            search = GUI.TextField(searchRect, search, BetterProjectGui.Search);
-            GUI.DrawTexture(new Rect(searchRect.x + 8f, searchRect.y + 6f, 16f, 16f), BetterProjectGui.Icon("Search Icon"), ScaleMode.ScaleToFit);
-            if (!string.IsNullOrEmpty(search) && BetterProjectGui.IconButton(
-                    new Rect(searchRect.xMax - 22f, searchRect.y + 4f, 20f, 20f), new GUIContent("×", "Clear")))
-            {
-                search = string.Empty;
-                GUI.FocusControl(SearchControlName);
-            }
+            Rect searchRect = new Rect(searchX, rect.y + 10f, searchWidth, DansToolboxSearchField.Height);
+            lastSearchRect = searchRect;
+            search = DansToolboxSearchField.Draw(searchRect, search, SearchControlName);
 
             float right = searchRect.xMax + 7f;
             if (BetterProjectGui.IconButton(new Rect(right, rect.y + 8f, 25f, 25f), new GUIContent("≡", "List"), view == BetterProjectView.List)) view = BetterProjectView.List;

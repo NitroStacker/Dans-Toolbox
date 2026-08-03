@@ -47,6 +47,7 @@ namespace DansToolbox.EditorTools.BetterInspector
         private bool pointerOverContentElement;
         private BetterInspectorEditorEntry pendingComponentContextEntry;
         private int styledThemeRevision = -1;
+        [NonSerialized] private Rect lastSearchRect;
         [NonSerialized] private double revealStartedAt;
 
         [MenuItem(MenuPath, false, 21)]
@@ -136,6 +137,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 return;
             }
 
+            if (DansToolboxSearchField.ReleaseFocusOnPointerDown(lastSearchRect, SearchControlName)) Repaint();
             HandleKeyboard();
             Object[] targets = GetTargets();
             Rect toolbar = new Rect(0f, 0f, position.width, ToolbarHeight);
@@ -197,11 +199,8 @@ namespace DansToolbox.EditorTools.BetterInspector
 
             float actionWidth = narrow ? 106f : 132f;
             float searchWidth = Mathf.Max(72f, rect.width - x - actionWidth - 8f);
-            GUI.SetNextControlName(SearchControlName);
-            string updated = GUI.TextField(
-                new Rect(x, 8f, searchWidth, 22f),
-                search,
-                styles.Search);
+            lastSearchRect = new Rect(x, 8f, searchWidth, DansToolboxSearchField.Height);
+            string updated = DansToolboxSearchField.Draw(lastSearchRect, search, SearchControlName);
             if (!string.Equals(updated, search, StringComparison.Ordinal))
             {
                 search = updated;
@@ -1624,13 +1623,6 @@ namespace DansToolbox.EditorTools.BetterInspector
             DansToolboxPalette palette = DansToolboxTheme.Current;
             styles = new BetterInspectorStyles
             {
-                Search = new GUIStyle(EditorStyles.toolbarSearchField)
-                {
-                    fontSize = 10,
-                    fixedHeight = 22f,
-                    normal = { textColor = palette.Text, background = MakeTexture(palette.Inset) },
-                    focused = { textColor = palette.Text, background = MakeTexture(palette.Raised) }
-                },
                 Card = new GUIStyle
                 {
                     normal = { background = MakeTexture(palette.Panel) },
@@ -1869,7 +1861,6 @@ namespace DansToolbox.EditorTools.BetterInspector
 
     internal sealed class BetterInspectorStyles
     {
-        internal GUIStyle Search;
         internal GUIStyle Card;
         internal GUIStyle CardBody;
         internal GUIStyle IssueCard;

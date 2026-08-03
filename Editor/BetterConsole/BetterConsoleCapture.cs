@@ -147,10 +147,18 @@ namespace DansToolbox.EditorTools.BetterConsole
 
             if (BetterConsoleSettings.CaptureNativeHistory && EditorApplication.timeSinceStartup >= nextNativePoll)
             {
-                nextNativePoll = double.MaxValue;
-                foreach (BetterConsoleEntry native in BetterConsoleNativeBridge.ReadNewEntries())
+                nextNativePoll = EditorApplication.timeSinceStartup + 0.5d;
+                BetterConsoleNativeRead nativeRead = BetterConsoleNativeBridge.ReadChanges();
+                if (nativeRead.Reconcile)
                 {
-                    if (!IsStoreDuplicate(native)) BetterConsoleStore.Add(native);
+                    BetterConsoleStore.ReconcileNativeSnapshot(nativeRead.Entries);
+                }
+                else
+                {
+                    foreach (BetterConsoleEntry native in nativeRead.Entries)
+                    {
+                        if (!IsStoreDuplicate(native)) BetterConsoleStore.Add(native);
+                    }
                 }
             }
 
@@ -164,7 +172,11 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         private static void OnPlayModeChanged(PlayModeStateChange state)
         {
-            if (state == PlayModeStateChange.EnteredPlayMode)
+            if (state == PlayModeStateChange.ExitingEditMode && BetterConsoleNativeBridge.ClearOnPlay)
+            {
+                BetterConsoleStore.Clear();
+            }
+            else if (state == PlayModeStateChange.EnteredPlayMode)
             {
                 BetterConsoleStore.BeginSession(BetterConsoleSessionKind.Play, "PLAY");
             }
@@ -176,6 +188,7 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         private static void OnCompilationStarted(object context)
         {
+            if (BetterConsoleNativeBridge.ClearOnRecompile) BetterConsoleStore.Clear();
             BetterConsoleStore.BeginSession(BetterConsoleSessionKind.Compile, "COMPILE");
         }
 
@@ -298,6 +311,7 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         public void OnPreprocessBuild(BuildReport report)
         {
+            if (BetterConsoleNativeBridge.ClearOnBuild) BetterConsoleStore.Clear();
             BetterConsoleStore.BeginSession(
                 BetterConsoleSessionKind.Build,
                 "BUILD " + report.summary.platform);

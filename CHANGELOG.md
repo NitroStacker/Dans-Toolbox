@@ -4,6 +4,20 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.16.0] - 2026-08-03
+
+### Added
+
+- Add native-style Shift range selection, Ctrl/Cmd selection toggling, and Ctrl/Cmd+C multi-entry copy to Better Console.
+
+### Changed
+
+- Standardize Toolbox search bars on Better Project's visual and interaction model, including a clear action and click-away focus release.
+
+### Fixed
+
+- Reconcile Better Console with Unity's current Console snapshot after domain reloads, recompiles, and native clears so stale errors cannot survive after Unity's Console is empty.
+
 ## [1.15.0] - 2026-08-03
 
 ### Added

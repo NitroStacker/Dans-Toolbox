@@ -34,24 +34,45 @@ namespace DansToolbox.EditorTools.BetterConsole
         public static void Add(BetterConsoleEntry entry)
         {
             if (entry == null) return;
-            entry.id = data.nextEntryId++;
-            if (entry.utcTicks <= 0) entry.utcTicks = DateTime.UtcNow.Ticks;
-            BetterConsoleSession session = ActiveSession ?? EnsureEditorSession();
-            if (string.IsNullOrEmpty(entry.sessionId)) entry.sessionId = session.id;
-            if (string.IsNullOrEmpty(entry.sessionLabel)) entry.sessionLabel = session.label;
-            entry.sessionKind = session.kind;
-            entry.signature = BetterConsoleClassification.Signature(entry);
-            BetterConsoleClassification.ParseFileLocation(entry);
-            entry.category = BetterConsoleClassification.Categorize(
-                entry.message,
-                entry.stackTrace,
-                entry.file,
-                session.kind);
+            BetterConsoleSession session = PrepareEntry(entry);
             data.entries.Add(entry);
             Increment(session, entry.severity);
 
             int overflow = data.entries.Count - BetterConsoleSettings.MaxEntries;
             if (overflow > 0) data.entries.RemoveRange(0, overflow);
+            MarkChanged();
+        }
+
+        public static void ReconcileNativeSnapshot(IReadOnlyList<BetterConsoleEntry> nativeEntries)
+        {
+            IReadOnlyList<BetterConsoleEntry> snapshot = nativeEntries ?? Array.Empty<BetterConsoleEntry>();
+            List<BetterConsoleEntry> previous = new List<BetterConsoleEntry>(data.entries);
+            bool[] used = new bool[previous.Count];
+            List<BetterConsoleEntry> reconciled = new List<BetterConsoleEntry>(snapshot.Count);
+
+            foreach (BetterConsoleEntry native in snapshot)
+            {
+                if (native == null) continue;
+                int match = FindNativeMatch(previous, used, native);
+                if (match >= 0)
+                {
+                    BetterConsoleEntry existing = previous[match];
+                    used[match] = true;
+                    MergeNativeMetadata(existing, native);
+                    reconciled.Add(existing);
+                }
+                else
+                {
+                    PrepareEntry(native);
+                    reconciled.Add(native);
+                }
+            }
+
+            int overflow = reconciled.Count - BetterConsoleSettings.MaxEntries;
+            if (overflow > 0) reconciled.RemoveRange(0, overflow);
+            data.entries.Clear();
+            data.entries.AddRange(reconciled);
+            RecalculateSessionCounts();
             MarkChanged();
         }
 
@@ -243,6 +264,96 @@ namespace DansToolbox.EditorTools.BetterConsole
         private static void Update()
         {
             if (dirty && EditorApplication.timeSinceStartup >= nextSaveAt) SaveNow();
+        }
+
+        private static BetterConsoleSession PrepareEntry(BetterConsoleEntry entry)
+        {
+            entry.id = data.nextEntryId++;
+            if (entry.utcTicks <= 0) entry.utcTicks = DateTime.UtcNow.Ticks;
+            BetterConsoleSession session = ActiveSession ?? EnsureEditorSession();
+            if (string.IsNullOrEmpty(entry.sessionId)) entry.sessionId = session.id;
+            if (string.IsNullOrEmpty(entry.sessionLabel)) entry.sessionLabel = session.label;
+            entry.sessionKind = session.kind;
+            entry.signature = BetterConsoleClassification.Signature(entry);
+            BetterConsoleClassification.ParseFileLocation(entry);
+            entry.category = BetterConsoleClassification.Categorize(
+                entry.message,
+                entry.stackTrace,
+                entry.file,
+                session.kind);
+            return session;
+        }
+
+        private static int FindNativeMatch(
+            IReadOnlyList<BetterConsoleEntry> entries,
+            IReadOnlyList<bool> used,
+            BetterConsoleEntry candidate)
+        {
+            if (candidate.nativeLineIndex != 0)
+            {
+                for (int index = 0; index < entries.Count; index++)
+                {
+                    BetterConsoleEntry existing = entries[index];
+                    if (!used[index] &&
+                        existing.nativeLineIndex == candidate.nativeLineIndex &&
+                        existing.severity == candidate.severity &&
+                        string.Equals(existing.message, candidate.message, StringComparison.Ordinal))
+                    {
+                        return index;
+                    }
+                }
+            }
+
+            for (int index = 0; index < entries.Count; index++)
+            {
+                BetterConsoleEntry existing = entries[index];
+                if (used[index] || existing.severity != candidate.severity) continue;
+                if (string.Equals(existing.message, candidate.message, StringComparison.Ordinal) &&
+                    string.Equals(existing.stackTrace, candidate.stackTrace, StringComparison.Ordinal))
+                {
+                    return index;
+                }
+            }
+
+            for (int index = 0; index < entries.Count; index++)
+            {
+                BetterConsoleEntry existing = entries[index];
+                if (used[index] || existing.severity != candidate.severity) continue;
+                if (string.Equals(existing.message, candidate.message, StringComparison.Ordinal)) return index;
+            }
+
+            return -1;
+        }
+
+        private static void MergeNativeMetadata(BetterConsoleEntry existing, BetterConsoleEntry native)
+        {
+            if (native.nativeLineIndex != 0) existing.nativeLineIndex = native.nativeLineIndex;
+            if (string.IsNullOrEmpty(existing.file)) existing.file = native.file;
+            if (existing.line <= 0) existing.line = native.line;
+            if (existing.column <= 0) existing.column = native.column;
+            if (existing.contextInstanceId == 0) existing.contextInstanceId = native.contextInstanceId;
+            if (string.IsNullOrEmpty(existing.contextName)) existing.contextName = native.contextName;
+            BetterConsoleClassification.ParseFileLocation(existing);
+        }
+
+        private static void RecalculateSessionCounts()
+        {
+            Dictionary<string, BetterConsoleSession> sessions = data.sessions
+                .Where(session => session != null)
+                .ToDictionary(session => session.id, session => session);
+            foreach (BetterConsoleSession session in sessions.Values)
+            {
+                session.logs = 0;
+                session.warnings = 0;
+                session.errors = 0;
+            }
+
+            BetterConsoleSession fallback = ActiveSession ?? EnsureEditorSession();
+            foreach (BetterConsoleEntry entry in data.entries)
+            {
+                if (!sessions.TryGetValue(entry.sessionId, out BetterConsoleSession session)) session = fallback;
+                Increment(session, entry.severity);
+            }
         }
 
         private static void MarkChanged()

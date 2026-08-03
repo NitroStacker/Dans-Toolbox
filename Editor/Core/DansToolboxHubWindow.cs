@@ -38,6 +38,7 @@ namespace DansToolbox.Editor
         [NonSerialized] private int styledThemeRevision = -1;
         [NonSerialized] private bool focusSearch;
         [NonSerialized] private bool clearInitialFocus;
+        [NonSerialized] private Rect lastSearchRect;
         [NonSerialized] private double nextOpenCountRefresh;
 
         [MenuItem("Tools/Dans Toolbox/Toolbox Hub", false, -100)]
@@ -105,6 +106,7 @@ namespace DansToolbox.Editor
             hoverCandidateToolId = null;
             DansToolboxPalette palette = DansToolboxTheme.Current;
             EnsureStyles(palette);
+            if (DansToolboxSearchField.ReleaseFocusOnPointerDown(lastSearchRect, SearchControl)) Repaint();
             HandleKeyboard();
             if (clearInitialFocus)
             {
@@ -120,7 +122,7 @@ namespace DansToolbox.Editor
 
             HubLayoutRegions layout = CalculateLayout(position.size);
             DrawHeader(layout.Header, palette);
-            DrawSearch(layout.Search, palette);
+            DrawSearch(layout.Search);
             DrawGroupFilter(layout.Filter, palette);
             DrawToolGallery(layout.Gallery, palette);
             DrawFooter(layout.Footer, palette);
@@ -163,51 +165,22 @@ namespace DansToolbox.Editor
             }
         }
 
-        private void DrawSearch(Rect rect, DansToolboxPalette palette)
+        private void DrawSearch(Rect rect)
         {
-            bool focused = GUI.GetNameOfFocusedControl() == SearchControl;
-            bool hovered = rect.Contains(Event.current.mousePosition);
-            DrawPanel(
-                rect,
-                focused ? palette.Panel : hovered ? palette.Raised : palette.Inset,
-                focused ? palette.Accent : hovered ? palette.BorderStrong : palette.Border);
-
-            Texture searchIcon = EditorGUIUtility.IconContent("Search Icon").image;
-            if (searchIcon != null)
-            {
-                GUI.DrawTexture(
-                    new Rect(rect.x + 11f, rect.y + 11f, 16f, 16f),
-                    searchIcon,
-                    ScaleMode.ScaleToFit,
-                    true);
-            }
-
-            GUI.SetNextControlName(SearchControl);
-            string next = EditorGUI.TextField(
-                new Rect(rect.x + 36f, rect.y + 1f, rect.width - 74f, rect.height - 2f),
+            lastSearchRect = new Rect(
+                rect.x,
+                rect.center.y - DansToolboxSearchField.Height * 0.5f,
+                rect.width,
+                DansToolboxSearchField.Height);
+            string next = DansToolboxSearchField.Draw(
+                lastSearchRect,
                 search,
-                styles.SearchField);
+                SearchControl,
+                "Find tools - audio, assets, logs, scene...");
             if (!string.Equals(next, search, StringComparison.Ordinal))
             {
                 search = next;
                 scroll = Vector2.zero;
-                visibleToolsDirty = true;
-            }
-
-            if (string.IsNullOrEmpty(search) && !focused)
-            {
-                GUI.Label(
-                    new Rect(rect.x + 38f, rect.y, rect.width - 78f, rect.height),
-                    "Find tools - audio, assets, logs, scene...",
-                    styles.SearchHint);
-            }
-            else if (!string.IsNullOrEmpty(search) && GUI.Button(
-                         new Rect(rect.xMax - 33f, rect.y + 7f, 24f, 24f),
-                         new GUIContent("\u00D7", "Clear search"),
-                         styles.ClearButton))
-            {
-                search = string.Empty;
-                focusSearch = true;
                 visibleToolsDirty = true;
             }
         }
@@ -966,20 +939,10 @@ namespace DansToolbox.Editor
             }
 
             styledThemeRevision = DansToolboxTheme.Revision;
-            GUIStyle searchField = new GUIStyle(EditorStyles.textField)
-            {
-                border = new RectOffset(),
-                normal = { background = null, textColor = palette.Text },
-                focused = { background = null, textColor = palette.Text },
-                fontSize = 12,
-                padding = new RectOffset(2, 2, 7, 5)
-            };
             styles = new HubStyles
             {
                 Title = Label(palette.Text, 17, FontStyle.Bold),
                 Subtitle = Label(palette.Muted, 10),
-                SearchField = searchField,
-                SearchHint = Label(new Color(palette.Muted.r, palette.Muted.g, palette.Muted.b, 0.72f), 12),
                 Filter = Label(palette.Muted, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 FilterActive = Label(palette.Text, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 CardName = Label(palette.Text, 11, FontStyle.Bold),
@@ -995,8 +958,7 @@ namespace DansToolbox.Editor
                 ActionButton = Label(palette.Text, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 Favorite = TransparentButton(palette.Muted, 18),
                 FavoriteActive = TransparentButton(palette.Accent, 18),
-                More = TransparentButton(palette.Muted, 11),
-                ClearButton = TransparentButton(palette.Muted, 17)
+                More = TransparentButton(palette.Muted, 11)
             };
         }
 
@@ -1037,8 +999,6 @@ namespace DansToolbox.Editor
         {
             internal GUIStyle Title;
             internal GUIStyle Subtitle;
-            internal GUIStyle SearchField;
-            internal GUIStyle SearchHint;
             internal GUIStyle Filter;
             internal GUIStyle FilterActive;
             internal GUIStyle CardName;
@@ -1055,7 +1015,6 @@ namespace DansToolbox.Editor
             internal GUIStyle Favorite;
             internal GUIStyle FavoriteActive;
             internal GUIStyle More;
-            internal GUIStyle ClearButton;
         }
     }
 }

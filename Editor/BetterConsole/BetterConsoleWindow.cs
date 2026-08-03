@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using DansToolbox.Editor;
 using UnityEditor;
@@ -25,6 +26,8 @@ namespace DansToolbox.EditorTools.BetterConsole
         [SerializeField] private BetterConsoleSurface surface;
         [SerializeField] private string queryText = string.Empty;
         [SerializeField] private long selectedEntryId;
+        [SerializeField] private long selectionAnchorEntryId;
+        [SerializeField] private List<long> selectedEntryIds = new List<long>();
         [SerializeField] private string selectedSignature = string.Empty;
         [SerializeField] private string selectedSessionId = string.Empty;
         [SerializeField] private bool showLogs = true;
@@ -82,6 +85,8 @@ namespace DansToolbox.EditorTools.BetterConsole
                 DansToolboxTools.BetterConsoleId);
             minSize = new Vector2(420f, 260f);
             wantsMouseMove = true;
+            if (selectedEntryIds == null) selectedEntryIds = new List<long>();
+            if (selectedEntryId != 0 && !selectedEntryIds.Contains(selectedEntryId)) selectedEntryIds.Add(selectedEntryId);
             BetterConsoleStore.Changed -= OnStoreChanged;
             BetterConsoleStore.Changed += OnStoreChanged;
             DansToolboxTheme.Changed -= Repaint;
@@ -138,11 +143,12 @@ namespace DansToolbox.EditorTools.BetterConsole
             int rightButtons = roomy ? 5 : 4;
             float rightWidth = 3f * (severityWidth + 3f) + rightButtons * 31f + 7f;
             float searchWidth = Mathf.Max(90f, rect.width - x - rightWidth);
-            lastSearchRect = new Rect(x, y, searchWidth, height);
-            string nextQuery = BetterConsoleGui.SearchField(
+            lastSearchRect = new Rect(x, y + 1f, searchWidth, DansToolboxSearchField.Height);
+            string nextQuery = DansToolboxSearchField.Draw(
                 lastSearchRect,
                 queryText,
-                SearchControl);
+                SearchControl,
+                "Search logs - sev:error");
             if (!string.Equals(nextQuery, queryText, StringComparison.Ordinal))
             {
                 queryText = nextQuery;
@@ -184,7 +190,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             DrawSeverityButton(ref x, y, severityWidth, height, BetterConsoleSeverity.Warning);
             DrawSeverityButton(ref x, y, severityWidth, height, BetterConsoleSeverity.Error);
 
-            if (BetterConsoleGui.Button(new Rect(x, y, 27f, height), new GUIContent("X", "Clear Better Console")))
+            if (BetterConsoleGui.Button(new Rect(x, y, 27f, height), new GUIContent("X", "Clear Unity and Better Console")))
             {
                 ClearAll();
             }
@@ -197,20 +203,7 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         private void ReleaseSearchFocusOnPointerDown()
         {
-            Event current = Event.current;
-            bool searchFocused = GUI.GetNameOfFocusedControl() == SearchControl;
-            if (!ShouldReleaseSearchFocus(
-                    lastSearchRect,
-                    current.mousePosition,
-                    searchFocused,
-                    current.type))
-            {
-                return;
-            }
-
-            GUI.FocusControl(null);
-            EditorGUIUtility.editingTextField = false;
-            Repaint();
+            if (DansToolboxSearchField.ReleaseFocusOnPointerDown(lastSearchRect, SearchControl)) Repaint();
         }
 
         private void DrawSurfaceButton(
@@ -352,7 +345,7 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         private void DrawEntryRow(Rect rect, BetterConsoleEntry entry, int index)
         {
-            bool selected = entry.id == selectedEntryId;
+            bool selected = IsEntrySelected(entry.id);
             bool hover = rect.Contains(Event.current.mousePosition);
             Color background = selected
                 ? DansToolboxTheme.Current.AccentSoft
@@ -493,7 +486,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             float x = header.xMax - 146f;
             if (BetterConsoleGui.Button(new Rect(x, header.y + 5f, 42f, 24f), new GUIContent("OPEN", "Open first source frame"))) OpenSource(entry);
             x += 46f;
-            if (BetterConsoleGui.Button(new Rect(x, header.y + 5f, 42f, 24f), new GUIContent("COPY", "Copy full entry"))) CopyFull(entry);
+            if (BetterConsoleGui.Button(new Rect(x, header.y + 5f, 42f, 24f), new GUIContent("COPY", "Copy selected entries"))) CopySelectionOrEntry(entry);
             x += 46f;
             if (BetterConsoleGui.Button(new Rect(x, header.y + 5f, 42f, 24f), new GUIContent("FIX", "Copy a grounded fix prompt")))
             {
@@ -748,8 +741,14 @@ namespace DansToolbox.EditorTools.BetterConsole
         {
             Event current = Event.current;
             if (current.type != EventType.MouseDown || !rect.Contains(current.mousePosition)) return;
-            selectedEntryId = entry.id;
-            selectedSignature = entry.signature;
+            if (current.button == 1)
+            {
+                if (!IsEntrySelected(entry.id)) SelectOnly(entry);
+            }
+            else
+            {
+                SelectEntry(entry, current.shift, current.control || current.command);
+            }
             selectedSessionId = string.Empty;
             detailScroll = Vector2.zero;
             MarkSeen(entry);
@@ -760,10 +759,48 @@ namespace DansToolbox.EditorTools.BetterConsole
             Repaint();
         }
 
+        private void SelectEntry(BetterConsoleEntry entry, bool shift, bool actionKey)
+        {
+            List<long> visibleIds = visibleEntries.Select(item => item.id).ToList();
+            selectedEntryIds = CalculateEntrySelection(
+                visibleIds,
+                selectedEntryIds,
+                selectionAnchorEntryId,
+                entry.id,
+                shift,
+                actionKey);
+            if (!shift || !visibleIds.Contains(selectionAnchorEntryId)) selectionAnchorEntryId = entry.id;
+
+            if (selectedEntryIds.Contains(entry.id))
+            {
+                selectedEntryId = entry.id;
+                selectedSignature = entry.signature;
+            }
+            else
+            {
+                HashSet<long> selected = new HashSet<long>(selectedEntryIds);
+                BetterConsoleEntry fallback = visibleEntries.LastOrDefault(item => selected.Contains(item.id));
+                selectedEntryId = fallback?.id ?? 0;
+                selectedSignature = fallback?.signature ?? string.Empty;
+            }
+        }
+
+        private void SelectOnly(BetterConsoleEntry entry)
+        {
+            selectedEntryIds.Clear();
+            selectedEntryIds.Add(entry.id);
+            selectedEntryId = entry.id;
+            selectionAnchorEntryId = entry.id;
+            selectedSignature = entry.signature;
+        }
+
         private void SelectIssue(BetterConsoleIssue issue)
         {
+            selectedEntryIds.Clear();
+            selectedEntryIds.Add(issue.representative.id);
             selectedSignature = issue.signature;
             selectedEntryId = issue.representative.id;
+            selectionAnchorEntryId = issue.representative.id;
             selectedSessionId = string.Empty;
             detailScroll = Vector2.zero;
             MarkSeen(issue.representative);
@@ -822,11 +859,6 @@ namespace DansToolbox.EditorTools.BetterConsole
         {
             GenericMenu menu = new GenericMenu();
             menu.AddItem(new GUIContent("Clear"), false, ClearAll);
-            menu.AddItem(new GUIContent("Clear Native Too"), false, () =>
-            {
-                BetterConsoleStore.Clear();
-                BetterConsoleNativeBridge.ClearNative();
-            });
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Collapse"), BetterConsoleSettings.Collapse, () => { BetterConsoleSettings.Collapse = !BetterConsoleSettings.Collapse; Invalidate(); });
             menu.AddItem(new GUIContent("Error Pause"), BetterConsoleSettings.ErrorPause, () => BetterConsoleSettings.ErrorPause = !BetterConsoleSettings.ErrorPause);
@@ -865,6 +897,11 @@ namespace DansToolbox.EditorTools.BetterConsole
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent("Copy/Message"), false, () => EditorGUIUtility.systemCopyBuffer = entry.message);
             menu.AddItem(new GUIContent("Copy/Full"), false, () => CopyFull(entry));
+            int selectedCount = SelectedVisibleEntries().Count;
+            if (selectedCount > 1)
+            {
+                menu.AddItem(new GUIContent($"Copy/Selected ({selectedCount})"), false, CopySelectedEntries);
+            }
             menu.AddItem(new GUIContent("Copy/Fix Prompt"), false, () => EditorGUIUtility.systemCopyBuffer = BetterConsoleExporter.FixPrompt(entry));
             menu.AddSeparator(string.Empty);
             AddTriageItems(menu, entry, state?.triage ?? BetterConsoleTriage.New);
@@ -961,6 +998,14 @@ namespace DansToolbox.EditorTools.BetterConsole
                 GUI.FocusControl(SearchControl);
                 current.Use();
             }
+            else if (command && current.keyCode == KeyCode.C &&
+                     !EditorGUIUtility.editingTextField &&
+                     GUI.GetNameOfFocusedControl() != SearchControl &&
+                     SelectedVisibleEntries().Count > 0)
+            {
+                CopySelectedEntries();
+                current.Use();
+            }
             else if (command && current.keyCode == KeyCode.L)
             {
                 ClearAll();
@@ -979,12 +1024,12 @@ namespace DansToolbox.EditorTools.BetterConsole
             }
             else if (current.keyCode == KeyCode.UpArrow || current.keyCode == KeyCode.DownArrow)
             {
-                MoveSelection(current.keyCode == KeyCode.DownArrow ? 1 : -1);
+                MoveSelection(current.keyCode == KeyCode.DownArrow ? 1 : -1, current.shift);
                 current.Use();
             }
         }
 
-        private void MoveSelection(int direction)
+        private void MoveSelection(int direction, bool extend)
         {
             if (surface == BetterConsoleSurface.Sessions)
             {
@@ -1001,9 +1046,10 @@ namespace DansToolbox.EditorTools.BetterConsole
                 index = Mathf.Clamp(index + direction, 0, source.Count - 1);
                 if (index >= 0 && index < source.Count)
                 {
-                    selectedEntryId = source[index].id;
-                    selectedSignature = source[index].signature;
-                    MarkSeen(source[index]);
+                    BetterConsoleEntry entry = source[index];
+                    if (surface == BetterConsoleSurface.Live) SelectEntry(entry, extend, false);
+                    else SelectOnly(entry);
+                    MarkSeen(entry);
                 }
             }
             Repaint();
@@ -1011,8 +1057,11 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         private void ClearAll()
         {
+            BetterConsoleNativeBridge.ClearNative();
             BetterConsoleStore.Clear();
+            selectedEntryIds.Clear();
             selectedEntryId = 0;
+            selectionAnchorEntryId = 0;
             selectedSignature = string.Empty;
             selectedSessionId = string.Empty;
             Invalidate();
@@ -1037,7 +1086,96 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         private static void CopyFull(BetterConsoleEntry entry)
         {
-            EditorGUIUtility.systemCopyBuffer = string.Concat(entry.message, "\n", entry.stackTrace);
+            EditorGUIUtility.systemCopyBuffer = FormatEntriesForClipboard(new[] { entry });
+        }
+
+        private void CopySelectionOrEntry(BetterConsoleEntry fallback)
+        {
+            List<BetterConsoleEntry> selected = SelectedVisibleEntries();
+            if (selected.Count == 0 && fallback != null) selected.Add(fallback);
+            CopyEntries(selected);
+        }
+
+        private void CopySelectedEntries()
+        {
+            CopyEntries(SelectedVisibleEntries());
+        }
+
+        private void CopyEntries(IReadOnlyList<BetterConsoleEntry> entries)
+        {
+            if (entries == null || entries.Count == 0) return;
+            EditorGUIUtility.systemCopyBuffer = FormatEntriesForClipboard(entries);
+            Flash(entries.Count == 1 ? "ENTRY COPIED" : $"{entries.Count} ENTRIES COPIED");
+        }
+
+        private List<BetterConsoleEntry> SelectedVisibleEntries()
+        {
+            if (surface == BetterConsoleSurface.Issues)
+            {
+                BetterConsoleEntry issue = SelectedEntry();
+                return issue == null ? new List<BetterConsoleEntry>() : new List<BetterConsoleEntry> { issue };
+            }
+            if (surface != BetterConsoleSurface.Live) return new List<BetterConsoleEntry>();
+            HashSet<long> selected = new HashSet<long>(selectedEntryIds);
+            return visibleEntries.Where(entry => selected.Contains(entry.id)).ToList();
+        }
+
+        private bool IsEntrySelected(long entryId)
+        {
+            return selectedEntryIds != null && selectedEntryIds.Contains(entryId);
+        }
+
+        internal static List<long> CalculateEntrySelection(
+            IReadOnlyList<long> visibleIds,
+            IReadOnlyCollection<long> currentSelection,
+            long anchorId,
+            long clickedId,
+            bool shift,
+            bool actionKey)
+        {
+            List<long> order = visibleIds?.ToList() ?? new List<long>();
+            int clickedIndex = order.IndexOf(clickedId);
+            if (clickedIndex < 0) return currentSelection?.ToList() ?? new List<long>();
+
+            HashSet<long> selected = currentSelection == null
+                ? new HashSet<long>()
+                : new HashSet<long>(currentSelection);
+            int anchorIndex = order.IndexOf(anchorId);
+            if (shift && anchorIndex >= 0)
+            {
+                if (!actionKey) selected.Clear();
+                int first = Math.Min(anchorIndex, clickedIndex);
+                int last = Math.Max(anchorIndex, clickedIndex);
+                for (int index = first; index <= last; index++) selected.Add(order[index]);
+            }
+            else if (actionKey)
+            {
+                if (!selected.Add(clickedId)) selected.Remove(clickedId);
+            }
+            else
+            {
+                selected.Clear();
+                selected.Add(clickedId);
+            }
+
+            return order.Where(selected.Contains).ToList();
+        }
+
+        internal static string FormatEntriesForClipboard(IEnumerable<BetterConsoleEntry> entries)
+        {
+            if (entries == null) return string.Empty;
+            StringBuilder clipboard = new StringBuilder();
+            foreach (BetterConsoleEntry entry in entries.Where(item => item != null))
+            {
+                if (clipboard.Length > 0) clipboard.Append("\n\n");
+                clipboard.Append(entry.message ?? string.Empty);
+                if (!string.IsNullOrEmpty(entry.stackTrace))
+                {
+                    if (clipboard.Length > 0 && clipboard[clipboard.Length - 1] != '\n') clipboard.Append('\n');
+                    clipboard.Append(entry.stackTrace.TrimEnd('\r', '\n'));
+                }
+            }
+            return clipboard.ToString();
         }
 
         private static void PingContext(BetterConsoleEntry entry)
@@ -1165,9 +1303,11 @@ namespace DansToolbox.EditorTools.BetterConsole
             bool searchFocused,
             EventType eventType)
         {
-            return searchFocused &&
-                   eventType == EventType.MouseDown &&
-                   !searchRect.Contains(pointerPosition);
+            return DansToolboxSearchField.ShouldReleaseFocus(
+                searchRect,
+                pointerPosition,
+                searchFocused,
+                eventType);
         }
 
         private static string CompactCount(int value)

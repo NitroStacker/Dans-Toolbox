@@ -10,6 +10,8 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 {
     internal sealed class BetterHierarchyRulesWindow : EditorWindow
     {
+        private const string SearchControlName = "BetterHierarchyRulesSearch";
+
         [Serializable]
         private sealed class RuleExport
         {
@@ -19,6 +21,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         [SerializeField] private Vector2 scroll;
         [SerializeField] private string filter = string.Empty;
         private readonly HashSet<string> expanded = new HashSet<string>();
+        [NonSerialized] private Rect lastSearchRect;
 
         internal static void Open()
         {
@@ -27,8 +30,15 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             window.Show();
         }
 
+        private void OnEnable()
+        {
+            wantsMouseMove = true;
+        }
+
         private void OnGUI()
         {
+            if (Event.current.type == EventType.MouseMove) Repaint();
+            if (DansToolboxSearchField.ReleaseFocusOnPointerDown(lastSearchRect, SearchControlName)) Repaint();
             DansToolboxPalette palette = DansToolboxTheme.Current;
             EditorGUI.DrawRect(new Rect(0f, 0f, position.width, position.height), palette.Canvas);
             DrawToolbar(palette);
@@ -106,8 +116,12 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 x += 62f;
             }
 
-            filter = GUI.TextField(new Rect(x, 9f, Mathf.Max(80f, position.width - x - 8f), 22f), filter,
-                EditorStyles.toolbarSearchField);
+            lastSearchRect = new Rect(x, 9f, Mathf.Max(80f, position.width - x - 8f), DansToolboxSearchField.Height);
+            filter = DansToolboxSearchField.Draw(
+                lastSearchRect,
+                filter,
+                SearchControlName,
+                "Search rules");
         }
 
         private void DrawRule(

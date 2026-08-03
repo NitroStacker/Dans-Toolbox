@@ -25,7 +25,6 @@ namespace DansToolbox.EditorTools.BetterProject
         private static GUIStyle toolbar;
         private static GUIStyle segment;
         private static GUIStyle segmentActive;
-        private static GUIStyle search;
         private static GUIStyle row;
         private static GUIStyle rowSelected;
         private static GUIStyle muted;
@@ -52,7 +51,6 @@ namespace DansToolbox.EditorTools.BetterProject
         internal static GUIStyle Toolbar { get { Ensure(); return toolbar; } }
         internal static GUIStyle Segment { get { Ensure(); return segment; } }
         internal static GUIStyle SegmentActive { get { Ensure(); return segmentActive; } }
-        internal static GUIStyle Search { get { Ensure(); return search; } }
         internal static GUIStyle Row { get { Ensure(); return row; } }
         internal static GUIStyle RowSelected { get { Ensure(); return rowSelected; } }
         internal static GUIStyle Muted { get { Ensure(); return muted; } }
@@ -296,18 +294,6 @@ namespace DansToolbox.EditorTools.BetterProject
 
             segment = FlatStyle(Inset, MutedColor, 10, FontStyle.Bold, TextAnchor.MiddleCenter);
             segmentActive = FlatStyle(Accent, Color.black, 10, FontStyle.Bold, TextAnchor.MiddleCenter);
-
-            search = new GUIStyle(EditorStyles.label)
-            {
-                fontSize = 10,
-                alignment = TextAnchor.MiddleLeft,
-                clipping = TextClipping.Clip,
-                padding = new RectOffset(22, 20, 1, 1),
-                normal = { textColor = Text },
-                hover = { textColor = Text },
-                active = { textColor = Text },
-                focused = { textColor = Text }
-            };
 
             row = FlatStyle(Color.clear, Text, 12, FontStyle.Normal, TextAnchor.MiddleLeft);
             row.padding = new RectOffset(6, 6, 0, 0);

@@ -361,6 +361,25 @@ namespace DansToolbox.Editor.Tests
             Assert.That(clearRect.yMax, Is.LessThan(searchRect.yMax));
         }
 
+        [Test]
+        public void SharedSearch_ReleasesFocusOnlyOnPointerDownOutsideTheField()
+        {
+            Rect searchRect = new Rect(100f, 8f, 180f, DansToolboxSearchField.Height);
+
+            Assert.That(
+                DansToolboxSearchField.ShouldReleaseFocus(searchRect, new Vector2(50f, 50f), true, EventType.MouseDown),
+                Is.True);
+            Assert.That(
+                DansToolboxSearchField.ShouldReleaseFocus(searchRect, new Vector2(150f, 16f), true, EventType.MouseDown),
+                Is.False);
+            Assert.That(
+                DansToolboxSearchField.ShouldReleaseFocus(searchRect, new Vector2(50f, 50f), false, EventType.MouseDown),
+                Is.False);
+            Assert.That(
+                DansToolboxSearchField.ShouldReleaseFocus(searchRect, new Vector2(50f, 50f), true, EventType.MouseMove),
+                Is.False);
+        }
+
         private static BetterProjectAssetRecord Record(string guid, string path, Type type, long bytes)
         {
             return new BetterProjectAssetRecord

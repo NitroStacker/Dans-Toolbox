@@ -126,7 +126,7 @@ See [Documentation~/retro-vfx.md](Documentation~/retro-vfx.md) for the full work
 - Issue state, bookmarks, notes, saved views, and mute rules persist in `ProjectSettings/BetterConsoleSettings.asset`. Bounded session history is cached under `Library/DansToolbox/BetterConsole`.
 - The detail pane exposes the first source frame, clickable stack frames, object context, structured properties, copy/export, and an explicit **FIX** prompt action.
 - Better Project and Better Hierarchy show clickable `W/E` log badges, Better Inspector can open logs for its current targets, and Better Console can filter the Unity selection or reveal a source asset back in Better Project.
-- Ctrl/Cmd+F focuses search, Ctrl/Cmd+L clears, Enter opens source, arrows move selection, and Escape clears the query. Native stack-trace settings, Error Pause, Editor/Player logs, and the stock Console remain available from `...`.
+- Click selects one Live entry, Shift-click selects a range, and Ctrl/Cmd-click toggles individual entries. Ctrl/Cmd+C copies every selected entry in visible order; Ctrl/Cmd+F focuses search, Ctrl/Cmd+L clears both Better Console and Unity's Console, Enter opens source, arrows move selection, and Escape clears the query. Native stack-trace settings, Error Pause, Editor/Player logs, and the stock Console remain available from `...`.
 - Player code may use `DansToolbox.BetterConsole.Log`, `.Warning`, `.Error`, `.Exception`, `.Property`, and `.Tag` for channels and structured values. These calls still write to Unity's normal logger.
 
 ## Better Scene

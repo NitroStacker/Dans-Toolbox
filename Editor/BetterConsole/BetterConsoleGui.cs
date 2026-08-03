@@ -53,24 +53,6 @@ namespace DansToolbox.EditorTools.BetterConsole
             return clicked;
         }
 
-        public static string SearchField(Rect rect, string value, string controlName)
-        {
-            Ensure();
-            DansToolboxPalette palette = DansToolboxTheme.Current;
-            bool focused = GUI.GetNameOfFocusedControl() == controlName;
-            bool hovered = rect.Contains(Event.current.mousePosition);
-            EditorGUI.DrawRect(rect, focused || hovered ? palette.Raised : palette.Inset);
-            Border(rect, focused ? palette.Accent : hovered ? palette.BorderStrong : palette.Border);
-            EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
-            GUI.SetNextControlName(controlName);
-            string result = GUI.TextField(new Rect(rect.x + 7f, rect.y + 1f, rect.width - 25f, rect.height - 2f), value ?? string.Empty, field);
-            if (string.IsNullOrEmpty(result) && !focused && Event.current.type == EventType.Repaint)
-            {
-                GUI.Label(new Rect(rect.x + 8f, rect.y + 1f, rect.width - 28f, rect.height - 2f), "SEARCH  /  sev:error", muted);
-            }
-            return result;
-        }
-
         public static void SeverityMark(Rect rect, BetterConsoleSeverity severity)
         {
             Color color = SeverityColor(severity);

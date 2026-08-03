@@ -33,6 +33,7 @@ namespace DansToolbox.EditorTools.BetterProject
         private const float MinimumAssetPaneWidth = 220f;
         private const float ResizeHandleWidth = 7f;
         private const float ListRowHeight = 26f;
+        private const float ListSubAssetRowHeight = 52f;
         private const float GridGap = 8f;
         private const float GridScrollBarAllowance = 14f;
 
@@ -79,6 +80,8 @@ namespace DansToolbox.EditorTools.BetterProject
         [NonSerialized] private int visibleCacheRevision = -1;
         [NonSerialized] private Rect lastSearchRect;
         [NonSerialized] private string dragHoverFolderGuid = string.Empty;
+        [NonSerialized] private List<BetterProjectGridEntry> gridEntries =
+            new List<BetterProjectGridEntry>();
 
         [MenuItem(MenuPath, false, 22)]
         internal static void Open()
@@ -111,6 +114,7 @@ namespace DansToolbox.EditorTools.BetterProject
             folderHistory ??= new List<string>();
             secondaryFolderHistory ??= new List<string>();
             visibleCache ??= new Dictionary<string, BetterProjectAssetRecord[]>(StringComparer.Ordinal);
+            gridEntries ??= new List<BetterProjectGridEntry>();
             visibleCache.Clear();
             visibleCacheRevision = BetterProjectIndex.Revision;
             currentFolder = AssetDatabase.IsValidFolder(currentFolder) ? currentFolder : "Assets";
@@ -832,7 +836,8 @@ namespace DansToolbox.EditorTools.BetterProject
         {
             CalculateGridLayout(pane.width, tileSize, out int columns, out float actualWidth);
             float cardHeight = actualWidth + 42f;
-            int rows = Mathf.CeilToInt(visible.Count / (float)columns);
+            BuildGridEntries(visible);
+            int rows = Mathf.CeilToInt(gridEntries.Count / (float)columns);
             Rect content = new Rect(
                 0f,
                 0f,
@@ -841,22 +846,55 @@ namespace DansToolbox.EditorTools.BetterProject
             scroll = GUI.BeginScrollView(pane, scroll, content);
             float visibleTop = Mathf.Max(0f, scroll.y - GridGap);
             float visibleBottom = scroll.y + pane.height + GridGap;
-            for (int index = 0; index < visible.Count; index++)
+            for (int flatIndex = 0; flatIndex < gridEntries.Count; flatIndex++)
             {
-                int column = index % columns;
-                int row = index / columns;
+                int column = flatIndex % columns;
+                int row = flatIndex / columns;
                 Rect card = new Rect(
                     GridGap + column * (actualWidth + GridGap),
                     GridGap + row * (cardHeight + GridGap),
                     actualWidth,
                     cardHeight);
-                if (card.yMax < visibleTop || card.y > visibleBottom)
+                if (card.yMax < visibleTop || card.y > visibleBottom) continue;
+
+                BetterProjectGridEntry entry = gridEntries[flatIndex];
+                if (entry.SubAsset != null)
                 {
-                    continue;
+                    DrawSubAssetCard(card, entry.SubAsset);
                 }
-                DrawAssetCard(card, visible[index], index, primary);
+                else
+                {
+                    DrawAssetCard(card, entry.Record, entry.RecordIndex, primary);
+                }
             }
             GUI.EndScrollView();
+        }
+
+        private void BuildGridEntries(IReadOnlyList<BetterProjectAssetRecord> visible)
+        {
+            gridEntries.Clear();
+            for (int index = 0; index < visible.Count; index++)
+            {
+                BetterProjectAssetRecord record = visible[index];
+                gridEntries.Add(new BetterProjectGridEntry(record, index, null));
+                if (!expandedAssetGuids.Contains(record.Guid)) continue;
+                foreach (UnityEngine.Object child in BetterProjectIndex.GetSubAssets(record))
+                {
+                    if (child != null) gridEntries.Add(new BetterProjectGridEntry(record, index, child));
+                }
+            }
+        }
+
+        private int GetExpandedSubAssetCount(BetterProjectAssetRecord record)
+        {
+            return record != null && expandedAssetGuids.Contains(record.Guid)
+                ? BetterProjectIndex.GetSubAssets(record).Count
+                : 0;
+        }
+
+        private float GetExpandedSubAssetHeight(BetterProjectAssetRecord record)
+        {
+            return GetExpandedSubAssetCount(record) * ListSubAssetRowHeight;
         }
 
         internal static void CalculateGridLayout(
@@ -875,8 +913,12 @@ namespace DansToolbox.EditorTools.BetterProject
 
         private void DrawAssetCard(Rect rect, BetterProjectAssetRecord record, int index, bool primary)
         {
+            float baseCardHeight = rect.width + 42f;
+            Rect mainRect = new Rect(rect.x, rect.y, rect.width, baseCardHeight);
+            IReadOnlyList<UnityEngine.Object> childAssets = BetterProjectIndex.GetSubAssets(record);
+            bool expanded = childAssets.Count > 0 && expandedAssetGuids.Contains(record.Guid);
             bool selected = selectedGuids.Contains(record.Guid);
-            bool hover = rect.Contains(Event.current.mousePosition);
+            bool hover = mainRect.Contains(Event.current.mousePosition);
             bool dropTarget = record.IsFolder && dragHoverFolderGuid == record.Guid;
             Color background = dropTarget
                 ? BetterProjectGui.AccentSoft
@@ -925,8 +967,52 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 BetterProjectUserSettings.ToggleFavorite(record.Guid);
             }
-            HandleFolderDrop(rect, record);
-            HandleAssetPointer(rect, record, index, primary);
+            if (childAssets.Count > 0 &&
+                BetterProjectGui.DisclosureButton(
+                    new Rect(rect.x + 6f, rect.y + 6f, 26f, 26f),
+                    expanded,
+                    childAssets.Count))
+            {
+                ToggleAssetExpansion(record);
+            }
+            HandleFolderDrop(mainRect, record);
+            HandleAssetPointer(mainRect, record, index, primary);
+        }
+
+        private void DrawSubAssetCard(Rect rect, UnityEngine.Object subAsset)
+        {
+            bool selected = Selection.objects.Contains(subAsset);
+            bool hover = rect.Contains(Event.current.mousePosition);
+            BetterProjectGui.DrawPanel(
+                rect,
+                selected ? BetterProjectGui.Selected : hover ? BetterProjectGui.Hover : BetterProjectGui.Panel);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 3f, rect.height), BetterProjectGui.Accent);
+
+            Rect previewRect = new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.width - 16f);
+            BetterProjectGui.DrawPanel(previewRect, BetterProjectGui.Inset, BetterProjectGui.Border);
+            Texture preview = AssetPreview.GetAssetPreview(subAsset) ?? AssetPreview.GetMiniThumbnail(subAsset);
+            if (preview != null)
+            {
+                GUI.DrawTexture(
+                    new Rect(previewRect.x + 3f, previewRect.y + 3f, previewRect.width - 6f, previewRect.height - 6f),
+                    preview,
+                    ScaleMode.ScaleToFit,
+                    true);
+            }
+
+            GUI.Label(
+                new Rect(rect.x + 8f, previewRect.yMax + 4f, rect.width - 16f, 18f),
+                subAsset.name,
+                BetterProjectGui.CardTitle);
+            GUI.Label(
+                new Rect(rect.x + 8f, previewRect.yMax + 22f, rect.width - 16f, 16f),
+                ObjectNames.NicifyVariableName(subAsset.GetType().Name).ToUpperInvariant(),
+                BetterProjectGui.Tiny);
+            GUI.Label(
+                new Rect(rect.x + 6f, rect.y + 6f, 30f, 16f),
+                "PART",
+                BetterProjectGui.Badge);
+            HandleSubAssetPointer(rect, subAsset);
         }
 
         private void DrawList(Rect pane, IReadOnlyList<BetterProjectAssetRecord> visible, ref Vector2 scroll, bool details, bool primary)
@@ -937,8 +1023,12 @@ namespace DansToolbox.EditorTools.BetterProject
                 DrawDetailsHeader(new Rect(pane.x, pane.y, pane.width, header));
             }
             Rect viewport = new Rect(pane.x, pane.y + header, pane.width, pane.height - header);
-            int subRows = visible.Count(record => expandedAssetGuids.Contains(record.Guid));
-            Rect content = new Rect(0f, 0f, viewport.width - 14f, Mathf.Max(viewport.height, (visible.Count + subRows * 2) * ListRowHeight));
+            float childContentHeight = visible.Sum(GetExpandedSubAssetHeight);
+            Rect content = new Rect(
+                0f,
+                0f,
+                viewport.width - 14f,
+                Mathf.Max(viewport.height, visible.Count * ListRowHeight + childContentHeight));
             scroll = GUI.BeginScrollView(viewport, scroll, content);
             float visibleTop = Mathf.Max(0f, scroll.y - ListRowHeight);
             float visibleBottom = scroll.y + viewport.height + ListRowHeight;
@@ -952,11 +1042,12 @@ namespace DansToolbox.EditorTools.BetterProject
                     DrawAssetRow(row, record, index, details, primary);
                 }
                 y += ListRowHeight;
-                if (expandedAssetGuids.Contains(record.Guid) && !record.IsFolder)
+                IReadOnlyList<UnityEngine.Object> childAssets = BetterProjectIndex.GetSubAssets(record);
+                if (expandedAssetGuids.Contains(record.Guid) && childAssets.Count > 0)
                 {
-                    float estimatedBottom = y + ListRowHeight * 2f;
+                    float estimatedBottom = y + ListSubAssetRowHeight * childAssets.Count;
                     y = estimatedBottom >= visibleTop && y <= visibleBottom
-                        ? DrawSubAssets(record, y, content.width)
+                        ? DrawSubAssets(childAssets, 0f, y, content.width, ListSubAssetRowHeight)
                         : estimatedBottom;
                 }
             }
@@ -988,20 +1079,25 @@ namespace DansToolbox.EditorTools.BetterProject
             BetterConsoleDiagnosticSummary consoleSummary = BetterConsoleDiagnosticBridge.GetSummaryForAssetPath(record.Path);
             EditorGUI.DrawRect(new Rect(rect.x, rect.y + 3f, 3f, rect.height - 6f), style.IsValid ? style.Color : BetterProjectGui.Border);
 
-            Rect fold = new Rect(rect.x + 6f, rect.y + 4f, 16f, 18f);
-            if (!record.IsFolder && GUI.Button(fold, expandedAssetGuids.Contains(record.Guid) ? "▾" : "▸", BetterProjectGui.Tiny))
+            Rect fold = new Rect(rect.x + 5f, rect.y + 2f, 22f, 22f);
+            IReadOnlyList<UnityEngine.Object> childAssets = BetterProjectIndex.GetSubAssets(record);
+            if (childAssets.Count > 0 &&
+                BetterProjectGui.DisclosureButton(
+                    fold,
+                    expandedAssetGuids.Contains(record.Guid),
+                    childAssets.Count))
             {
-                if (!expandedAssetGuids.Remove(record.Guid)) expandedAssetGuids.Add(record.Guid);
+                ToggleAssetExpansion(record);
             }
             Texture icon = style.IsValid && !string.IsNullOrEmpty(style.IconName)
                 ? EditorGUIUtility.IconContent(style.IconName).image
                 : record.IsFolder
                     ? EditorGUIUtility.FindTexture("Folder Icon")
                     : AssetPreview.GetMiniThumbnail(BetterProjectOperations.Load(record));
-            if (icon != null) GUI.DrawTexture(new Rect(rect.x + 23f, rect.y + 4f, 18f, 18f), icon, ScaleMode.ScaleToFit);
+            if (icon != null) GUI.DrawTexture(new Rect(rect.x + 32f, rect.y + 4f, 18f, 18f), icon, ScaleMode.ScaleToFit);
 
             float nameWidth = details ? rect.width * 0.48f - 12f : rect.width - 160f;
-            Rect nameRect = new Rect(rect.x + 46f, rect.y + 2f, Mathf.Max(60f, nameWidth), rect.height - 4f);
+            Rect nameRect = new Rect(rect.x + 55f, rect.y + 2f, Mathf.Max(60f, nameWidth - 9f), rect.height - 4f);
             if (renamingGuid == record.Guid)
             {
                 GUI.SetNextControlName("BetterProjectRename");
@@ -1052,25 +1148,102 @@ namespace DansToolbox.EditorTools.BetterProject
             HandleAssetPointer(rect, record, index, primary);
         }
 
-        private float DrawSubAssets(BetterProjectAssetRecord record, float y, float width)
+        private void ToggleAssetExpansion(BetterProjectAssetRecord record)
         {
-            foreach (UnityEngine.Object subAsset in AssetDatabase.LoadAllAssetRepresentationsAtPath(record.Path))
+            if (record == null || BetterProjectIndex.GetSubAssets(record).Count == 0) return;
+            if (!expandedAssetGuids.Remove(record.Guid)) expandedAssetGuids.Add(record.Guid);
+            Repaint();
+        }
+
+        private float DrawSubAssets(
+            IReadOnlyList<UnityEngine.Object> childAssets,
+            float x,
+            float y,
+            float width,
+            float rowHeight)
+        {
+            foreach (UnityEngine.Object subAsset in childAssets)
             {
                 if (subAsset == null) continue;
-                Rect row = new Rect(0f, y, width, ListRowHeight);
-                EditorGUI.DrawRect(new Rect(row.x + 24f, row.y, 1f, row.height), BetterProjectGui.Border);
-                Texture icon = AssetPreview.GetMiniThumbnail(subAsset);
-                if (icon != null) GUI.DrawTexture(new Rect(row.x + 34f, row.y + 4f, 18f, 18f), icon, ScaleMode.ScaleToFit);
-                GUI.Label(new Rect(row.x + 58f, row.y, row.width - 66f, row.height), subAsset.name, BetterProjectGui.Muted);
-                if (Event.current.type == EventType.MouseDown && row.Contains(Event.current.mousePosition))
+                Rect row = new Rect(x, y, width, rowHeight);
+                bool selected = Selection.objects.Contains(subAsset);
+                bool hover = row.Contains(Event.current.mousePosition);
+                if (selected || hover)
                 {
-                    Selection.activeObject = subAsset;
-                    if (Event.current.clickCount == 2) AssetDatabase.OpenAsset(subAsset);
-                    Event.current.Use();
+                    EditorGUI.DrawRect(row, selected ? BetterProjectGui.Selected : BetterProjectGui.Hover);
                 }
-                y += ListRowHeight;
+                float guideX = row.x + 24f;
+                EditorGUI.DrawRect(new Rect(guideX, row.y, 1f, row.height), BetterProjectGui.Border);
+                EditorGUI.DrawRect(new Rect(guideX, row.center.y, 7f, 1f), BetterProjectGui.Border);
+
+                float previewSize = 40f;
+                Rect previewRect = new Rect(
+                    guideX + 10f,
+                    row.y + (row.height - previewSize) * 0.5f,
+                    previewSize,
+                    previewSize);
+                BetterProjectGui.DrawPanel(previewRect, BetterProjectGui.Inset, BetterProjectGui.Border);
+                Texture preview = AssetPreview.GetAssetPreview(subAsset) ?? AssetPreview.GetMiniThumbnail(subAsset);
+                if (preview != null)
+                {
+                    GUI.DrawTexture(
+                        new Rect(previewRect.x + 2f, previewRect.y + 2f, previewRect.width - 4f, previewRect.height - 4f),
+                        preview,
+                        ScaleMode.ScaleToFit,
+                        true);
+                }
+
+                float labelX = previewRect.xMax + 8f;
+                float labelWidth = Mathf.Max(20f, row.xMax - labelX - 7f);
+                GUI.Label(
+                    new Rect(labelX, row.y + 6f, labelWidth, 20f),
+                    subAsset.name,
+                    BetterProjectGui.CardTitle);
+                GUI.Label(
+                    new Rect(labelX, row.y + 26f, labelWidth, 18f),
+                    ObjectNames.NicifyVariableName(subAsset.GetType().Name).ToUpperInvariant(),
+                    BetterProjectGui.Tiny);
+                HandleSubAssetPointer(row, subAsset);
+                y += rowHeight;
             }
             return y;
+        }
+
+        private void HandleSubAssetPointer(
+            Rect rect,
+            UnityEngine.Object subAsset)
+        {
+            Event evt = Event.current;
+            if (!rect.Contains(evt.mousePosition)) return;
+            if (evt.type == EventType.MouseDown && evt.button == 0)
+            {
+                if (EditorGUI.actionKey)
+                {
+                    var selection = Selection.objects.ToList();
+                    if (!selection.Remove(subAsset)) selection.Add(subAsset);
+                    Selection.objects = selection.ToArray();
+                }
+                else
+                {
+                    Selection.activeObject = subAsset;
+                }
+                if (evt.clickCount == 2) AssetDatabase.OpenAsset(subAsset);
+                evt.Use();
+            }
+            else if (evt.type == EventType.MouseDrag && evt.button == 0 && Selection.objects.Contains(subAsset))
+            {
+                DragAndDrop.PrepareStartDrag();
+                DragAndDrop.objectReferences = Selection.objects;
+                DragAndDrop.paths = Array.Empty<string>();
+                DragAndDrop.StartDrag(subAsset.name);
+                evt.Use();
+            }
+            else if (evt.type == EventType.ContextClick)
+            {
+                Selection.activeObject = subAsset;
+                BetterProjectOperations.ShowUnityAssetMenu(rect);
+                evt.Use();
+            }
         }
 
         private void HandleAssetPointer(Rect rect, BetterProjectAssetRecord record, int index, bool primary)
@@ -1121,7 +1294,8 @@ namespace DansToolbox.EditorTools.BetterProject
             }
             BetterProjectAssetRecord record = selected[selected.Length - 1];
             UnityEngine.Object target = BetterProjectOperations.Load(record);
-            EnsurePreviewEditor(target);
+            if (record.Kind == BetterProjectAssetKind.Model) DestroyPreviewEditor();
+            else EnsurePreviewEditor(target);
             Rect inner = new Rect(rect.x + 12f, rect.y + 12f, rect.width - 24f, rect.height - 24f);
             previewScroll = GUI.BeginScrollView(inner, previewScroll, new Rect(0f, 0f, inner.width - 14f, 620f));
             float y = 0f;
@@ -1131,7 +1305,9 @@ namespace DansToolbox.EditorTools.BetterProject
             y += 24f;
             Rect preview = new Rect(0f, y, inner.width - 18f, Mathf.Min(230f, inner.width - 18f));
             BetterProjectGui.DrawPanel(preview, BetterProjectGui.Canvas);
-            if (previewEditor != null && previewEditor.HasPreviewGUI())
+            if (record.Kind != BetterProjectAssetKind.Model &&
+                previewEditor != null &&
+                previewEditor.HasPreviewGUI())
             {
                 previewEditor.OnInteractivePreviewGUI(new Rect(preview.x + 4f, preview.y + 4f, preview.width - 8f, preview.height - 8f), GUIStyle.none);
             }
@@ -1191,11 +1367,12 @@ namespace DansToolbox.EditorTools.BetterProject
             if (target is Texture2D texture) DrawMetaLine(ref y, width, "IMAGE", texture.width + " × " + texture.height);
             if (target is AudioClip audio) DrawMetaLine(ref y, width, "AUDIO", audio.length.ToString("0.00") + "s · " + audio.channels + "ch · " + audio.frequency + "Hz");
             if (target is AnimationClip clip) DrawMetaLine(ref y, width, "CLIP", clip.length.ToString("0.00") + "s · " + clip.frameRate.ToString("0.#") + "fps");
-            if (target is GameObject prefab)
+            if (target is GameObject gameObject)
             {
-                MeshFilter[] meshes = prefab.GetComponentsInChildren<MeshFilter>(true);
+                MeshFilter[] meshes = gameObject.GetComponentsInChildren<MeshFilter>(true);
                 int vertices = meshes.Where(filter => filter.sharedMesh != null).Sum(filter => filter.sharedMesh.vertexCount);
-                DrawMetaLine(ref y, width, "PREFAB", prefab.GetComponentsInChildren<Transform>(true).Length + " objects · " + vertices.ToString("N0") + " verts");
+                string label = record.Kind == BetterProjectAssetKind.Model ? "MODEL" : "PREFAB";
+                DrawMetaLine(ref y, width, label, gameObject.GetComponentsInChildren<Transform>(true).Length + " objects · " + vertices.ToString("N0") + " verts");
             }
             if (target is Sprite sprite) DrawMetaLine(ref y, width, "SPRITE", sprite.rect.width + " × " + sprite.rect.height + " · " + sprite.pixelsPerUnit + " PPU");
             if (target is Shader shader) DrawMetaLine(ref y, width, "SHADER", shader.GetPropertyCount() + " properties");
@@ -2300,6 +2477,23 @@ namespace DansToolbox.EditorTools.BetterProject
         {
             Type type = typeof(EditorWindow).Assembly.GetType("UnityEditor.ProjectBrowser");
             if (type != null) GetWindow(type);
+        }
+
+        private readonly struct BetterProjectGridEntry
+        {
+            internal BetterProjectGridEntry(
+                BetterProjectAssetRecord record,
+                int recordIndex,
+                UnityEngine.Object subAsset)
+            {
+                Record = record;
+                RecordIndex = recordIndex;
+                SubAsset = subAsset;
+            }
+
+            internal BetterProjectAssetRecord Record { get; }
+            internal int RecordIndex { get; }
+            internal UnityEngine.Object SubAsset { get; }
         }
     }
 }

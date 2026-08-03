@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -5,8 +8,34 @@ namespace DansToolbox.Editor
 {
     internal static class DansToolboxLayoutInstaller
     {
-        // The organized workspace does not depend on a serialized Unity layout.
-        internal static bool IsLayoutAvailable => true;
+        private static readonly Type[] LayoutLoadSignature =
+        {
+            typeof(string),
+            typeof(bool),
+            typeof(bool),
+            typeof(bool),
+            typeof(bool)
+        };
+
+        internal static string RecommendedLayoutPath
+        {
+            get
+            {
+                UnityEditor.PackageManager.PackageInfo package =
+                    UnityEditor.PackageManager.PackageInfo.FindForAssembly(
+                        typeof(DansToolboxLayoutInstaller).Assembly);
+                return package == null || string.IsNullOrEmpty(package.resolvedPath)
+                    ? string.Empty
+                    : Path.Combine(
+                        package.resolvedPath,
+                        "Editor",
+                        "Layouts",
+                        "Toolbox.wlt");
+            }
+        }
+
+        internal static bool IsLayoutAvailable =>
+            File.Exists(RecommendedLayoutPath);
 
         internal static void ApplyRecommendedLayout()
         {
@@ -15,11 +44,71 @@ namespace DansToolbox.Editor
 
         internal static bool ApplyRecommendedLayoutNow()
         {
-            // Organized is a launcher preference, not a serialized Unity layout.
-            // Never close docked windows here: removing the only tab from a dock
-            // collapses that region and causes Unity's center view to expand.
+            bool loaded = TryLoadRecommendedLayout();
             EditorApplication.delayCall += CloseDisabledToolWindows;
-            return true;
+            return loaded;
+        }
+
+        private static bool TryLoadRecommendedLayout()
+        {
+            string path = RecommendedLayoutPath;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                Debug.LogWarning(
+                    "Dans Toolbox could not find its packaged Toolbox layout.");
+                return false;
+            }
+
+            try
+            {
+                Type windowLayout = typeof(EditorWindow).Assembly.GetType(
+                    "UnityEditor.WindowLayout",
+                    true);
+                const BindingFlags flags =
+                    BindingFlags.Static |
+                    BindingFlags.Public |
+                    BindingFlags.NonPublic;
+                MethodInfo load = windowLayout.GetMethod(
+                                      "TryLoadWindowLayout",
+                                      flags,
+                                      null,
+                                      LayoutLoadSignature,
+                                      null) ??
+                                  windowLayout.GetMethod(
+                                      "LoadWindowLayout",
+                                      flags,
+                                      null,
+                                      LayoutLoadSignature,
+                                      null);
+                if (load == null)
+                {
+                    Debug.LogError(
+                        "Dans Toolbox could not access Unity's layout loader.");
+                    return false;
+                }
+
+                object result = load.Invoke(
+                    null,
+                    new object[]
+                    {
+                        path,
+                        false,
+                        true,
+                        true,
+                        true
+                    });
+                return !(result is bool success) || success;
+            }
+            catch (TargetInvocationException exception)
+            {
+                Debug.LogException(exception.InnerException ?? exception);
+                return false;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                return false;
+            }
         }
 
         internal static void CloseDisabledToolWindows()

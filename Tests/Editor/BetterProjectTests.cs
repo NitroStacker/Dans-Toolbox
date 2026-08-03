@@ -59,6 +59,76 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void AssetClassification_DistinguishesModelsPrefabsSpritesAndTextures()
+        {
+            Assert.That(
+                BetterProjectIndex.ClassifyAsset(
+                    "Assets/Art/Character.fbx",
+                    typeof(GameObject),
+                    false,
+                    false,
+                    false),
+                Is.EqualTo(BetterProjectAssetKind.Model));
+            Assert.That(
+                BetterProjectIndex.ClassifyAsset(
+                    "Assets/Prefabs/Character.prefab",
+                    typeof(GameObject),
+                    false,
+                    false,
+                    false),
+                Is.EqualTo(BetterProjectAssetKind.Prefab));
+            Assert.That(
+                BetterProjectIndex.ClassifyAsset(
+                    "Assets/Art/Characters.png",
+                    typeof(Texture2D),
+                    false,
+                    false,
+                    true),
+                Is.EqualTo(BetterProjectAssetKind.Sprite));
+            Assert.That(
+                BetterProjectIndex.ClassifyAsset(
+                    "Assets/Art/Backdrop.png",
+                    typeof(Texture2D),
+                    false,
+                    false,
+                    false),
+                Is.EqualTo(BetterProjectAssetKind.Texture));
+        }
+
+        [Test]
+        public void CompoundAsset_ExposesItsImportedSubAssets()
+        {
+            const string root = "Assets/__BetterProjectSubAssetTests";
+            const string path = root + "/Compound.asset";
+            if (!AssetDatabase.IsValidFolder(root))
+            {
+                AssetDatabase.CreateFolder("Assets", "__BetterProjectSubAssetTests");
+            }
+            var main = new AnimationClip { name = "Main" };
+            var child = new AnimationClip { name = "Child" };
+            AssetDatabase.CreateAsset(main, path);
+            AssetDatabase.AddObjectToAsset(child, path);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            try
+            {
+                BetterProjectIndex.Refresh();
+                BetterProjectAssetRecord record = BetterProjectIndex.GetByPath(path);
+
+                Assert.That(record, Is.Not.Null);
+                Assert.That(
+                    BetterProjectIndex.GetSubAssets(record).Select(asset => asset.name),
+                    Does.Contain("Child"));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(root);
+                AssetDatabase.Refresh();
+                BetterProjectIndex.Refresh();
+            }
+        }
+
+        [Test]
         public void Move_DetectsSameFolderAsNoOp()
         {
             Assert.That(BetterProjectOperations.IsSameFolder(

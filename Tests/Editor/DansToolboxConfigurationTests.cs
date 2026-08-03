@@ -145,9 +145,30 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
-        public void OrganizedWorkspace_CatalogsEveryToolWindowWithoutLoadingALayout()
+        public void ToolboxWorkspace_BundlesCapturedLayoutAndCatalogsEveryToolWindow()
         {
             Assert.That(DansToolboxLayoutInstaller.IsLayoutAvailable, Is.True);
+            Assert.That(
+                Path.GetFileName(DansToolboxLayoutInstaller.RecommendedLayoutPath),
+                Is.EqualTo("Toolbox.wlt"));
+            string layout = File.ReadAllText(
+                DansToolboxLayoutInstaller.RecommendedLayoutPath);
+            foreach (string typeName in new[]
+                     {
+                         "UnityEditor.SceneView",
+                         "UnityEditor.GameView",
+                         "UnityEditor.Graphs.AnimatorControllerTool",
+                         "DansToolbox.EditorTools.BetterHierarchy.BetterHierarchyWindow",
+                         "DansToolbox.EditorTools.BetterProject.BetterProjectWindow",
+                         "DansToolbox.EditorTools.BetterInspector.BetterInspectorWindow",
+                         "DansToolbox.EditorTools.BetterConsole.BetterConsoleWindow",
+                         "DansToolbox.EditorTools.Audio.RetroSfxGeneratorWindow",
+                         "DansToolbox.EditorTools.NativeWindowDock.NativeWindowDockWindow"
+                     })
+            {
+                Assert.That(layout, Does.Contain(typeName), typeName);
+            }
+
             Assert.That(
                 DansToolboxToolLauncher.KnownWindowTypeNames.Count(),
                 Is.EqualTo(DansToolboxTools.All.Count));
@@ -360,6 +381,36 @@ namespace DansToolbox.Editor.Tests
             {
                 Object.DestroyImmediate(wizard);
             }
+        }
+
+        [Test]
+        public void SetupWizard_TabsCanJumpDirectlyBetweenSteps()
+        {
+            DansToolboxSetupWizard wizard =
+                ScriptableObject.CreateInstance<DansToolboxSetupWizard>();
+            try
+            {
+                wizard.SetStep(DansToolboxSetupStep.Layout);
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Layout));
+                wizard.SetStep(DansToolboxSetupStep.Theme);
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Theme));
+                wizard.SetStep((DansToolboxSetupStep)99);
+                Assert.That(wizard.CurrentStep, Is.EqualTo(DansToolboxSetupStep.Theme));
+            }
+            finally
+            {
+                Object.DestroyImmediate(wizard);
+            }
+        }
+
+        [TestCase(499f, 1)]
+        [TestCase(500f, 2)]
+        [TestCase(620f, 2)]
+        public void SetupWizard_ToolCardsUseResponsiveColumns(float width, int expected)
+        {
+            Assert.That(
+                DansToolboxSetupWizard.CalculateToolCardColumnCount(width),
+                Is.EqualTo(expected));
         }
 
         [Test]

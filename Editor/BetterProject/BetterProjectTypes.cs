@@ -64,6 +64,16 @@ namespace DansToolbox.EditorTools.BetterProject
         Asset
     }
 
+    internal enum BetterProjectAssetKind
+    {
+        Asset,
+        Folder,
+        Prefab,
+        Model,
+        Sprite,
+        Texture
+    }
+
     [Flags]
     internal enum BetterProjectDiagnosticFlags
     {
@@ -88,6 +98,7 @@ namespace DansToolbox.EditorTools.BetterProject
         internal string Name;
         internal string Extension;
         internal Type MainType;
+        internal BetterProjectAssetKind Kind;
         internal bool IsFolder;
         internal bool IsPackage;
         internal bool IsReadOnly;
@@ -96,9 +107,21 @@ namespace DansToolbox.EditorTools.BetterProject
         internal int DirectDependencyCount;
         internal int ReferenceCount;
 
-        internal string TypeName => IsFolder
-            ? "Folder"
-            : MainType == null ? "Asset" : MainType.Name;
+        internal string TypeName
+        {
+            get
+            {
+                switch (Kind)
+                {
+                    case BetterProjectAssetKind.Folder: return "Folder";
+                    case BetterProjectAssetKind.Prefab: return "Prefab";
+                    case BetterProjectAssetKind.Model: return "Model";
+                    case BetterProjectAssetKind.Sprite: return "Sprite";
+                    case BetterProjectAssetKind.Texture: return "Texture";
+                    default: return MainType == null ? "Asset" : MainType.Name;
+                }
+            }
+        }
     }
 
     [Serializable]

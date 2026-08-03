@@ -238,7 +238,15 @@ namespace DansToolbox.Editor
             settings.seamlessToolSurfaces = useSeamlessToolSurfaces;
             settings.Save(true);
             DansToolboxTheme.NotifyChanged();
-            EditorApplication.delayCall += DansToolboxLayoutInstaller.CloseDisabledToolWindows;
+            if (useRecommendedLayout)
+            {
+                DansToolboxLayoutInstaller.ApplyRecommendedLayout();
+            }
+            else
+            {
+                EditorApplication.delayCall +=
+                    DansToolboxLayoutInstaller.CloseDisabledToolWindows;
+            }
         }
 
         public static void DismissSetupPrompt()

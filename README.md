@@ -19,18 +19,28 @@ The setup wizard opens as a focused, blurred overlay after the package is instal
 
 - Signal Orange, Neon Cyan, or Arcade Violet color themes.
 - Which Dans Toolbox tools are enabled.
-- Whether to use the organized, Hub-first launcher workflow while preserving the current dock layout.
+- Whether to apply the packaged Toolbox layout captured from the intended Unity workspace or keep the project's current layout.
 - Whether Toolbox windows use visually seamless shared surfaces and softer internal dividers. Native tabs and dock geometry remain unchanged.
 
 The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they can be shared with the project. The toolbar icon now opens the **Toolbox Hub** for everyday use; project themes and enabled tools remain available from **Tools > Dans Toolbox > Setup Wizard**.
 
 ## Install from Git
 
-After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
+Open **Window > Package Manager**, select **+ > Add package from git URL**, and enter:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.14.0
+https://github.com/NitroStacker/Dans-Toolbox.git#main
 ```
+
+This tracks the repository's `main` branch. When a newer commit is available, select **Dans Toolbox** in Package Manager and click **Update**. Because this package lives at the repository root, the URL does not need a `?path=/...` segment.
+
+For a project that must stay on an exact release, use a version-tagged URL instead:
+
+```text
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.18.0
+```
+
+Tagged installs are intentionally pinned and do not advance when a newer tag is published.
 
 For local development, use:
 
@@ -43,7 +53,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.14.0"
+    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#main"
   }
 }
 ```
@@ -152,7 +162,7 @@ Use semantic versions and matching Git tags. For each release:
 3. Commit the release and create a tag such as `v1.1.0`.
 4. Push both the commit and tag.
 
-Users update by changing the version at the end of their Git URL, for example from `#v1.4.0` to `#v1.5.0`. A scoped registry such as OpenUPM can later provide version discovery and an Update button without changing this package layout.
+Users who installed with `#main` select **Dans Toolbox** in Package Manager and click **Update** to fetch the latest commit from that branch. Users who installed a version tag remain pinned for reproducible builds and update by changing the tag at the end of their Git URL, for example from `#v1.17.0` to `#v1.18.0`.
 
 ## Migrating an existing project
 

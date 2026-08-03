@@ -151,10 +151,23 @@ namespace DansToolbox.Editor
 
             Color previousColor = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, opacity);
-            Texture2D icon = DansToolboxToolbarButton.LoadIcon();
-            if (icon != null && iconSize > 0.5f)
+            if (iconSize > 0.5f)
             {
-                GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit, true);
+                Color border = palette.Accent;
+                border.a *= opacity;
+                Color fill = palette.AccentSoft;
+                fill.a *= opacity;
+                EditorGUI.DrawRect(iconRect, border);
+                EditorGUI.DrawRect(
+                    new Rect(
+                        iconRect.x + 2f,
+                        iconRect.y + 2f,
+                        Mathf.Max(0f, iconRect.width - 4f),
+                        Mathf.Max(0f, iconRect.height - 4f)),
+                    fill);
+                Color check = palette.Text;
+                check.a *= opacity;
+                DansToolboxSetupWizard.DrawCheck(iconRect, check);
             }
 
             float textProgress = EaseOutCubic(Mathf.Clamp01((progress - 0.2f) / 0.24f));

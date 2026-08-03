@@ -4,7 +4,7 @@
 
 The setup wizard opens over a blurred view of Unity on first install, after reinstalling the package, and once after every package-version update. It selects the shared color theme, enabled tools, workspace behavior, and whether Toolbox windows use seamless surfaces. Settings are saved per project. Reopen it with **Tools > Dans Toolbox > Setup Wizard**.
 
-The available themes are **Signal Orange**, **Neon Cyan**, and **Arcade Violet**. Disabling a tool prevents its menu command from opening and closes any existing instance. Choosing **Organized** enables the Hub-first workflow while preserving every open window and dock region. **Seamless Tool Surfaces** is strictly visual: it unifies Toolbox content surfaces and softens redundant internal dividers while leaving Unity's native tab chrome, hover, selection, and dock geometry unchanged.
+The available themes are **Signal Orange**, **Neon Cyan**, and **Arcade Violet**. Disabling a tool prevents its menu command from opening and closes any existing instance. Choosing **Toolbox Layout** applies the packaged workspace captured for Dans Toolbox; choosing **Keep Current Layout** leaves every open window and dock region in place. **Seamless Tool Surfaces** is strictly visual: it unifies Toolbox content surfaces and softens redundant internal dividers while leaving Unity's native tab chrome, hover, and selection behavior unchanged.
 
 ## Toolbox Hub
 

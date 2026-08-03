@@ -25,6 +25,8 @@ namespace DansToolbox.EditorTools.BetterProject
             new Dictionary<string, BetterProjectAssetRecord>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, List<BetterProjectAssetRecord>> children =
             new Dictionary<string, List<BetterProjectAssetRecord>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, UnityEngine.Object[]> subAssets =
+            new Dictionary<string, UnityEngine.Object[]>(StringComparer.Ordinal);
         private static readonly Dictionary<string, string[]> labels =
             new Dictionary<string, string[]>(StringComparer.Ordinal);
         private static readonly Dictionary<string, BetterProjectDiagnosticFlags> diagnostics =
@@ -83,6 +85,7 @@ namespace DansToolbox.EditorTools.BetterProject
             byGuid.Clear();
             byPath.Clear();
             children.Clear();
+            subAssets.Clear();
             labels.Clear();
             diagnostics.Clear();
             references.Clear();
@@ -111,6 +114,8 @@ namespace DansToolbox.EditorTools.BetterProject
                 }
 
                 string physicalPath = ResolvePhysicalPath(path);
+                Type mainType = folder ? typeof(DefaultAsset) : AssetDatabase.GetMainAssetTypeAtPath(path);
+                AssetImporter importer = folder ? null : AssetImporter.GetAtPath(path);
                 var record = new BetterProjectAssetRecord
                 {
                     Guid = guid,
@@ -118,7 +123,8 @@ namespace DansToolbox.EditorTools.BetterProject
                     ParentPath = Parent(path),
                     Name = folder ? LastSegment(path) : Path.GetFileNameWithoutExtension(path),
                     Extension = folder ? string.Empty : Path.GetExtension(path).ToLowerInvariant(),
-                    MainType = folder ? typeof(DefaultAsset) : AssetDatabase.GetMainAssetTypeAtPath(path),
+                    MainType = mainType,
+                    Kind = ClassifyAsset(path, mainType, folder, importer),
                     IsFolder = folder,
                     IsPackage = path.StartsWith("Packages/", StringComparison.Ordinal),
                     IsReadOnly = path.StartsWith("Packages/", StringComparison.Ordinal),
@@ -175,6 +181,65 @@ namespace DansToolbox.EditorTools.BetterProject
                 : Array.Empty<BetterProjectAssetRecord>();
         }
 
+        internal static IReadOnlyList<UnityEngine.Object> GetSubAssets(BetterProjectAssetRecord record)
+        {
+            if (record == null || record.IsFolder)
+            {
+                return Array.Empty<UnityEngine.Object>();
+            }
+            if (subAssets.TryGetValue(record.Guid, out UnityEngine.Object[] cached))
+            {
+                return cached;
+            }
+
+            cached = AssetDatabase.LoadAllAssetRepresentationsAtPath(record.Path)
+                .Where(asset => asset != null)
+                .ToArray();
+            subAssets[record.Guid] = cached;
+            return cached;
+        }
+
+        internal static BetterProjectAssetKind ClassifyAsset(
+            string path,
+            Type mainType,
+            bool isFolder,
+            bool hasModelImporter,
+            bool isSpriteTexture)
+        {
+            if (isFolder) return BetterProjectAssetKind.Folder;
+            string extension = Path.GetExtension(path ?? string.Empty);
+            if (hasModelImporter || IsModelExtension(extension)) return BetterProjectAssetKind.Model;
+            if (string.Equals(extension, ".prefab", StringComparison.OrdinalIgnoreCase) &&
+                mainType != null && typeof(GameObject).IsAssignableFrom(mainType))
+            {
+                return BetterProjectAssetKind.Prefab;
+            }
+            if (isSpriteTexture || mainType != null && typeof(Sprite).IsAssignableFrom(mainType))
+            {
+                return BetterProjectAssetKind.Sprite;
+            }
+            if (mainType != null && typeof(Texture).IsAssignableFrom(mainType))
+            {
+                return BetterProjectAssetKind.Texture;
+            }
+            return BetterProjectAssetKind.Asset;
+        }
+
+        private static BetterProjectAssetKind ClassifyAsset(
+            string path,
+            Type mainType,
+            bool isFolder,
+            AssetImporter importer)
+        {
+            var textureImporter = importer as TextureImporter;
+            return ClassifyAsset(
+                path,
+                mainType,
+                isFolder,
+                importer is ModelImporter,
+                textureImporter != null && textureImporter.textureType == TextureImporterType.Sprite);
+        }
+
         internal static string[] GetLabels(BetterProjectAssetRecord record)
         {
             if (record == null || record.IsFolder)
@@ -214,7 +279,9 @@ namespace DansToolbox.EditorTools.BetterProject
                 {
                     flags |= BetterProjectDiagnosticFlags.Importer;
                 }
-                if (asset is GameObject prefab && HasMissingScripts(prefab))
+                if (record.Kind == BetterProjectAssetKind.Prefab &&
+                    asset is GameObject prefab &&
+                    HasMissingScripts(prefab))
                 {
                     flags |= BetterProjectDiagnosticFlags.MissingScript;
                 }
@@ -486,7 +553,19 @@ namespace DansToolbox.EditorTools.BetterProject
                 case BetterProjectRuleMatch.NameContains:
                     return record.Name.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
                 case BetterProjectRuleMatch.Type:
-                    return record.TypeName.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (record.TypeName.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return true;
+                    }
+                    // Preserve existing default rules created before imported models and
+                    // prefabs had distinct display identities.
+                    if (record.Kind == BetterProjectAssetKind.Prefab &&
+                        string.Equals(value, "GameObject", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                    return record.Kind == BetterProjectAssetKind.Sprite &&
+                           value.IndexOf("Texture", StringComparison.OrdinalIgnoreCase) >= 0;
                 case BetterProjectRuleMatch.Extension:
                     return string.Equals(record.Extension, value, StringComparison.OrdinalIgnoreCase);
                 case BetterProjectRuleMatch.Label:
@@ -518,7 +597,9 @@ namespace DansToolbox.EditorTools.BetterProject
 
         private static bool IsOversized(BetterProjectAssetRecord record)
         {
-            if (record.MainType != null && typeof(Texture).IsAssignableFrom(record.MainType))
+            if (record.Kind == BetterProjectAssetKind.Texture ||
+                record.Kind == BetterProjectAssetKind.Sprite ||
+                record.MainType != null && typeof(Texture).IsAssignableFrom(record.MainType))
             {
                 return record.FileSize > OversizedTextureBytes;
             }
@@ -527,6 +608,25 @@ namespace DansToolbox.EditorTools.BetterProject
                 return record.FileSize > OversizedAudioBytes;
             }
             return record.FileSize > OversizedGeneralBytes;
+        }
+
+        private static bool IsModelExtension(string extension)
+        {
+            switch ((extension ?? string.Empty).ToLowerInvariant())
+            {
+                case ".fbx":
+                case ".obj":
+                case ".dae":
+                case ".3ds":
+                case ".dxf":
+                case ".blend":
+                case ".max":
+                case ".ma":
+                case ".mb":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static int CompareDefault(BetterProjectAssetRecord left, BetterProjectAssetRecord right)

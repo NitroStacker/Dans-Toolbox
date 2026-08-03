@@ -45,6 +45,7 @@ namespace DansToolbox.Editor
         private const float Gap = 10f;
         private const float StepRailHeight = 36f;
         private const float FooterHeight = 38f;
+        private const float ToolCardHeight = 136f;
         private const float OverlayPanelWidth = 652f;
         private const float OverlayPanelHeight = 642f;
         private const float OverlayEdgeMargin = 36f;
@@ -52,6 +53,7 @@ namespace DansToolbox.Editor
         private const double StepTransitionDuration = 0.24d;
         private const float InstallFadeStart = 0.72f;
         private static readonly string[] StepLabels = { "01  THEME", "02  TOOLS", "03  WORKSPACE" };
+        private static readonly Vector3[] CheckStroke = new Vector3[3];
 
         [SerializeField] private DansToolboxSetupStep currentStep;
         [SerializeField] private DansToolboxThemeId selectedTheme;
@@ -69,6 +71,7 @@ namespace DansToolbox.Editor
         private DansToolboxThemeId styledTheme = (DansToolboxThemeId)(-1);
         private bool styledSeamlessToolSurfaces;
         [System.NonSerialized] private Texture2D backdrop;
+        [System.NonSerialized] private Dictionary<string, Texture> toolIcons;
         [System.NonSerialized] private float surfaceWidth;
         [System.NonSerialized] private float surfaceHeight;
 
@@ -315,11 +318,11 @@ namespace DansToolbox.Editor
                     segmentWidth,
                     rect.height);
                 bool active = index == (int)currentStep;
-                bool complete = index < (int)currentStep;
+                bool hovered = !active && segment.Contains(Event.current.mousePosition);
                 DrawPanel(
                     segment,
-                    active ? palette.Raised : palette.Inset,
-                    active ? palette.BorderStrong : palette.Border);
+                    active ? palette.Raised : hovered ? palette.Panel : palette.Inset,
+                    active ? palette.Accent : hovered ? palette.BorderStrong : palette.Border);
 
                 if (active)
                 {
@@ -328,10 +331,15 @@ namespace DansToolbox.Editor
                         palette.Accent);
                 }
 
-                GUIStyle labelStyle = active
-                    ? styles.StepActive
-                    : complete ? styles.StepComplete : styles.StepInactive;
+                GUIStyle labelStyle = active ? styles.StepActive : styles.StepInactive;
                 GUI.Label(segment, StepLabels[index], labelStyle);
+                if (GUI.Button(
+                        segment,
+                        new GUIContent(string.Empty, "Open " + StepLabels[index].Substring(4).ToLowerInvariant()),
+                        GUIStyle.none))
+                {
+                    SetStep((DansToolboxSetupStep)index);
+                }
             }
         }
 
@@ -422,45 +430,254 @@ namespace DansToolbox.Editor
         private void DrawToolsStep(DansToolboxPalette palette)
         {
             DrawScreenTitle("Choose tools");
-            GUILayout.Space(14f);
+            GUILayout.Space(4f);
+            GUI.Label(
+                GUILayoutUtility.GetRect(1f, 30f, GUILayout.ExpandWidth(true)),
+                "Enable the tools that belong in this project. You can change these choices anytime.",
+                styles.ScreenSubtitle);
+            GUILayout.Space(10f);
 
-            foreach (DansToolboxToolDescriptor tool in DansToolboxTools.All)
+            DrawToolGroup(DansToolboxToolGroup.Workspace, palette);
+            DrawToolGroup(DansToolboxToolGroup.Create, palette);
+            DrawToolGroup(DansToolboxToolGroup.Integrate, palette);
+        }
+
+        private void DrawToolGroup(
+            DansToolboxToolGroup group,
+            DansToolboxPalette palette)
+        {
+            int toolCount = CountToolsInGroup(group);
+            if (toolCount == 0)
             {
-                Rect rect = GUILayoutUtility.GetRect(1f, 62f, GUILayout.ExpandWidth(true));
-                bool enabled = enabledToolIds.Contains(tool.Id);
-                bool hovered = rect.Contains(Event.current.mousePosition);
+                return;
+            }
 
-                DrawPanel(
-                    rect,
-                    hovered ? palette.Raised : palette.Panel,
-                    enabled ? palette.Accent : hovered ? palette.BorderStrong : palette.Border);
-                DrawToggleIndicator(new Rect(rect.x + 15f, rect.y + 17f, 28f, 28f), enabled, palette);
+            int enabledCount = CountEnabledToolsInGroup(group);
+            Color accent = GetToolGroupColor(group, palette);
+            Rect heading = GUILayoutUtility.GetRect(1f, 36f, GUILayout.ExpandWidth(true));
+            EditorGUI.DrawRect(new Rect(heading.x, heading.y + 7f, 3f, 22f), accent);
+            GUI.Label(
+                new Rect(heading.x + 12f, heading.y, heading.width - 130f, heading.height),
+                GetToolGroupTitle(group),
+                styles.SectionTitle);
+            GUI.Label(
+                new Rect(heading.xMax - 124f, heading.y, 124f, heading.height),
+                enabledCount + " / " + toolCount + " ENABLED",
+                styles.SectionMeta);
+
+            int columns = CalculateToolCardColumnCount(
+                Mathf.Max(1f, surfaceWidth - Margin * 2f - 18f));
+            for (int start = 0; start < toolCount; start += columns)
+            {
+                Rect row = GUILayoutUtility.GetRect(
+                    1f,
+                    ToolCardHeight,
+                    GUILayout.ExpandWidth(true));
+                float cardWidth = (row.width - Gap * (columns - 1)) / columns;
+                for (int column = 0; column < columns; column++)
+                {
+                    int groupIndex = start + column;
+                    if (groupIndex >= toolCount)
+                    {
+                        break;
+                    }
+
+                    DansToolboxLaunchDescriptor descriptor = GetToolInGroup(group, groupIndex);
+                    DrawSetupToolCard(
+                        new Rect(
+                            row.x + column * (cardWidth + Gap),
+                            row.y,
+                            cardWidth,
+                            ToolCardHeight),
+                        descriptor,
+                        palette,
+                        accent);
+                }
+
+                GUILayout.Space(Gap);
+            }
+
+            GUILayout.Space(6f);
+        }
+
+        private void DrawSetupToolCard(
+            Rect rect,
+            DansToolboxLaunchDescriptor descriptor,
+            DansToolboxPalette palette,
+            Color accent)
+        {
+            DansToolboxToolDescriptor tool = DansToolboxTools.Find(descriptor.Id);
+            bool enabled = enabledToolIds.Contains(descriptor.Id);
+            bool hovered = rect.Contains(Event.current.mousePosition);
+            DrawPanel(
+                rect,
+                hovered ? palette.Hover : palette.Panel,
+                enabled ? accent : hovered ? palette.BorderStrong : palette.Border);
+            Color rail = accent;
+            rail.a = enabled ? 1f : hovered ? 0.5f : 0.25f;
+            EditorGUI.DrawRect(
+                new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, enabled ? 3f : 2f),
+                rail);
+
+            Rect iconPlate = new Rect(rect.x + 12f, rect.y + 14f, 42f, 42f);
+            DrawPanel(iconPlate, palette.Inset, enabled ? accent : palette.Border);
+            Texture icon = GetToolIcon(descriptor.IconName);
+            if (icon != null)
+            {
+                Color previous = GUI.color;
+                GUI.color = enabled
+                    ? new Color(1f, 1f, 1f, 0.96f)
+                    : new Color(1f, 1f, 1f, 0.38f);
+                GUI.DrawTexture(
+                    new Rect(iconPlate.x + 7f, iconPlate.y + 7f, 28f, 28f),
+                    icon,
+                    ScaleMode.ScaleToFit,
+                    true);
+                GUI.color = previous;
+            }
+
+            GUI.Label(
+                new Rect(iconPlate.xMax + 10f, rect.y + 12f, rect.width - 78f, 24f),
+                tool.Name,
+                enabled ? styles.CardTitle : styles.CardTitleDisabled);
+            GUI.Label(
+                new Rect(
+                    iconPlate.xMax + 10f,
+                    rect.y + 34f,
+                    rect.width - (tool.WindowsOnly ? 148f : 106f),
+                    18f),
+                GetToolGroupTitle(descriptor.Group),
+                styles.CardCategory);
+            GUI.Label(
+                new Rect(rect.x + 12f, rect.y + 66f, rect.width - 24f, 42f),
+                tool.Description,
+                enabled ? styles.CardBody : styles.CardBodyDisabled);
+            GUI.Label(
+                new Rect(rect.x + 12f, rect.yMax - 25f, rect.width - 52f, 18f),
+                enabled ? "ENABLED" : "CLICK TO ENABLE",
+                enabled ? styles.EnabledStatus : styles.DisabledStatus);
+
+            Rect toggle = new Rect(rect.xMax - 32f, rect.yMax - 30f, 20f, 20f);
+            DrawToggleIndicator(toggle, enabled, palette, accent);
+            if (tool.WindowsOnly)
+            {
                 GUI.Label(
-                    new Rect(rect.x + 58f, rect.y + 17f, rect.width - 170f, 28f),
-                    tool.Name.ToUpperInvariant(),
-                    styles.CardTitle);
+                    new Rect(rect.xMax - 76f, rect.y + 34f, 62f, 18f),
+                    "WINDOWS",
+                    styles.PlatformBadge);
+            }
 
-                if (tool.WindowsOnly)
+            if (GUI.Button(
+                    rect,
+                    new GUIContent(string.Empty, "Toggle " + tool.Name),
+                    GUIStyle.none))
+            {
+                if (enabled)
                 {
-                    GUI.Label(
-                        new Rect(rect.xMax - 92f, rect.y + 21f, 76f, 20f),
-                        "WINDOWS",
-                        styles.Badge);
+                    enabledToolIds.Remove(descriptor.Id);
+                }
+                else
+                {
+                    enabledToolIds.Add(descriptor.Id);
                 }
 
-                if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+                Repaint();
+            }
+        }
+
+        internal static int CalculateToolCardColumnCount(float availableWidth)
+        {
+            return availableWidth >= 500f ? 2 : 1;
+        }
+
+        private static int CountToolsInGroup(DansToolboxToolGroup group)
+        {
+            int count = 0;
+            foreach (DansToolboxLaunchDescriptor descriptor in DansToolboxToolLauncher.All)
+            {
+                if (descriptor.Group == group)
                 {
-                    if (enabled)
-                    {
-                        enabledToolIds.Remove(tool.Id);
-                    }
-                    else
-                    {
-                        enabledToolIds.Add(tool.Id);
-                    }
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountEnabledToolsInGroup(DansToolboxToolGroup group)
+        {
+            int count = 0;
+            foreach (DansToolboxLaunchDescriptor descriptor in DansToolboxToolLauncher.All)
+            {
+                if (descriptor.Group == group && enabledToolIds.Contains(descriptor.Id))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static DansToolboxLaunchDescriptor GetToolInGroup(
+            DansToolboxToolGroup group,
+            int groupIndex)
+        {
+            int current = 0;
+            foreach (DansToolboxLaunchDescriptor descriptor in DansToolboxToolLauncher.All)
+            {
+                if (descriptor.Group != group)
+                {
+                    continue;
                 }
 
-                GUILayout.Space(8f);
+                if (current == groupIndex)
+                {
+                    return descriptor;
+                }
+
+                current++;
+            }
+
+            return default;
+        }
+
+        private Texture GetToolIcon(string iconName)
+        {
+            toolIcons ??= new Dictionary<string, Texture>();
+            if (toolIcons.TryGetValue(iconName, out Texture cached))
+            {
+                return cached;
+            }
+
+            Texture icon = EditorGUIUtility.IconContent(iconName)?.image;
+            if (icon == null && !iconName.StartsWith("d_", System.StringComparison.Ordinal))
+            {
+                icon = EditorGUIUtility.IconContent("d_" + iconName)?.image;
+            }
+
+            toolIcons[iconName] = icon;
+            return icon;
+        }
+
+        private static string GetToolGroupTitle(DansToolboxToolGroup group)
+        {
+            switch (group)
+            {
+                case DansToolboxToolGroup.Create: return "CREATE";
+                case DansToolboxToolGroup.Integrate: return "INTEGRATE";
+                default: return "WORKSPACE";
+            }
+        }
+
+        private static Color GetToolGroupColor(
+            DansToolboxToolGroup group,
+            DansToolboxPalette palette)
+        {
+            switch (group)
+            {
+                case DansToolboxToolGroup.Create: return palette.Signal;
+                case DansToolboxToolGroup.Integrate: return palette.Success;
+                default: return palette.Accent;
             }
         }
 
@@ -540,7 +757,7 @@ namespace DansToolbox.Editor
                 recommended);
             GUI.Label(
                 new Rect(rect.x + 14f, rect.yMax - 48f, rect.width - 48f, 28f),
-                recommended ? "ORGANIZED" : "KEEP OPEN WINDOWS",
+                recommended ? "TOOLBOX LAYOUT" : "KEEP CURRENT LAYOUT",
                 styles.CardTitle);
 
             if (selected)
@@ -566,8 +783,7 @@ namespace DansToolbox.Editor
         private void DrawFooter(Rect row, DansToolboxPalette palette)
         {
             Rect laterRect = new Rect(row.x, row.y, 92f, row.height);
-            Rect nextRect = new Rect(row.xMax - 118f, row.y, 118f, row.height);
-            Rect backRect = new Rect(nextRect.x - 100f, row.y, 88f, row.height);
+            Rect applyRect = new Rect(row.xMax - 124f, row.y, 124f, row.height);
 
             if (DrawFlatButton(laterRect, "NOT NOW", palette, false, true))
             {
@@ -576,27 +792,9 @@ namespace DansToolbox.Editor
                 return;
             }
 
-            if (DrawFlatButton(
-                    backRect,
-                    "BACK",
-                    palette,
-                    false,
-                    currentStep != DansToolboxSetupStep.Theme))
+            if (DrawFlatButton(applyRect, "APPLY SETUP", palette, true, true))
             {
-                MoveBack();
-            }
-
-            string nextLabel = currentStep == DansToolboxSetupStep.Layout ? "APPLY" : "NEXT";
-            if (DrawFlatButton(nextRect, nextLabel, palette, true, true))
-            {
-                if (currentStep == DansToolboxSetupStep.Layout)
-                {
-                    ApplySelection();
-                }
-                else
-                {
-                    MoveNext();
-                }
+                ApplySelection();
             }
         }
 
@@ -614,11 +812,7 @@ namespace DansToolbox.Editor
         {
             if (currentStep < DansToolboxSetupStep.Layout)
             {
-                currentStep = (DansToolboxSetupStep)((int)currentStep + 1);
-                scrollPosition = Vector2.zero;
-                stepTransitionDirection = 1;
-                stepTransitionStartedAt = EditorApplication.timeSinceStartup;
-                Repaint();
+                SetStep((DansToolboxSetupStep)((int)currentStep + 1));
             }
         }
 
@@ -626,12 +820,24 @@ namespace DansToolbox.Editor
         {
             if (currentStep > DansToolboxSetupStep.Theme)
             {
-                currentStep = (DansToolboxSetupStep)((int)currentStep - 1);
-                scrollPosition = Vector2.zero;
-                stepTransitionDirection = -1;
-                stepTransitionStartedAt = EditorApplication.timeSinceStartup;
-                Repaint();
+                SetStep((DansToolboxSetupStep)((int)currentStep - 1));
             }
+        }
+
+        internal void SetStep(DansToolboxSetupStep step)
+        {
+            if (step < DansToolboxSetupStep.Theme ||
+                step > DansToolboxSetupStep.Layout ||
+                step == currentStep)
+            {
+                return;
+            }
+
+            stepTransitionDirection = step > currentStep ? 1 : -1;
+            currentStep = step;
+            scrollPosition = Vector2.zero;
+            stepTransitionStartedAt = EditorApplication.timeSinceStartup;
+            Repaint();
         }
 
         private void ApplySelection()
@@ -771,12 +977,17 @@ namespace DansToolbox.Editor
             return 1f - inverse * inverse * inverse;
         }
 
-        private static void DrawToggleIndicator(Rect rect, bool enabled, DansToolboxPalette palette)
+        private static void DrawToggleIndicator(
+            Rect rect,
+            bool enabled,
+            DansToolboxPalette palette,
+            Color? selectedColor = null)
         {
+            Color accent = selectedColor ?? palette.Accent;
             DrawPanel(
                 rect,
                 enabled ? palette.AccentSoft : palette.Inset,
-                enabled ? palette.Accent : palette.Border);
+                enabled ? accent : palette.Border);
             if (enabled)
             {
                 DrawCheck(rect, palette.Text);
@@ -789,11 +1000,25 @@ namespace DansToolbox.Editor
             DrawCheck(rect, palette.Text);
         }
 
-        private static void DrawCheck(Rect rect, Color color)
+        internal static void DrawCheck(Rect rect, Color color)
         {
-            EditorGUI.DrawRect(new Rect(rect.x + 4f, rect.center.y, 4f, 2f), color);
-            EditorGUI.DrawRect(new Rect(rect.x + 7f, rect.center.y - 3f, 2f, 5f), color);
-            EditorGUI.DrawRect(new Rect(rect.x + 9f, rect.center.y - 5f, 6f, 2f), color);
+            CheckStroke[0] = new Vector3(
+                rect.x + rect.width * 0.23f,
+                rect.y + rect.height * 0.52f);
+            CheckStroke[1] = new Vector3(
+                rect.x + rect.width * 0.43f,
+                rect.y + rect.height * 0.70f);
+            CheckStroke[2] = new Vector3(
+                rect.x + rect.width * 0.78f,
+                rect.y + rect.height * 0.31f);
+            Color previous = Handles.color;
+            Handles.color = color;
+            Handles.BeginGUI();
+            Handles.DrawAAPolyLine(
+                Mathf.Clamp(rect.width * 0.13f, 2f, 8f),
+                CheckStroke);
+            Handles.EndGUI();
+            Handles.color = previous;
         }
 
         private static void DrawLayoutPreview(
@@ -948,15 +1173,32 @@ namespace DansToolbox.Editor
             styles = new WizardStyles
             {
                 ScreenTitle = MakeLabel(palette.Text, 17, FontStyle.Bold),
+                ScreenSubtitle = new GUIStyle(MakeLabel(palette.Muted, 10, FontStyle.Normal))
+                {
+                    wordWrap = true
+                },
                 Splash = MakeLabel(palette.Text, 15, FontStyle.Bold, TextAnchor.MiddleCenter),
                 StepActive = MakeLabel(palette.Text, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
-                StepComplete = MakeLabel(palette.Accent, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 StepInactive = MakeLabel(palette.Muted, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 CardTitle = MakeLabel(palette.Text, 11, FontStyle.Bold),
+                CardTitleDisabled = MakeLabel(palette.Muted, 11, FontStyle.Bold),
                 CardBody = new GUIStyle(MakeLabel(palette.Muted, 10, FontStyle.Normal))
                 {
                     wordWrap = true
                 },
+                CardBodyDisabled = new GUIStyle(MakeLabel(
+                    Color.Lerp(palette.Muted, palette.Canvas, 0.28f),
+                    10,
+                    FontStyle.Normal))
+                {
+                    wordWrap = true
+                },
+                CardCategory = MakeLabel(palette.Muted, 8, FontStyle.Bold),
+                SectionTitle = MakeLabel(palette.Text, 10, FontStyle.Bold),
+                SectionMeta = MakeLabel(palette.Muted, 8, FontStyle.Bold, TextAnchor.MiddleRight),
+                EnabledStatus = MakeLabel(palette.Success, 8, FontStyle.Bold),
+                DisabledStatus = MakeLabel(palette.Muted, 8, FontStyle.Bold),
+                PlatformBadge = MakeLabel(palette.Warning, 7, FontStyle.Bold, TextAnchor.MiddleRight),
                 Badge = MakeLabel(palette.Accent, 8, FontStyle.Bold, TextAnchor.MiddleRight),
                 DangerBadge = MakeLabel(palette.Danger, 8, FontStyle.Bold, TextAnchor.MiddleRight)
             };
@@ -981,12 +1223,20 @@ namespace DansToolbox.Editor
         private sealed class WizardStyles
         {
             internal GUIStyle ScreenTitle;
+            internal GUIStyle ScreenSubtitle;
             internal GUIStyle Splash;
             internal GUIStyle StepActive;
-            internal GUIStyle StepComplete;
             internal GUIStyle StepInactive;
             internal GUIStyle CardTitle;
+            internal GUIStyle CardTitleDisabled;
             internal GUIStyle CardBody;
+            internal GUIStyle CardBodyDisabled;
+            internal GUIStyle CardCategory;
+            internal GUIStyle SectionTitle;
+            internal GUIStyle SectionMeta;
+            internal GUIStyle EnabledStatus;
+            internal GUIStyle DisabledStatus;
+            internal GUIStyle PlatformBadge;
             internal GUIStyle Badge;
             internal GUIStyle DangerBadge;
         }

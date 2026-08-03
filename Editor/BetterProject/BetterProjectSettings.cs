@@ -120,9 +120,11 @@ namespace DansToolbox.EditorTools.BetterProject
             return new List<BetterProjectStyleRule>
             {
                 Rule("Scenes", BetterProjectRuleMatch.Extension, ".unity", new Color32(82, 196, 255, 255), "SCN", 80),
-                Rule("Prefabs", BetterProjectRuleMatch.Type, "GameObject", new Color32(76, 166, 255, 255), "PFB", 70),
+                Rule("Prefabs", BetterProjectRuleMatch.Type, "Prefab", new Color32(76, 166, 255, 255), "PFB", 70),
+                Rule("Models", BetterProjectRuleMatch.Type, "Model", new Color32(86, 176, 224, 255), "MDL", 65),
                 Rule("Scripts", BetterProjectRuleMatch.Extension, ".cs", new Color32(114, 216, 146, 255), "CS", 60),
                 Rule("Audio", BetterProjectRuleMatch.Type, "AudioClip", new Color32(214, 112, 255, 255), "SFX", 55),
+                Rule("Sprites", BetterProjectRuleMatch.Type, "Sprite", new Color32(255, 166, 102, 255), "SPR", 52),
                 Rule("Textures", BetterProjectRuleMatch.Type, "Texture", new Color32(255, 152, 92, 255), "TEX", 50),
                 Rule("Materials", BetterProjectRuleMatch.Type, "Material", new Color32(245, 192, 86, 255), "MAT", 45),
                 Rule("Packages", BetterProjectRuleMatch.Package, string.Empty, new Color32(132, 139, 151, 255), "PKG", 20),

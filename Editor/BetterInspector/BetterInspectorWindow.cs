@@ -270,15 +270,16 @@ namespace DansToolbox.EditorTools.BetterInspector
             }
 
             Object primary = targets[0];
+            bool sceneGameObjects = AreEditableSceneGameObjects(targets);
             Texture icon = AssetPreview.GetMiniThumbnail(primary) ??
                            EditorGUIUtility.ObjectContent(primary, primary.GetType()).image;
             Rect iconRect = new Rect(12f, rect.y + 16f, 46f, 46f);
             EditorGUI.DrawRect(new Rect(iconRect.x - 1f, iconRect.y - 1f, iconRect.width + 2f, iconRect.height + 2f), palette.Border);
             EditorGUI.DrawPreviewTexture(iconRect, icon, null, ScaleMode.ScaleToFit);
 
-            float rightActions = targets.All(target => target is GameObject) ? 132f : 36f;
+            float rightActions = sceneGameObjects ? 132f : 36f;
             Rect nameRect = new Rect(70f, rect.y + 12f, Mathf.Max(80f, rect.width - 82f - rightActions), 24f);
-            if (targets.Length == 1 && primary is GameObject gameObject)
+            if (sceneGameObjects && targets.Length == 1 && primary is GameObject gameObject)
             {
                 string renamed = EditorGUI.DelayedTextField(nameRect, gameObject.name, styles.ObjectName);
                 if (!string.Equals(renamed, gameObject.name, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(renamed))
@@ -302,7 +303,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 GUI.Label(new Rect(70f, rect.y + 56f, Mathf.Max(80f, rect.width - 118f), 16f), AssetDatabase.GetAssetPath(primary), styles.Path);
             }
 
-            if (targets.All(target => target is GameObject))
+            if (sceneGameObjects)
             {
                 DrawGameObjectHeaderControls(GetGameObjectActionColumn(rect), targets.Cast<GameObject>().ToArray(), palette);
             }
@@ -318,7 +319,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 ToggleLock();
             }
 
-            if (targets.All(target => target is GameObject) &&
+            if (sceneGameObjects &&
                 DrawFlatButton(
                     GetAddComponentButtonRect(rect),
                     "+ COMPONENT",
@@ -1167,7 +1168,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 return;
             }
 
-            if (targets.All(target => target is GameObject))
+            if (AreEditableSceneGameObjects(targets))
             {
                 foreach (BetterInspectorComponentGroup group in BuildComponentGroups(targets.Cast<GameObject>().ToArray()))
                 {
@@ -1547,7 +1548,15 @@ namespace DansToolbox.EditorTools.BetterInspector
             }
         }
 
-        private static string GetTargetDetail(Object[] targets)
+        internal static bool AreEditableSceneGameObjects(Object[] targets)
+        {
+            return targets.Length > 0 && targets.All(target =>
+                target is GameObject gameObject &&
+                !EditorUtility.IsPersistent(gameObject) &&
+                gameObject.scene.IsValid());
+        }
+
+        internal static string GetTargetDetail(Object[] targets)
         {
             if (targets.Length > 1)
             {
@@ -1560,8 +1569,16 @@ namespace DansToolbox.EditorTools.BetterInspector
             Object target = targets[0];
             if (target is GameObject gameObject)
             {
+                if (EditorUtility.IsPersistent(gameObject) || AssetDatabase.Contains(gameObject))
+                {
+                    string assetPath = AssetDatabase.GetAssetPath(gameObject);
+                    if (AssetImporter.GetAtPath(assetPath) is ModelImporter) return "MODEL ASSET";
+                    if (assetPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)) return "PREFAB ASSET";
+                    return "GAME OBJECT ASSET";
+                }
                 string prefab = PrefabUtility.IsPartOfPrefabInstance(gameObject) ? "  ·  PREFAB INSTANCE" : string.Empty;
-                return gameObject.scene.name.ToUpperInvariant() + prefab;
+                string sceneName = gameObject.scene.IsValid() ? gameObject.scene.name : string.Empty;
+                return (string.IsNullOrEmpty(sceneName) ? "SCENE OBJECT" : sceneName.ToUpperInvariant()) + prefab;
             }
             return ObjectNames.NicifyVariableName(target.GetType().Name).ToUpperInvariant();
         }

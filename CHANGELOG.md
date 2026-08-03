@@ -4,6 +4,24 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.18.0] - 2026-08-03
+
+### Added
+
+- Bundle the intended Toolbox workspace as a Unity layout and apply it when the Setup Wizard's Toolbox Layout option is selected, while retaining a Keep Current Layout choice.
+- Add expandable rendered sub-asset previews for compound models and sprites in Better Project list and grid views, including direct selection, multi-selection, opening, and dragging.
+
+### Changed
+
+- Redesign the Setup Wizard tool picker as responsive Tool Hub-style cards grouped into Workspace, Create, and Integrate categories.
+- Make every Setup Wizard tab directly navigable, keep Apply Setup available from every tab, and replace the ambiguous selection glyph with a crisp checkmark.
+- Document `#main` as the recommended Git installation revision so Package Manager users can update the package from the branch.
+
+### Fixed
+
+- Restore Unity Project-window parity for compound assets in Better Project: models and sprites keep their imported identity, use a high-contrast disclosure control, and are no longer treated as prefabs.
+- Treat imported model roots as assets in Better Inspector so selecting an FBX uses its native importer surface instead of scene-object controls.
+
 ## [1.17.0] - 2026-08-03
 
 ### Added

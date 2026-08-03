@@ -31,6 +31,7 @@ namespace DansToolbox.EditorTools.BetterProject
         private static GUIStyle badge;
         private static GUIStyle cardTitle;
         private static GUIStyle tiny;
+        private static readonly Vector3[] DisclosureStroke = new Vector3[3];
 
         internal static Color Canvas => DansToolboxTheme.Current.Canvas;
         internal static Color Panel => DansToolboxTheme.Current.Panel;
@@ -66,6 +67,43 @@ namespace DansToolbox.EditorTools.BetterProject
                 EditorGUI.DrawRect(rect, background);
             }
             return GUI.Button(rect, content, GUIStyle.none);
+        }
+
+        internal static bool DisclosureButton(Rect rect, bool expanded, int childCount)
+        {
+            bool hovered = rect.Contains(Event.current.mousePosition);
+            Color fill = expanded ? AccentSoft : hovered ? Raised : Inset;
+            Color border = expanded || hovered ? Accent : BorderStrong;
+            DrawPanel(rect, fill, border);
+
+            if (Event.current.type == EventType.Repaint)
+            {
+                float cx = Mathf.Round(rect.center.x);
+                float cy = Mathf.Round(rect.center.y);
+                if (expanded)
+                {
+                    DisclosureStroke[0] = new Vector3(cx - 5f, cy - 2f);
+                    DisclosureStroke[1] = new Vector3(cx, cy + 3f);
+                    DisclosureStroke[2] = new Vector3(cx + 5f, cy - 2f);
+                }
+                else
+                {
+                    DisclosureStroke[0] = new Vector3(cx - 2f, cy - 5f);
+                    DisclosureStroke[1] = new Vector3(cx + 3f, cy);
+                    DisclosureStroke[2] = new Vector3(cx - 2f, cy + 5f);
+                }
+
+                Color previous = Handles.color;
+                Handles.color = expanded || hovered ? Accent : Text;
+                Handles.BeginGUI();
+                Handles.DrawAAPolyLine(2.4f, DisclosureStroke);
+                Handles.EndGUI();
+                Handles.color = previous;
+            }
+
+            string tooltip = (expanded ? "Collapse" : "Expand") + " " + childCount +
+                             (childCount == 1 ? " imported item" : " imported items");
+            return GUI.Button(rect, new GUIContent(string.Empty, tooltip), GUIStyle.none);
         }
 
         internal static bool SegmentButton(Rect rect, string label, bool active, string tooltip)
@@ -190,7 +228,7 @@ namespace DansToolbox.EditorTools.BetterProject
             EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), Border);
         }
 
-        private static void DrawPanel(Rect rect, Color fill, Color border)
+        internal static void DrawPanel(Rect rect, Color fill, Color border)
         {
             EditorGUI.DrawRect(rect, border);
             EditorGUI.DrawRect(

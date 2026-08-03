@@ -103,6 +103,33 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void SceneAndPrefabGameObjectsUseTheirCorrectInspectorSurfaces()
+        {
+            const string prefabPath = "Assets/BetterInspectorGameObjectAssetParityTest.prefab";
+            var sceneObject = new GameObject("Scene Object");
+            try
+            {
+                Assert.That(
+                    BetterInspectorWindow.AreEditableSceneGameObjects(new Object[] { sceneObject }),
+                    Is.True);
+
+                GameObject prefab = PrefabUtility.SaveAsPrefabAsset(sceneObject, prefabPath);
+                Assert.That(prefab, Is.Not.Null);
+                Assert.That(
+                    BetterInspectorWindow.AreEditableSceneGameObjects(new Object[] { prefab }),
+                    Is.False);
+                Assert.That(
+                    BetterInspectorWindow.GetTargetDetail(new Object[] { prefab }),
+                    Is.EqualTo("PREFAB ASSET"));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(prefabPath);
+                Object.DestroyImmediate(sceneObject);
+            }
+        }
+
+        [Test]
         public void AddComponentCatalog_ExcludesTransformAndAbstractTypes()
         {
             var types = BetterInspectorAddComponentPopup.GetAddableTypes().ToArray();

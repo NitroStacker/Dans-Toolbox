@@ -96,6 +96,8 @@ namespace DansToolbox.Editor
         {
             bool retroEnabled = DansToolboxSettings.IsToolEnabled(
                 DansToolboxTools.RetroSfxId);
+            bool retroVfxEnabled = DansToolboxSettings.IsToolEnabled(
+                DansToolboxTools.RetroVfxId);
             bool dockEnabled = DansToolboxSettings.IsToolEnabled(
                 DansToolboxTools.NativeWindowDockId);
             bool hierarchyEnabled = DansToolboxSettings.IsToolEnabled(
@@ -114,6 +116,8 @@ namespace DansToolbox.Editor
                 string fullName = window.GetType().FullName;
                 if ((!retroEnabled &&
                      fullName == "DansToolbox.EditorTools.Audio.RetroSfxGeneratorWindow") ||
+                    (!retroVfxEnabled &&
+                     fullName == "DansToolbox.EditorTools.RetroVfx.RetroVfxGeneratorWindow") ||
                     (!dockEnabled &&
                      fullName == "DansToolbox.EditorTools.NativeWindowDock.NativeWindowDockWindow") ||
                     (!hierarchyEnabled &&

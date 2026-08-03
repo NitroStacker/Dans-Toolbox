@@ -272,6 +272,23 @@ namespace DansToolbox.Editor.Tests
             Assert.That(wideWidth, Is.EqualTo(112f));
         }
 
+        [Test]
+        public void SearchLayout_SeparatesClearButtonFromFieldAndFocusBorder()
+        {
+            Rect searchRect = new Rect(100f, 8f, 180f, 22f);
+
+            BetterProjectWindow.CalculateSearchControlRects(
+                searchRect,
+                true,
+                out Rect fieldRect,
+                out Rect clearRect);
+
+            Assert.That(fieldRect.xMax, Is.LessThan(clearRect.xMin));
+            Assert.That(clearRect.xMax, Is.LessThan(searchRect.xMax));
+            Assert.That(clearRect.yMin, Is.GreaterThan(searchRect.yMin));
+            Assert.That(clearRect.yMax, Is.LessThan(searchRect.yMax));
+        }
+
         private static BetterProjectAssetRecord Record(string guid, string path, Type type, long bytes)
         {
             return new BetterProjectAssetRecord

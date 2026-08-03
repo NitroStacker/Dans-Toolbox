@@ -3,6 +3,8 @@
   "rootNamespace": "DansToolbox.Editor.Tests",
   "references": [
     "DansToolbox.Core.Editor",
+    "DansToolbox.RetroVfx.Runtime",
+    "DansToolbox.RetroVfx.Editor",
     "DansToolbox.NativeWindowDock.Editor",
     "DansToolbox.BetterHierarchy.Editor",
     "DansToolbox.BetterInspector.Editor",

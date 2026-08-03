@@ -308,6 +308,7 @@ MonoBehaviour:
   - {fileID: 15}
   - {fileID: 16}
   - {fileID: 26}
+  - {fileID: 27}
   m_Selected: 3
   m_LastSelected: 1
 --- !u!114 &13
@@ -2279,3 +2280,59 @@ MonoBehaviour:
   bookmarkName: VIEW
   presetName: LAYERS
   showAdvanced: 0
+--- !u!114 &27
+MonoBehaviour:
+  m_ObjectHideFlags: 52
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28f0b1423cc94fd596114761f85297fe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DansToolbox.RetroVfx.Editor::DansToolbox.EditorTools.RetroVfx.RetroVfxGeneratorWindow
+  m_MinSize: {x: 720, y: 720}
+  m_MaxSize: {x: 4000, y: 4000}
+  m_TitleContent:
+    m_Text: Retro VFX
+    m_Image: {fileID: 0}
+    m_Tooltip: 
+    m_TextWithWhitespace: "Retro VFX\u200B"
+  m_Pos:
+    serializedVersion: 2
+    x: 1826
+    y: 86
+    width: 731.6666
+    height: 1258.6666
+  m_SerializedDataModeController:
+    m_DataMode: 0
+    m_PreferredDataMode: 0
+    m_SupportedDataModes: 
+    isAutomatic: 1
+  m_ViewDataDictionary: {fileID: 0}
+  m_OverlayCanvas:
+    m_LastAppliedPresetName: Default
+    m_SaveData: []
+    m_ContainerData: []
+    m_DynamicPanelContainerData: []
+    m_OverlaysVisible: 1
+    m_DynamicPanelBehavior: 0
+  activeTab: 0
+  libraryFamily: 0
+  workingRecipe: {fileID: 0}
+  workingRecipeJson: 
+  sourceRecipe: {fileID: 0}
+  selectedPresetId: sharp-impact
+  outputFolder: Assets/RetroVfx/Generated
+  exportName: Sharp Impact
+  outputMode: 2
+  flipbookFrameSize: 256
+  flipbookColumns: 4
+  flipbookRows: 4
+  workingDirty: 0
+  forgeScroll: {x: 0, y: 0}
+  layersScroll: {x: 0, y: 0}
+  advancedScroll: {x: 0, y: 0}
+  status: Choose a preset, shape it, then save a recipe or export production assets.
+  statusType: 0

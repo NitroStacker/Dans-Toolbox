@@ -4,6 +4,36 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.12.0] - 2026-08-03
+
+### Added
+
+- Turn Retro VFX into a source-aware production workstation with anticipation/primary/secondary/sustain/decay phases, source and geometry modes, gradients, turbulence, drag, real trails, surface animation, collision, and sub-emitter events.
+- Add a flat, hover-aware Sources tab with detection and license boundaries for twenty-five researched sprite packs, repositories, shader libraries, authoring tools, Asset Store effects, and runtime integrations.
+- Embed curated CC0 CodeManu flipbooks and the Kenney Smoke Particles library with local provenance, automatic grid inference, and procedural fallback.
+- Add a portable Retro VFX Uber shader, generated arc/ring/ribbon meshes, third-party prefab layers, scene-response events, and expanded production tests.
+- Expand Retro VFX to forty procedural patches across eleven families, including pixel-art bomb explosions, gunfire, blood, sword swings, magic, item shines, pickups, smoke, impacts, and environmental effects.
+- Add nineteen purpose-built procedural sprite silhouettes, animated point-filtered pixel explosion and smoke sheets, directional and stationary motion modes, repeated bursts, per-axis aspect, emission offsets, jitter, stretch, and additive or alpha rendering.
+- Add deterministic preset rerolls: every preset click generates a fresh variation of that archetype while the existing regenerate action continues to preserve locked layers.
+- Add a compact Retro SFX-style Shape rack with draggable, scrollable, resettable knobs and focused Library, Shape, Layers, and Advanced tabs.
+
+### Changed
+
+- Replace long layer slider stacks with compact Retro SFX-style rotary control banks while keeping explicit source, curve, gradient, and event fields.
+- Preserve point filtering when generated pixel textures are exported so baked Particle System prefabs retain crisp retro edges.
+- Replace broad generic particle recipes with family-specific geometry, timing, motion, palette, and layering.
+
+## [1.11.0] - 2026-08-02
+
+### Added
+
+- Add **Retro VFX** as an eighth selectable tool with the shared Retro SFX rack, transport, theme, motion, and status language adapted to a radial live preview stage.
+- Add twelve deterministic procedural patches across Impact, Explosion, Muzzle Flash, Smoke, Energy Burst, and Pickup families with high-level shaping, palette changes, per-layer editing, layer locking, and seeded variation generation.
+- Add nondestructive `RetroVfxRecipe` assets and the player-safe `RetroVfxPlayer` component with particle, audio, and animated-light playback.
+- Add editable Particle System prefab export plus transparent flipbook baking that produces a PNG, material, and ready-to-use flipbook prefab.
+- Add the Advanced surface for Built-in-pipeline distortion, custom material or shader overrides, capability-detected VFX Graph attachment, tiled flipbook importing, and animated point, spot, or directional lights.
+- Add setup-catalog, disabled-window cleanup, recommended-layout, package metadata, documentation, and EditMode coverage for Retro VFX.
+
 ## [1.10.0] - 2026-08-02
 
 ### Added

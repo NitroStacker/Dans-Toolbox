@@ -1,0 +1,19 @@
+{
+  "name": "DansToolbox.RetroVfx.Editor",
+  "rootNamespace": "DansToolbox.EditorTools.RetroVfx",
+  "references": [
+    "DansToolbox.Core.Editor",
+    "DansToolbox.RetroVfx.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

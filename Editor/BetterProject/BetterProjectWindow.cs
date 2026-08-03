@@ -226,6 +226,12 @@ namespace DansToolbox.EditorTools.BetterProject
             lastSearchRect = searchRect;
             bool searchFocused = GUI.GetNameOfFocusedControl() == SearchControlName;
             bool searchHovered = searchRect.Contains(Event.current.mousePosition);
+            bool showClearSearch = !string.IsNullOrEmpty(search);
+            CalculateSearchControlRects(
+                searchRect,
+                showClearSearch,
+                out Rect searchFieldRect,
+                out Rect clearSearchRect);
             EditorGUI.DrawRect(
                 searchRect,
                 searchFocused
@@ -236,15 +242,15 @@ namespace DansToolbox.EditorTools.BetterProject
                 searchFocused || searchHovered ? BetterProjectGui.Raised : BetterProjectGui.Inset);
             GUI.SetNextControlName(SearchControlName);
             search = GUI.TextField(
-                new Rect(searchRect.x + 1f, searchRect.y + 1f, searchRect.width - 2f, searchRect.height - 2f),
+                searchFieldRect,
                 search,
                 BetterProjectGui.Search);
             BetterProjectGui.DrawToolbarGlyph(
                 new Rect(searchRect.x + 4f, searchRect.y + 3f, 16f, 16f),
                 BetterProjectToolbarGlyph.Search,
                 searchFocused || searchHovered ? BetterProjectGui.Accent : BetterProjectGui.MutedColor);
-            if (!string.IsNullOrEmpty(search) && BetterProjectGui.ToolbarIconButton(
-                    new Rect(searchRect.xMax - 20f, searchRect.y + 1f, 20f, 20f),
+            if (showClearSearch && BetterProjectGui.ToolbarIconButton(
+                    clearSearchRect,
                     BetterProjectToolbarGlyph.Close,
                     "Clear"))
             {
@@ -304,6 +310,21 @@ namespace DansToolbox.EditorTools.BetterProject
 
             GUI.FocusControl(null);
             Repaint();
+        }
+
+        internal static void CalculateSearchControlRects(
+            Rect searchRect,
+            bool showClear,
+            out Rect fieldRect,
+            out Rect clearRect)
+        {
+            clearRect = new Rect(searchRect.xMax - 21f, searchRect.y + 2f, 18f, 18f);
+            float fieldRight = showClear ? clearRect.x - 2f : searchRect.xMax - 1f;
+            fieldRect = new Rect(
+                searchRect.x + 1f,
+                searchRect.y + 1f,
+                Mathf.Max(1f, fieldRight - searchRect.x - 1f),
+                Mathf.Max(1f, searchRect.height - 2f));
         }
 
         private void DrawRefinedSurfaceTab(

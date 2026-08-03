@@ -1,17 +1,17 @@
 # Dans Toolbox
 
-Dans Toolbox is a Unity 6 package containing six focused tools:
+Dans Toolbox is a Unity 6 package containing eight focused tools:
 
 - **Retro SFX** — create, preview, import, process, and render retro sound effects.
+- **Retro VFX** — forge deterministic particle effects, import flipbooks, attach advanced rendering, and export editable prefabs or baked sprite sheets.
 - **Native Window Dock** — place interactive Windows application windows inside resizable Unity tabs, including multi-panel layouts and crop framing.
 - **Better Hierarchy** — replace Unity's hierarchy with rule styling, collections, diagnostics, visual search, batch actions, and the thumbnail-based Object Atlas.
 - **Better Inspector** — inspect scene objects and assets with searchable component cards, pinned targets, favorites, multi-editing, and diagnostics.
-
 - **Better Project** — browse assets with visual rules, smart collections, rich previews, health diagnostics, batch actions, and dependency impact tracing.
-
 - **Better Console** — capture, search, group, triage, compare, and export Editor or player logs without losing Unity Console compatibility.
+- **Better Scene** — place, paint, align, measure, and bookmark scene content through focused level-design workflows.
 
-All visual tools are Editor-only. Better Console also includes an optional player-safe structured logging API. Native Window Dock is available only in the Windows Editor.
+All visual tools are Editor-only. Retro VFX includes a small player-safe recipe/player API, and Better Console includes an optional player-safe structured logging API. Native Window Dock is available only in the Windows Editor.
 
 ## First-install setup
 
@@ -28,7 +28,7 @@ The choices are stored in `ProjectSettings/DansToolboxSettings.asset` so they ca
 After this repository is pushed to a Git host, open **Window > Package Manager**, select **+ > Add package from git URL**, and enter a version-tagged URL:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.8.0
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.12.0
 ```
 
 For local development, use:
@@ -42,7 +42,7 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.8.0"
+    "com.dans.toolbox": "https://github.com/NitroStacker/Dans-Toolbox.git#v1.12.0"
   }
 }
 ```
@@ -52,11 +52,27 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - **Dans Toolbox icon in the Unity main toolbar**
 - **Tools > Dans Toolbox > Setup Wizard**
 - **Tools > Dans Toolbox > Retro SFX**
+- **Tools > Dans Toolbox > Retro VFX**
 - **Tools > Dans Toolbox > Native Window Dock**
 - **Tools > Dans Toolbox > Better Hierarchy**
 - **Tools > Dans Toolbox > Better Inspector**
 - **Tools > Dans Toolbox > Better Project**
 - **Tools > Dans Toolbox > Better Console**
+- **Tools > Dans Toolbox > Better Scene**
+
+## Retro VFX essentials
+
+- **Library** contains forty procedural patches across eleven families: Impact, Explosion, Gunfire, Blood, Swords, Magic, Energy, Pickup, Item Shine, Smoke, and World. Click any patch—including the active patch—to generate a fresh deterministic variation of that archetype.
+- **Shape** uses compact Retro SFX-style knobs for duration, scale, intensity, and direction, plus palette and attached Retro SFX audio controls.
+- **Layers** edits purpose-built pixel explosions, smoke, chunks, sparks, rings, slash arcs, blood splats and drops, muzzle flashes, glints, runes, leaves, bubbles, beams, and imported flipbooks. Its compact knob banks cover phase timing, emission, motion, turbulence, real Particle System trails, shader surfaces, collision, and sub-emitter events. Lock any layer before using the global regenerate control.
+- **Sources** discovers and routes layers through the embedded CC0 CodeManu and Kenney libraries plus compatible packs already installed in the project. Asset Store and commercial sources remain use-in-place references and are never copied into the package.
+- **Advanced** adds the production dissolve/flow/emission shader, Built-in-pipeline distortion, custom materials, third-party prefab layers, capability-detected VFX Graph assets, imported tiled flipbooks, animated effect lights, and camera-shake/hit-stop/decal events.
+- The live stage plays, pauses, restarts, scrubs, and zooms without adding preview objects to the current scene.
+- Presets vary their geometry, timing, count, motion, palette, and layering while retaining their identity; animated pixel sheets remain point-filtered through export.
+- Save a nondestructive `RetroVfxRecipe`, export an editable Particle System prefab, bake a transparent flipbook PNG with its material and prefab, or generate both.
+- Generated prefabs use the player-safe `RetroVfxPlayer` component. URP and HDRP distortion requires a pipeline-compatible material assigned in Advanced.
+
+See [Documentation~/retro-vfx.md](Documentation~/retro-vfx.md) for the full workflow and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for embedded-source provenance and optional integration boundaries.
 
 ## Better Hierarchy essentials
 

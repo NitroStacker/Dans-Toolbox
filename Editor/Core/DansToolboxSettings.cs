@@ -57,6 +57,7 @@ namespace DansToolbox.Editor
     public static class DansToolboxTools
     {
         public const string RetroSfxId = "retro-sfx";
+        public const string RetroVfxId = "retro-vfx";
         public const string NativeWindowDockId = "native-window-dock";
         public const string BetterHierarchyId = "better-hierarchy";
         public const string BetterInspectorId = "better-inspector";
@@ -71,6 +72,12 @@ namespace DansToolbox.Editor
                     RetroSfxId,
                     "Retro SFX",
                     "Synthesize, import, process, preview, and render game-ready sound effects.",
+                    true,
+                    false),
+                new DansToolboxToolDescriptor(
+                    RetroVfxId,
+                    "Retro VFX",
+                    "Forge, preview, import, and export procedural particle effects and flipbooks.",
                     true,
                     false),
                 new DansToolboxToolDescriptor(

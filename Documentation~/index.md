@@ -10,6 +10,16 @@ The available themes are **Signal Orange**, **Neon Cyan**, and **Arcade Violet**
 
 Open **Tools > Dans Toolbox > Retro SFX**. Use the Synth and Import tabs to choose a source, apply effects, preview with the transport controls, and render a WAV asset into the project.
 
+## Retro VFX
+
+Open **Tools > Dans Toolbox > Retro VFX**. Library offers forty production archetypes across Impact, Explosion, Gunfire, Blood, Swords, Magic, Energy, Pickup, Item Shine, Smoke, and World families. Clicking any patch generates a fresh seeded variation of its archetype. Shape and Layers use the compact Retro SFX knob language; Layers adds phase-based composition, source routing, real trails, turbulence, mesh geometry, surface animation, collision, and sub-emitters. Sources discovers embedded or project-installed packs without violating their redistribution boundaries. Advanced adds the production shader, distortion, third-party prefab layers, optional VFX Graph assets, imported flipbooks, animated lights, and scene-response hooks.
+
+The live stage supports play, pause, restart, scrubbing, and zoom. Pixel explosions and smoke use animated point-filtered sheets; blood, sword, gunfire, shine, magic, and environment patches use distinct silhouettes, motion, timing, and layering. **Generate Unlocked Variation** changes only unlocked layers from a stored seed. Save the nondestructive `RetroVfxRecipe` asset, export an editable Particle System prefab, bake a transparent flipbook PNG with its material and prefab, or produce both. Generated runtime prefabs use the small `RetroVfxPlayer` component and may include a rendered Retro SFX AudioClip.
+
+The bundled distortion shader supports the Built-in render pipeline. URP and HDRP projects should assign a compatible distortion material in Advanced. VFX Graph is capability-detected and does not prevent the core tool from compiling or running when the package is absent.
+
+See the [complete Retro VFX guide](retro-vfx.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+
 ## Native Window Dock
 
 Open **Tools > Dans Toolbox > Native Window Dock**. Choose an application from the thumbnail gallery and attach it. Create additional panels to place different applications in separate Unity dock regions. Use Frame to crop the visible portion with draggable borders.

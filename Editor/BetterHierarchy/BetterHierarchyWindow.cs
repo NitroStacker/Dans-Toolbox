@@ -743,13 +743,13 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             bool hidden = SceneVisibilityManager.instance.IsHidden(context);
             menu.AddItem(new GUIContent(objectPrefix + (hidden ? "Show" : "Hide")), false, () =>
             {
-                SceneVisibilityManager.instance.ToggleVisibility(context, false);
+                BetterHierarchySceneState.ToggleVisibility(context);
                 RefreshAll();
             });
             bool locked = SceneVisibilityManager.instance.IsPickingDisabled(context);
             menu.AddItem(new GUIContent(objectPrefix + (locked ? "Unlock" : "Lock")), false, () =>
             {
-                SceneVisibilityManager.instance.TogglePicking(context, false);
+                BetterHierarchySceneState.TogglePicking(context);
                 RefreshAll();
             });
             menu.AddItem(new GUIContent(objectPrefix + "New Collection…"), false, () =>

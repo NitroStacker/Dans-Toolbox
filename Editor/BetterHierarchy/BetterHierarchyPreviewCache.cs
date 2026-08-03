@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -19,6 +20,19 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             if (previews.TryGetValue(id, out Texture2D cached) && cached != null)
             {
                 return cached;
+            }
+
+            Component representative = GetRepresentativeComponent(gameObject);
+            if (representative != null)
+            {
+                Texture2D componentIcon = EditorGUIUtility.ObjectContent(
+                    null,
+                    representative.GetType()).image as Texture2D;
+                if (componentIcon != null)
+                {
+                    previews[id] = componentIcon;
+                    return componentIcon;
+                }
             }
 
             UnityEngine.Object previewTarget = GetPreviewTarget(gameObject);
@@ -93,6 +107,32 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
 
             return gameObject;
+        }
+
+        internal static System.Type GetRepresentativeComponentType(GameObject gameObject)
+        {
+            return GetRepresentativeComponent(gameObject)?.GetType();
+        }
+
+        private static Component GetRepresentativeComponent(GameObject gameObject)
+        {
+            if (gameObject == null || HasRenderableGeometry(gameObject))
+            {
+                return null;
+            }
+
+            return gameObject.GetComponents<Component>()
+                .FirstOrDefault(component => component != null && !(component is Transform));
+        }
+
+        private static bool HasRenderableGeometry(GameObject gameObject)
+        {
+            return gameObject.GetComponentsInChildren<MeshFilter>(true)
+                       .Any(filter => filter.sharedMesh != null) ||
+                   gameObject.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                       .Any(renderer => renderer.sharedMesh != null) ||
+                   gameObject.GetComponentsInChildren<SpriteRenderer>(true)
+                       .Any(renderer => renderer.sprite != null);
         }
     }
 }

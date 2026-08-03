@@ -12,6 +12,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
     {
         private readonly BetterHierarchyWindow host;
         private readonly BetterHierarchyPreviewCache previews = new BetterHierarchyPreviewCache();
+        private readonly HashSet<int> expandedObjects = new HashSet<int>();
         private List<AtlasEntry> entries = new List<AtlasEntry>();
         private bool dirty = true;
         private bool assetsDirty = true;
@@ -140,6 +141,12 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             EditorGUI.DrawRect(rect, border);
             EditorGUI.DrawRect(new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f),
                 hovered ? palette.Raised : palette.Panel);
+            if (entry.Depth > 0)
+            {
+                EditorGUI.DrawRect(
+                    new Rect(rect.x + 1f, rect.y + 1f, 3f, rect.height - 2f),
+                    Color.Lerp(palette.BorderStrong, palette.Accent, 0.65f));
+            }
 
             Rect previewRect = new Rect(rect.x + 5f, rect.y + 5f, rect.width - 10f, previewHeight - 8f);
             EditorGUI.DrawRect(previewRect, palette.Inset);
@@ -159,7 +166,24 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 });
             }
 
-            Rect nameRect = new Rect(rect.x + 7f, previewRect.yMax + 6f, rect.width - 14f, 17f);
+            float nameLeft = rect.x + 7f;
+            if (entry.HasChildren)
+            {
+                Rect foldoutRect = new Rect(nameLeft, previewRect.yMax + 5f, 16f, 18f);
+                bool expanded = EditorGUI.Foldout(
+                    foldoutRect,
+                    entry.IsExpanded,
+                    new GUIContent(string.Empty, entry.IsExpanded ? "Collapse children" : "Show children"),
+                    false);
+                if (expanded != entry.IsExpanded)
+                {
+                    ToggleExpanded(entry.GameObject);
+                    Event.current.Use();
+                }
+                nameLeft += 17f;
+            }
+
+            Rect nameRect = new Rect(nameLeft, previewRect.yMax + 6f, rect.xMax - nameLeft - 7f, 17f);
             GUI.Label(nameRect, new GUIContent(entry.Name, entry.Path), new GUIStyle(EditorStyles.miniBoldLabel)
             {
                 clipping = TextClipping.Clip,
@@ -367,22 +391,56 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
             else
             {
-                IEnumerable<GameObject> sourceObjects = GetSourceObjects(source);
-                foreach (GameObject gameObject in sourceObjects.Where(gameObject => gameObject != null).Distinct())
+                if (ShouldDisplayHierarchy(source, query.IsEmpty))
                 {
-                    BetterHierarchyDiagnosticFlags diagnostics = BetterHierarchyUserSettings.Diagnostics
-                        ? BetterHierarchyDiagnostics.Get(gameObject)
-                        : BetterHierarchyDiagnosticFlags.None;
-                    if (query.IsEmpty || query.Matches(gameObject, diagnostics, BetterHierarchyCollections.Contains))
+                    foreach (BetterHierarchyAtlasNode node in BetterHierarchyAtlasLayout.GetVisible(
+                                 GetSourceRoots(source),
+                                 expandedObjects))
                     {
-                        entries.Add(new AtlasEntry(gameObject, false));
+                        entries.Add(new AtlasEntry(
+                            node.GameObject,
+                            false,
+                            node.Depth,
+                            node.GameObject.transform.childCount > 0,
+                            expandedObjects.Contains(node.GameObject.GetInstanceID())));
+                    }
+                }
+                else
+                {
+                    IEnumerable<GameObject> sourceObjects = GetSourceObjects(source);
+                    foreach (GameObject gameObject in sourceObjects.Where(gameObject => gameObject != null).Distinct())
+                    {
+                        BetterHierarchyDiagnosticFlags diagnostics = BetterHierarchyUserSettings.Diagnostics
+                            ? BetterHierarchyDiagnostics.Get(gameObject)
+                            : BetterHierarchyDiagnosticFlags.None;
+                        if (query.IsEmpty || query.Matches(gameObject, diagnostics, BetterHierarchyCollections.Contains))
+                        {
+                            entries.Add(new AtlasEntry(gameObject, false));
+                        }
                     }
                 }
             }
 
-            entries = entries
-                .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            if (!ShouldDisplayHierarchy(source, query.IsEmpty))
+            {
+                entries = entries
+                    .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+        }
+
+        internal static bool ShouldDisplayHierarchy(BetterHierarchyAtlasSource source, bool queryIsEmpty)
+        {
+            return queryIsEmpty &&
+                   (source == BetterHierarchyAtlasSource.Scene ||
+                    source == BetterHierarchyAtlasSource.Selection);
+        }
+
+        private IEnumerable<GameObject> GetSourceRoots(BetterHierarchyAtlasSource source)
+        {
+            return source == BetterHierarchyAtlasSource.Selection
+                ? BetterHierarchyAtlasLayout.GetTopLevelSelection(Selection.gameObjects)
+                : GetLoadedSceneRoots();
         }
 
         private IEnumerable<GameObject> GetSourceObjects(BetterHierarchyAtlasSource source)
@@ -416,6 +474,23 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                     {
                         yield return gameObject;
                     }
+                }
+            }
+        }
+
+        private static IEnumerable<GameObject> GetLoadedSceneRoots()
+        {
+            for (int sceneIndex = 0; sceneIndex < SceneManager.sceneCount; sceneIndex++)
+            {
+                Scene scene = SceneManager.GetSceneAt(sceneIndex);
+                if (!scene.isLoaded)
+                {
+                    continue;
+                }
+
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    yield return root;
                 }
             }
         }
@@ -481,6 +556,22 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             host.Repaint();
         }
 
+        private void ToggleExpanded(GameObject gameObject)
+        {
+            if (gameObject == null)
+            {
+                return;
+            }
+
+            int id = gameObject.GetInstanceID();
+            if (!expandedObjects.Remove(id))
+            {
+                expandedObjects.Add(id);
+            }
+            dirty = true;
+            host.Repaint();
+        }
+
         internal void InvalidateAssets()
         {
             assetsDirty = true;
@@ -494,7 +585,12 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 
         private readonly struct AtlasEntry
         {
-            internal AtlasEntry(GameObject gameObject, bool prefabAsset = true)
+            internal AtlasEntry(
+                GameObject gameObject,
+                bool prefabAsset = true,
+                int depth = 0,
+                bool hasChildren = false,
+                bool isExpanded = false)
             {
                 GameObject = prefabAsset && AssetDatabase.Contains(gameObject) ? null : gameObject;
                 Asset = prefabAsset && AssetDatabase.Contains(gameObject) ? gameObject : null;
@@ -505,6 +601,9 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                         : BetterHierarchyQuery.GetPath(gameObject.transform)
                     : string.Empty;
                 IsPrefab = Asset != null;
+                Depth = depth;
+                HasChildren = hasChildren;
+                IsExpanded = isExpanded;
             }
 
             internal GameObject GameObject { get; }
@@ -512,6 +611,90 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             internal string Name { get; }
             internal string Path { get; }
             internal bool IsPrefab { get; }
+            internal int Depth { get; }
+            internal bool HasChildren { get; }
+            internal bool IsExpanded { get; }
+        }
+    }
+
+    internal readonly struct BetterHierarchyAtlasNode
+    {
+        internal BetterHierarchyAtlasNode(GameObject gameObject, int depth)
+        {
+            GameObject = gameObject;
+            Depth = depth;
+        }
+
+        internal GameObject GameObject { get; }
+        internal int Depth { get; }
+    }
+
+    internal static class BetterHierarchyAtlasLayout
+    {
+        internal static IEnumerable<BetterHierarchyAtlasNode> GetVisible(
+            IEnumerable<GameObject> roots,
+            ISet<int> expandedObjects)
+        {
+            if (roots == null)
+            {
+                yield break;
+            }
+
+            foreach (GameObject root in roots
+                         .Where(gameObject => gameObject != null)
+                         .Distinct()
+                         .OrderBy(gameObject => gameObject.name, StringComparer.OrdinalIgnoreCase))
+            {
+                foreach (BetterHierarchyAtlasNode node in GetVisibleBranch(root, 0, expandedObjects))
+                {
+                    yield return node;
+                }
+            }
+        }
+
+        internal static IEnumerable<GameObject> GetTopLevelSelection(IEnumerable<GameObject> selection)
+        {
+            HashSet<GameObject> selected = new HashSet<GameObject>(
+                (selection ?? Enumerable.Empty<GameObject>()).Where(gameObject => gameObject != null));
+            return selected.Where(gameObject => !HasSelectedAncestor(gameObject.transform.parent, selected));
+        }
+
+        private static IEnumerable<BetterHierarchyAtlasNode> GetVisibleBranch(
+            GameObject root,
+            int depth,
+            ISet<int> expandedObjects)
+        {
+            yield return new BetterHierarchyAtlasNode(root, depth);
+            if (expandedObjects == null || !expandedObjects.Contains(root.GetInstanceID()))
+            {
+                yield break;
+            }
+
+            IEnumerable<Transform> children = Enumerable.Range(0, root.transform.childCount)
+                .Select(root.transform.GetChild)
+                .OrderBy(child => child.name, StringComparer.OrdinalIgnoreCase);
+            foreach (Transform child in children)
+            {
+                foreach (BetterHierarchyAtlasNode node in GetVisibleBranch(
+                             child.gameObject,
+                             depth + 1,
+                             expandedObjects))
+                {
+                    yield return node;
+                }
+            }
+        }
+
+        private static bool HasSelectedAncestor(Transform parent, ISet<GameObject> selection)
+        {
+            for (Transform current = parent; current != null; current = current.parent)
+            {
+                if (selection.Contains(current.gameObject))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

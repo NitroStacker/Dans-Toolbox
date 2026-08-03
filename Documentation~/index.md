@@ -39,7 +39,7 @@ Detach applications before closing Unity. The recovery guard also attempts to re
 
 ## Better Hierarchy
 
-Open **Tools > Dans Toolbox > Better Hierarchy**. The Tree surface mirrors loaded scenes and Prefab Mode with selection, renaming, reparenting, Undo, component inspectors, status actions, rule styling, and diagnostics. The Atlas surface visually browses scene branches, favorites, recent objects, and prefabs using cached previews.
+Open **Tools > Dans Toolbox > Better Hierarchy**. The Tree surface mirrors loaded scenes and Prefab Mode with selection, renaming, reparenting, Undo, component inspectors, status actions, rule styling, and diagnostics. Parent visibility and picking-lock actions cascade to descendants while children remain independently overridable. The Atlas surface visually browses scene branches, favorites, recent objects, and prefabs using cached previews; multi-part scene objects stay grouped under collapsible root cards, and non-renderable objects use their native component icons.
 
 Use the collection button to create either a **Virtual** collection, which leaves Transform parenting untouched, or a **Parent** collection, which creates a normal Transform parent and reparents the selection. Project rules and virtual collections are stored in `ProjectSettings/BetterHierarchySettings.asset`; personal view density, favorites, and recent history stay local to the Editor user.
 

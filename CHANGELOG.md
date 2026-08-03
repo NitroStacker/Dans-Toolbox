@@ -4,6 +4,17 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.17.0] - 2026-08-03
+
+### Added
+
+- Add collapsible hierarchy browsing to Better Hierarchy's Atlas so multi-part scene objects appear as one root card until their children are expanded.
+- Add native component icons for cameras, lights, and other non-renderable scene objects in the Atlas while preserving combined previews for renderable model roots.
+
+### Changed
+
+- Make Better Hierarchy Tree visibility and picking-lock actions cascade from a parent to its descendants while keeping every child independently overridable afterward.
+
 ## [1.16.0] - 2026-08-03
 
 ### Added

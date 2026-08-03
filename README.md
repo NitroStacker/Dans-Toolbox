@@ -80,12 +80,12 @@ See [Documentation~/retro-vfx.md](Documentation~/retro-vfx.md) for the full work
 
 ## Better Hierarchy essentials
 
-- **Tree / Atlas** switches between the structural hierarchy and visual scene or prefab cards. Press Space to switch.
+- **Tree / Atlas** switches between the structural hierarchy and visual scene or prefab cards. Atlas groups multi-part scene objects under collapsible root cards and uses native component icons for non-renderable objects. Press Space to switch.
 - Search accepts names plus compact filters such as `t:Camera`, `tag:Player`, `layer:UI`, `is:prefab`, `is:hidden`, `warn:any`, and `collection:Gameplay`.
 - **Virtual collections** organize objects without changing Transforms. **Parent collections** create a normal parent so moving it moves every member.
 - Hover a collection member and press **−** to remove it. Virtual members keep their Transform untouched; Parent members move one level out while preserving their world transform. Use **Remove Selection** on a virtual collection menu for batches.
 - Delete a collection from its hover action, context menu, or the Delete key. The confirmation popup can keep/move out its items, delete every item, or cancel.
-- Hover rows for active, Scene visibility, picking lock, and favorite controls. Component icons open compact inspectors.
+- Hover rows for active, Scene visibility, picking lock, and favorite controls. Parent visibility and picking changes cascade to descendants, and children remain independently overridable. Component icons open compact inspectors.
 - Save useful queries from the `#` menu, and set any scene object as the default parent from its context menu.
 - Rules, view modes, batch tools, isolation, and the stock Unity Hierarchy fallback live under the `...` menu.
 - Prefab instance menus expose ping, apply, revert, and unpack actions with confirmation for destructive changes.

@@ -772,14 +772,14 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                     BetterHierarchyUserSettings.ToggleFavorite(gameObject);
                     host.Repaint();
                 }, palette);
-                right = DrawTinyAction(row, right, "L", "Toggle picking", SceneVisibilityManager.instance.IsPickingDisabled(gameObject), () =>
+                right = DrawTinyAction(row, right, "L", "Toggle picking for this object and its children", SceneVisibilityManager.instance.IsPickingDisabled(gameObject), () =>
                 {
-                    SceneVisibilityManager.instance.TogglePicking(gameObject, false);
+                    BetterHierarchySceneState.TogglePicking(gameObject);
                     host.Repaint();
                 }, palette);
-                right = DrawTinyAction(row, right, "V", "Toggle Scene visibility", SceneVisibilityManager.instance.IsHidden(gameObject), () =>
+                right = DrawTinyAction(row, right, "V", "Toggle Scene visibility for this object and its children", SceneVisibilityManager.instance.IsHidden(gameObject), () =>
                 {
-                    SceneVisibilityManager.instance.ToggleVisibility(gameObject, false);
+                    BetterHierarchySceneState.ToggleVisibility(gameObject);
                     host.Repaint();
                 }, palette);
                 right = DrawTinyAction(row, right, gameObject.activeSelf ? "●" : "○", "Toggle active", gameObject.activeSelf, () =>
@@ -1154,6 +1154,25 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             return component != null
                 ? EditorGUIUtility.ObjectContent(null, component.GetType()).image as Texture2D
                 : EditorGUIUtility.IconContent("GameObject Icon").image as Texture2D;
+        }
+    }
+
+    internal static class BetterHierarchySceneState
+    {
+        internal static void ToggleVisibility(GameObject gameObject)
+        {
+            if (gameObject != null)
+            {
+                SceneVisibilityManager.instance.ToggleVisibility(gameObject, true);
+            }
+        }
+
+        internal static void TogglePicking(GameObject gameObject)
+        {
+            if (gameObject != null)
+            {
+                SceneVisibilityManager.instance.TogglePicking(gameObject, true);
+            }
         }
     }
 }

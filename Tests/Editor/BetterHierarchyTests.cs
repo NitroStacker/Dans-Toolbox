@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using DansToolbox.EditorTools.BetterHierarchy;
 using NUnit.Framework;
 using UnityEditor;
@@ -355,6 +356,132 @@ namespace DansToolbox.Editor.Tests
 
             Assert.That(content.center.y, Is.EqualTo(row.center.y).Within(0.001f));
             Assert.That(content.height, Is.EqualTo(Mathf.Min(rowHeight, 18f)).Within(0.001f));
+        }
+
+        [Test]
+        public void AtlasHierarchy_CollapsesChildrenUntilTheirParentIsExpanded()
+        {
+            GameObject root = new GameObject("SoccerGoal");
+            GameObject net = new GameObject("Net");
+            GameObject post = new GameObject("Post");
+            GameObject detail = new GameObject("Detail");
+            net.transform.SetParent(root.transform);
+            post.transform.SetParent(root.transform);
+            detail.transform.SetParent(net.transform);
+            try
+            {
+                HashSet<int> expanded = new HashSet<int>();
+                List<BetterHierarchyAtlasNode> collapsed = BetterHierarchyAtlasLayout
+                    .GetVisible(new[] { root }, expanded)
+                    .ToList();
+
+                Assert.That(collapsed.Select(node => node.GameObject), Is.EqualTo(new[] { root }));
+
+                expanded.Add(root.GetInstanceID());
+                List<BetterHierarchyAtlasNode> rootExpanded = BetterHierarchyAtlasLayout
+                    .GetVisible(new[] { root }, expanded)
+                    .ToList();
+
+                Assert.That(
+                    rootExpanded.Select(node => node.GameObject),
+                    Is.EqualTo(new[] { root, net, post }));
+                Assert.That(rootExpanded.Select(node => node.Depth), Is.EqualTo(new[] { 0, 1, 1 }));
+
+                expanded.Add(net.GetInstanceID());
+                Assert.That(
+                    BetterHierarchyAtlasLayout.GetVisible(new[] { root }, expanded)
+                        .Select(node => node.GameObject),
+                    Is.EqualTo(new[] { root, net, detail, post }));
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AtlasBranch_KeepsOnlyTopLevelSelectedObjects()
+        {
+            GameObject root = new GameObject("Root");
+            GameObject child = new GameObject("Child");
+            child.transform.SetParent(root.transform);
+            try
+            {
+                Assert.That(
+                    BetterHierarchyAtlasLayout.GetTopLevelSelection(new[] { root, child }),
+                    Is.EqualTo(new[] { root }));
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void AtlasPreview_UsesComponentIconsForNonRenderableSceneObjects()
+        {
+            GameObject cameraObject = new GameObject("Camera", typeof(Camera));
+            GameObject lightObject = new GameObject("Light", typeof(Light));
+            GameObject visualRoot = new GameObject("Visual Root");
+            GameObject visualChild = new GameObject("Visual Child", typeof(MeshFilter), typeof(MeshRenderer));
+            Mesh mesh = new Mesh();
+            visualChild.GetComponent<MeshFilter>().sharedMesh = mesh;
+            visualChild.transform.SetParent(visualRoot.transform);
+            try
+            {
+                Assert.That(
+                    BetterHierarchyPreviewCache.GetRepresentativeComponentType(cameraObject),
+                    Is.EqualTo(typeof(Camera)));
+                Assert.That(
+                    BetterHierarchyPreviewCache.GetRepresentativeComponentType(lightObject),
+                    Is.EqualTo(typeof(Light)));
+                Assert.That(
+                    BetterHierarchyPreviewCache.GetRepresentativeComponentType(visualRoot),
+                    Is.Null,
+                    "Renderable model roots should keep their combined model preview.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(lightObject);
+                Object.DestroyImmediate(visualRoot);
+                Object.DestroyImmediate(mesh);
+            }
+        }
+
+        [Test]
+        public void TreeSceneControls_CascadeAndAllowAChildOverride()
+        {
+            GameObject parent = new GameObject("Parent");
+            GameObject child = new GameObject("Child");
+            child.transform.SetParent(parent.transform);
+            SceneVisibilityManager manager = SceneVisibilityManager.instance;
+            manager.Show(parent, true);
+            manager.EnablePicking(parent, true);
+            try
+            {
+                BetterHierarchySceneState.ToggleVisibility(parent);
+                Assert.That(manager.IsHidden(parent), Is.True);
+                Assert.That(manager.IsHidden(child), Is.True);
+
+                BetterHierarchySceneState.ToggleVisibility(child);
+                Assert.That(manager.IsHidden(parent), Is.True);
+                Assert.That(manager.IsHidden(child), Is.False);
+
+                BetterHierarchySceneState.TogglePicking(parent);
+                Assert.That(manager.IsPickingDisabled(parent), Is.True);
+                Assert.That(manager.IsPickingDisabled(child), Is.True);
+
+                BetterHierarchySceneState.TogglePicking(child);
+                Assert.That(manager.IsPickingDisabled(parent), Is.True);
+                Assert.That(manager.IsPickingDisabled(child), Is.False);
+            }
+            finally
+            {
+                manager.Show(parent, true);
+                manager.EnablePicking(parent, true);
+                Object.DestroyImmediate(parent);
+            }
         }
 
         [Test]

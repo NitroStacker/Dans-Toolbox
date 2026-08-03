@@ -8,7 +8,6 @@ namespace DansToolbox.EditorTools.BetterScene
     [FilePath("ProjectSettings/BetterSceneSettings.asset", FilePathAttribute.Location.ProjectFolder)]
     internal sealed class BetterSceneSettings : ScriptableSingleton<BetterSceneSettings>
     {
-        [SerializeField] private bool overlayVisible = true;
         [SerializeField] private bool drawSelectionBounds = true;
         [SerializeField] private bool drawPivot = true;
         [SerializeField] private bool drawDiagnostics = true;
@@ -21,12 +20,25 @@ namespace DansToolbox.EditorTools.BetterScene
         [SerializeField] private float scatterHeight;
         [SerializeField] private int scatterSeed = 1337;
         [SerializeField] private string placementAssetGuid = string.Empty;
+        [SerializeField] private List<string> recentPlacementGuids = new List<string>();
+        [SerializeField] private List<int> toolbarOrder = new List<int>
+        {
+            (int)BetterScenePanel.Create,
+            (int)BetterScenePanel.Transform,
+            (int)BetterScenePanel.Place,
+            (int)BetterScenePanel.View,
+            (int)BetterScenePanel.Visibility,
+            (int)BetterScenePanel.Measure,
+            (int)BetterScenePanel.Review
+        };
+        [SerializeField] private List<int> hiddenToolbarPanels = new List<int>();
+        [SerializeField] private bool toolbarHistoryVisible = true;
+        [SerializeField] private bool toolbarQuickActionsVisible = true;
         [SerializeField] private List<BetterSceneBookmark> bookmarks = new List<BetterSceneBookmark>();
         [SerializeField] private List<BetterSceneLayerPreset> layerPresets = new List<BetterSceneLayerPreset>();
 
         internal static event Action Changed;
 
-        internal static bool OverlayVisible { get => instance.overlayVisible; set => Set(ref instance.overlayVisible, value); }
         internal static bool DrawSelectionBounds { get => instance.drawSelectionBounds; set => Set(ref instance.drawSelectionBounds, value); }
         internal static bool DrawPivot { get => instance.drawPivot; set => Set(ref instance.drawPivot, value); }
         internal static bool DrawDiagnostics { get => instance.drawDiagnostics; set => Set(ref instance.drawDiagnostics, value); }
@@ -40,6 +52,52 @@ namespace DansToolbox.EditorTools.BetterScene
         internal static int ScatterSeed { get => instance.scatterSeed; set => Set(ref instance.scatterSeed, value); }
         internal static IReadOnlyList<BetterSceneBookmark> Bookmarks => instance.bookmarks;
         internal static IReadOnlyList<BetterSceneLayerPreset> LayerPresets => instance.layerPresets;
+        internal static IReadOnlyList<string> RecentPlacementGuids => instance.recentPlacementGuids;
+        internal static IReadOnlyList<BetterScenePanel> ToolbarOrder
+        {
+            get
+            {
+                EnsureToolbarOrder();
+                return instance.toolbarOrder.ConvertAll(value => (BetterScenePanel)value);
+            }
+        }
+        internal static bool ToolbarHistoryVisible { get => instance.toolbarHistoryVisible; set => Set(ref instance.toolbarHistoryVisible, value); }
+        internal static bool ToolbarQuickActionsVisible { get => instance.toolbarQuickActionsVisible; set => Set(ref instance.toolbarQuickActionsVisible, value); }
+
+        internal static bool IsToolbarPanelVisible(BetterScenePanel panel)
+        {
+            return !instance.hiddenToolbarPanels.Contains((int)panel);
+        }
+
+        internal static void SetToolbarPanelVisible(BetterScenePanel panel, bool visible)
+        {
+            int value = (int)panel;
+            bool changed = visible
+                ? instance.hiddenToolbarPanels.Remove(value)
+                : !instance.hiddenToolbarPanels.Contains(value) && AddHiddenToolbarPanel(value);
+            if (changed) SaveAndNotify();
+        }
+
+        internal static void MoveToolbarPanel(BetterScenePanel panel, int direction)
+        {
+            EnsureToolbarOrder();
+            int index = instance.toolbarOrder.IndexOf((int)panel);
+            int target = Mathf.Clamp(index + Math.Sign(direction), 0, instance.toolbarOrder.Count - 1);
+            if (index < 0 || target == index) return;
+            int value = instance.toolbarOrder[index];
+            instance.toolbarOrder.RemoveAt(index);
+            instance.toolbarOrder.Insert(target, value);
+            SaveAndNotify();
+        }
+
+        internal static void ResetToolbarLayout()
+        {
+            instance.toolbarOrder = DefaultToolbarOrder();
+            instance.hiddenToolbarPanels.Clear();
+            instance.toolbarHistoryVisible = true;
+            instance.toolbarQuickActionsVisible = true;
+            SaveAndNotify();
+        }
 
         internal static UnityEngine.Object PlacementAsset
         {
@@ -56,8 +114,75 @@ namespace DansToolbox.EditorTools.BetterScene
                 string guid = string.IsNullOrEmpty(path) ? string.Empty : AssetDatabase.AssetPathToGUID(path);
                 if (string.Equals(instance.placementAssetGuid, guid, StringComparison.Ordinal)) return;
                 instance.placementAssetGuid = guid;
+                if (!string.IsNullOrEmpty(guid))
+                {
+                    instance.recentPlacementGuids.RemoveAll(item => string.Equals(item, guid, StringComparison.Ordinal));
+                    instance.recentPlacementGuids.Insert(0, guid);
+                    if (instance.recentPlacementGuids.Count > 8)
+                    {
+                        instance.recentPlacementGuids.RemoveRange(8, instance.recentPlacementGuids.Count - 8);
+                    }
+                }
                 SaveAndNotify();
             }
+        }
+
+        internal static UnityEngine.Object[] GetRecentPlacementAssets()
+        {
+            var assets = new List<UnityEngine.Object>();
+            bool changed = false;
+            for (int index = instance.recentPlacementGuids.Count - 1; index >= 0; index--)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(instance.recentPlacementGuids[index]);
+                UnityEngine.Object asset = string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadMainAssetAtPath(path);
+                if (asset == null)
+                {
+                    instance.recentPlacementGuids.RemoveAt(index);
+                    changed = true;
+                }
+                else
+                {
+                    assets.Insert(0, asset);
+                }
+            }
+            if (changed) SaveAndNotify();
+            return assets.ToArray();
+        }
+
+        private static bool AddHiddenToolbarPanel(int value)
+        {
+            instance.hiddenToolbarPanels.Add(value);
+            return true;
+        }
+
+        private static void EnsureToolbarOrder()
+        {
+            if (instance.toolbarOrder == null) instance.toolbarOrder = new List<int>();
+            if (instance.hiddenToolbarPanels == null) instance.hiddenToolbarPanels = new List<int>();
+            List<int> defaults = DefaultToolbarOrder();
+            var valid = new HashSet<int>(defaults);
+            instance.toolbarOrder.RemoveAll(value => !valid.Contains(value));
+            var seen = new HashSet<int>();
+            instance.toolbarOrder.RemoveAll(value => !seen.Add(value));
+            foreach (int value in defaults)
+            {
+                if (!seen.Contains(value)) instance.toolbarOrder.Add(value);
+            }
+            instance.hiddenToolbarPanels.RemoveAll(value => !valid.Contains(value));
+        }
+
+        private static List<int> DefaultToolbarOrder()
+        {
+            return new List<int>
+            {
+                (int)BetterScenePanel.Create,
+                (int)BetterScenePanel.Transform,
+                (int)BetterScenePanel.Place,
+                (int)BetterScenePanel.View,
+                (int)BetterScenePanel.Visibility,
+                (int)BetterScenePanel.Measure,
+                (int)BetterScenePanel.Review
+            };
         }
 
         internal static BetterSceneBookmark AddBookmark(

@@ -4,6 +4,29 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.13.0] - 2026-08-03
+
+### Added
+
+- Add a native Unity Scene overlay with collapsible Create, Transform, Place, View, Visibility, Measure, and Review mega-panels.
+- Add icon and thumbnail-driven creation and recent-placement palettes, six orthographic view presets, Scene-camera creation, grouping, transform resets, and active-object mirroring.
+
+### Changed
+
+- Replace the Better Scene dockable button wall with a selection-aware companion containing a compact tool navigator and collapsible active-tool, saved-view, and Scene-health sections.
+- Move spatial commands into contextual Scene overlays, keep unavailable actions visibly disabled, and block overlay clicks from leaking into Scene placement or measurement.
+- Let Unity dock, float, move, collapse, orient, and persist the Better Scene toolbar and active mega-panel; toolbar groups can be hidden and tool buttons can be reordered or removed from their context menus.
+- Open each mega-panel beside the toolbar's current horizontal, vertical, docked, or floating position instead of restoring an unrelated corner.
+
+### Fixed
+
+- Fully clean up measurement and placement state when switching Better Scene panels, selecting a native Unity tool, collapsing the overlay, entering Play Mode, or reloading assemblies.
+- Prevent measurement guides and placement previews from remaining active after their owning tool exits.
+- Keep Better Scene mega-panels open beside the toolbar that launched them instead of flashing at a generic position and immediately closing.
+- Replace corrupted Better Inspector reference-header glyphs with encoding-safe Unicode characters.
+- Ignore malformed diagnostic paths and map local-package source paths safely so Better Console cannot interrupt Better Inspector rendering.
+- Stop Better Hierarchy context menus from accumulating orphaned native Hierarchy windows and clean up invalid windows left by earlier versions so Unity layouts save normally.
+
 ## [1.12.0] - 2026-08-03
 
 ### Added

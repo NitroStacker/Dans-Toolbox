@@ -11,6 +11,14 @@ namespace DansToolbox.Editor.Tests
     public sealed class BetterInspectorTests
     {
         [Test]
+        public void ReferenceHeaderGlyphs_AreEncodingSafeUnicodeCharacters()
+        {
+            Assert.That(BetterInspectorWindow.ExpandedGlyph, Is.EqualTo("\u25BE"));
+            Assert.That(BetterInspectorWindow.CollapsedGlyph, Is.EqualTo("\u25B8"));
+            Assert.That(BetterInspectorWindow.MetadataSeparator, Is.EqualTo("\u00B7"));
+        }
+
+        [Test]
         public void Search_MatchesComponentAndPropertyTokensCaseInsensitively()
         {
             Assert.That(

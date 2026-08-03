@@ -14,8 +14,14 @@ namespace DansToolbox.EditorTools.BetterScene
     {
         private const string ModeKey = "DansToolbox.BetterScene.Mode";
         private const string SnapKey = "DansToolbox.BetterScene.Snap";
+        private const string PanelKey = "DansToolbox.BetterScene.Panel";
+        private const string PanelExpandedKey = "DansToolbox.BetterScene.PanelExpanded";
         private static BetterSceneMode mode;
         private static BetterSceneSnapMode snapMode;
+        private static BetterScenePanel activePanel;
+        private static bool panelExpanded;
+        private static Tool previousUnityTool = Tool.Move;
+        private static bool ownsUnityTool;
         private static bool hasMeasureStart;
         private static bool hasMeasureEnd;
         private static Vector3 measureStart;
@@ -29,6 +35,18 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             mode = (BetterSceneMode)Mathf.Clamp(SessionState.GetInt(ModeKey, 0), 0, 3);
             snapMode = (BetterSceneSnapMode)Mathf.Clamp(SessionState.GetInt(SnapKey, 2), 0, 3);
+            activePanel = (BetterScenePanel)Mathf.Clamp(SessionState.GetInt(PanelKey, (int)BetterScenePanel.Transform), 0, 7);
+            panelExpanded = SessionState.GetBool(PanelExpandedKey, true);
+            if (mode == BetterSceneMode.Measure || mode == BetterSceneMode.Place)
+            {
+                // Spatial cursor ownership is transient and must never survive a
+                // domain reload without a corresponding EnterMode call.
+                mode = BetterSceneMode.Select;
+                panelExpanded = false;
+                SessionState.SetInt(ModeKey, (int)mode);
+                SessionState.SetBool(PanelExpandedKey, false);
+            }
+            else if (mode == BetterSceneMode.Review) activePanel = BetterScenePanel.Review;
             SceneView.duringSceneGui -= OnSceneGui;
             SceneView.duringSceneGui += OnSceneGui;
             Selection.selectionChanged += Repaint;
@@ -38,19 +56,81 @@ namespace DansToolbox.EditorTools.BetterScene
             BetterSceneSelectionHistory.Changed += Repaint;
             BetterConsoleDiagnosticBridge.Changed += Repaint;
             DansToolboxTheme.Changed += Repaint;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            AssemblyReloadEvents.beforeAssemblyReload += CleanupTransientState;
+            EditorApplication.quitting += CleanupTransientState;
         }
 
         internal static event Action Changed;
         internal static BetterSceneMode Mode => mode;
         internal static BetterSceneSnapMode SnapMode => snapMode;
+        internal static BetterScenePanel ActivePanel => activePanel;
+        internal static bool PanelExpanded => panelExpanded;
         internal static BetterSceneMeasurement Measurement => new BetterSceneMeasurement(measureStart, measureEnd, hasMeasureStart, hasMeasureEnd);
 
         internal static void SetMode(BetterSceneMode value)
         {
-            if (mode == value) return;
+            if (mode == value)
+            {
+                EnsureModePanel(value);
+                if (IsSpatialMode(value) && !ownsUnityTool) EnterMode(value);
+                Changed?.Invoke();
+                Repaint();
+                BetterSceneNativeOverlayUtility.SchedulePanelNearToolbar();
+                return;
+            }
+
+            ExitMode(mode);
             mode = value;
             SessionState.SetInt(ModeKey, (int)value);
-            if (mode != BetterSceneMode.Measure) hasMeasureEnd = false;
+            EnterMode(value);
+            EnsureModePanel(value);
+            Changed?.Invoke();
+            Repaint();
+            BetterSceneNativeOverlayUtility.SchedulePanelNearToolbar();
+        }
+
+        internal static void TogglePanel(BetterScenePanel panel)
+        {
+            if (panel == BetterScenePanel.None)
+            {
+                CollapsePanel();
+                return;
+            }
+
+            if (activePanel == panel && panelExpanded)
+            {
+                CollapsePanel();
+                return;
+            }
+
+            activePanel = panel;
+            panelExpanded = true;
+            SessionState.SetInt(PanelKey, (int)panel);
+            SessionState.SetBool(PanelExpandedKey, true);
+            BetterSceneMode nextMode = ModeForPanel(panel);
+            if (mode != nextMode)
+            {
+                ExitMode(mode);
+                mode = nextMode;
+                SessionState.SetInt(ModeKey, (int)mode);
+                EnterMode(mode);
+            }
+            Changed?.Invoke();
+            Repaint();
+            BetterSceneNativeOverlayUtility.SchedulePanelNearToolbar();
+        }
+
+        internal static void CollapsePanel()
+        {
+            panelExpanded = false;
+            SessionState.SetBool(PanelExpandedKey, false);
+            if (mode == BetterSceneMode.Place || mode == BetterSceneMode.Measure || mode == BetterSceneMode.Review)
+            {
+                ExitMode(mode);
+                mode = BetterSceneMode.Select;
+                SessionState.SetInt(ModeKey, (int)mode);
+            }
             Changed?.Invoke();
             Repaint();
         }
@@ -66,10 +146,26 @@ namespace DansToolbox.EditorTools.BetterScene
 
         internal static void ClearMeasurement()
         {
-            hasMeasureStart = false;
+            ClearMeasurementState();
+            Changed?.Invoke();
+            Repaint();
+        }
+
+        internal static void BeginMeasurement(Vector3 point)
+        {
+            measureStart = point;
+            measureEnd = point;
+            hasMeasureStart = true;
             hasMeasureEnd = false;
-            measureStart = Vector3.zero;
-            measureEnd = Vector3.zero;
+            Changed?.Invoke();
+            Repaint();
+        }
+
+        internal static void CompleteMeasurement(Vector3 point)
+        {
+            if (!hasMeasureStart) BeginMeasurement(point);
+            measureEnd = point;
+            hasMeasureEnd = true;
             Changed?.Invoke();
             Repaint();
         }
@@ -142,22 +238,38 @@ namespace DansToolbox.EditorTools.BetterScene
             Event current = Event.current;
             if (current.type == EventType.MouseMove || current.type == EventType.DragUpdated) sceneView.Repaint();
 
+            if (ownsUnityTool && IsSpatialMode(mode) && Tools.current != Tool.None)
+            {
+                // A native Unity tool was chosen while Better Scene owned the cursor.
+                // Respect that choice and fully tear down the transient spatial tool.
+                panelExpanded = false;
+                SessionState.SetBool(PanelExpandedKey, false);
+                ExitMode(mode);
+                mode = BetterSceneMode.Select;
+                SessionState.SetInt(ModeKey, (int)mode);
+                Changed?.Invoke();
+                Repaint();
+            }
+
             hasHoverPoint = TryGetWorldPoint(sceneView, current.mousePosition, out hoverPoint, out hoverNormal, out hoverObject);
             HandleEscape(current);
-            HandleAssetDrag(current);
-            if (mode == BetterSceneMode.Place) HandlePlacement(current);
-            else if (mode == BetterSceneMode.Measure) HandleMeasurement(current);
+            if (current.type != EventType.Used)
+            {
+                HandleAssetDrag(current);
+                if (mode == BetterSceneMode.Place) HandlePlacement(current);
+                else if (mode == BetterSceneMode.Measure) HandleMeasurement(current);
+            }
 
             DrawSpatialFeedback();
             DrawMeasurement();
             DrawPlacementPreview();
-            if (BetterSceneSettings.OverlayVisible) DrawOverlay(sceneView);
         }
 
         private static void HandleEscape(Event current)
         {
             if (current.type != EventType.KeyDown || current.keyCode != KeyCode.Escape) return;
             if (mode == BetterSceneMode.Measure && (hasMeasureStart || hasMeasureEnd)) ClearMeasurement();
+            else if (panelExpanded) CollapsePanel();
             else SetMode(BetterSceneMode.Select);
             current.Use();
         }
@@ -205,17 +317,12 @@ namespace DansToolbox.EditorTools.BetterScene
             {
                 if (!hasMeasureStart || hasMeasureEnd)
                 {
-                    measureStart = hoverPoint;
-                    measureEnd = hoverPoint;
-                    hasMeasureStart = true;
-                    hasMeasureEnd = false;
+                    BeginMeasurement(hoverPoint);
                 }
                 else
                 {
-                    measureEnd = hoverPoint;
-                    hasMeasureEnd = true;
+                    CompleteMeasurement(hoverPoint);
                 }
-                Changed?.Invoke();
                 current.Use();
             }
             else if (current.type == EventType.MouseMove && hasMeasureStart && !hasMeasureEnd)
@@ -350,7 +457,7 @@ namespace DansToolbox.EditorTools.BetterScene
 
         private static void DrawMeasurement()
         {
-            if (!hasMeasureStart) return;
+            if (mode != BetterSceneMode.Measure || !hasMeasureStart) return;
             Vector3 end = hasMeasureEnd ? measureEnd : hoverPoint;
             DansToolboxPalette palette = DansToolboxTheme.Current;
             Handles.color = hasMeasureEnd ? palette.Success : palette.Signal;
@@ -383,48 +490,83 @@ namespace DansToolbox.EditorTools.BetterScene
             }
         }
 
-        private static void DrawOverlay(SceneView sceneView)
+        private static void EnterMode(BetterSceneMode value)
         {
-            Handles.BeginGUI();
-            DansToolboxPalette palette = DansToolboxTheme.Current;
-            // Leave the native Scene tool strip unobstructed while keeping the
-            // controls close enough to feel like part of the Scene view.
-            float width = Mathf.Min(430f, Mathf.Max(270f, sceneView.position.width - 64f));
-            Rect panel = new Rect(48f, 42f, width, 34f);
-            BetterSceneGui.Panel(panel, false, true);
-            EditorGUI.DrawRect(new Rect(panel.x, panel.y, 3f, panel.height), palette.Accent);
-            float x = panel.x + 7f;
-            if (BetterSceneGui.Button(new Rect(x, panel.y + 6f, 22f, 22f), new GUIContent("<", "Selection back"), false, BetterSceneSelectionHistory.CanBack)) BetterSceneSelectionHistory.Back();
-            x += 25f;
-            if (BetterSceneGui.Button(new Rect(x, panel.y + 6f, 22f, 22f), new GUIContent(">", "Selection forward"), false, BetterSceneSelectionHistory.CanForward)) BetterSceneSelectionHistory.Forward();
-            x += 28f;
-            foreach (BetterSceneMode candidate in Enum.GetValues(typeof(BetterSceneMode)))
+            if (!IsSpatialMode(value)) return;
+            if (!ownsUnityTool)
             {
-                string glyph = candidate == BetterSceneMode.Select ? "S" : candidate == BetterSceneMode.Place ? "P" : candidate == BetterSceneMode.Measure ? "M" : "R";
-                if (BetterSceneGui.Button(new Rect(x, panel.y + 6f, 25f, 22f), new GUIContent(glyph, candidate.ToString()), mode == candidate)) SetMode(candidate);
-                x += 28f;
+                previousUnityTool = Tools.current == Tool.None ? Tool.Move : Tools.current;
+                ownsUnityTool = true;
             }
-            x += 2f;
-            GameObject active = Selection.activeGameObject;
-            BetterSceneDiagnosticReport report = BetterSceneDiagnostics.Current;
-            float actionsX = panel.xMax - 88f;
-            if (BetterSceneGui.Button(new Rect(actionsX, panel.y + 6f, 25f, 22f), new GUIContent("F", "Frame selection"), false, active != null)) BetterSceneOperations.FrameSelection();
-            actionsX += 28f;
-            if (BetterSceneGui.Button(new Rect(actionsX, panel.y + 6f, 25f, 22f), new GUIContent("I", "Isolate / restore"), BetterSceneVisibility.IsIsolating, active != null)) BetterSceneVisibility.ToggleIsolation(Selection.gameObjects);
-            actionsX += 28f;
-            if (BetterSceneGui.Button(
-                    new Rect(actionsX, panel.y + 6f, 25f, 22f),
-                    new GUIContent("!", report.Console.Tooltip),
-                    report.Console.HasSignals,
-                    report.Console.Total > 0,
-                    report.Console.Errors > 0 ? palette.Danger : palette.Warning))
+            Tools.current = Tool.None;
+        }
+
+        private static void ExitMode(BetterSceneMode value)
+        {
+            if (value == BetterSceneMode.Measure) ClearMeasurementState();
+            hasHoverPoint = false;
+            hoverObject = null;
+            if (!IsSpatialMode(value) || !ownsUnityTool) return;
+            if (Tools.current == Tool.None) Tools.current = previousUnityTool;
+            ownsUnityTool = false;
+        }
+
+        private static void EnsureModePanel(BetterSceneMode value)
+        {
+            BetterScenePanel expected = value == BetterSceneMode.Place ? BetterScenePanel.Place
+                : value == BetterSceneMode.Measure ? BetterScenePanel.Measure
+                : value == BetterSceneMode.Review ? BetterScenePanel.Review
+                : IsSelectPanel(activePanel) ? activePanel : BetterScenePanel.Transform;
+            if (activePanel != expected) activePanel = expected;
+            panelExpanded = true;
+            SessionState.SetInt(PanelKey, (int)activePanel);
+            SessionState.SetBool(PanelExpandedKey, true);
+        }
+
+        private static BetterSceneMode ModeForPanel(BetterScenePanel panel)
+        {
+            if (panel == BetterScenePanel.Place) return BetterSceneMode.Place;
+            if (panel == BetterScenePanel.Measure) return BetterSceneMode.Measure;
+            if (panel == BetterScenePanel.Review) return BetterSceneMode.Review;
+            return BetterSceneMode.Select;
+        }
+
+        private static bool IsSpatialMode(BetterSceneMode value)
+        {
+            return value == BetterSceneMode.Place || value == BetterSceneMode.Measure;
+        }
+
+        private static bool IsSelectPanel(BetterScenePanel panel)
+        {
+            return panel == BetterScenePanel.Create || panel == BetterScenePanel.Transform ||
+                   panel == BetterScenePanel.View || panel == BetterScenePanel.Visibility;
+        }
+
+        private static void ClearMeasurementState()
+        {
+            hasMeasureStart = false;
+            hasMeasureEnd = false;
+            measureStart = Vector3.zero;
+            measureEnd = Vector3.zero;
+        }
+
+        private static void CleanupTransientState()
+        {
+            ExitMode(mode);
+            ClearMeasurementState();
+        }
+
+        private static void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingEditMode || state == PlayModeStateChange.EnteredPlayMode)
             {
-                BetterConsoleDiagnosticBridge.OpenForTargets(Selection.objects);
+                CleanupTransientState();
+                mode = BetterSceneMode.Select;
+                panelExpanded = false;
+                SessionState.SetInt(ModeKey, (int)mode);
+                SessionState.SetBool(PanelExpandedKey, false);
+                Repaint();
             }
-            Rect labelRect = new Rect(x, panel.y + 5f, Mathf.Max(0f, actionsX - x - 8f), 24f);
-            string label = active == null ? "NO SELECTION" : active.name;
-            GUI.Label(labelRect, label, BetterSceneGui.Label);
-            Handles.EndGUI();
         }
 
         private static string FormatVector(Vector3 value)

@@ -1,6 +1,8 @@
 using DansToolbox.EditorTools.BetterConsole;
+using System.IO;
 using NUnit.Framework;
 using UnityEngine;
+using PackageManagerInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace DansToolbox.Editor.Tests
 {
@@ -108,6 +110,32 @@ namespace DansToolbox.Editor.Tests
             {
                 UnityEngine.Object.DestroyImmediate(context);
             }
+        }
+
+        [Test]
+        public void DiagnosticPaths_RejectMalformedAndUnrelatedAbsolutePaths()
+        {
+            Assert.That(BetterConsoleDiagnosticBridge.NormalizeAssetPath("bad\0path"), Is.Empty);
+            Assert.That(
+                BetterConsoleDiagnosticBridge.NormalizeAssetPath(
+                    Path.Combine(Path.GetTempPath(), "DansToolbox-Unrelated", "Broken.cs")),
+                Is.Empty);
+        }
+
+        [Test]
+        public void DiagnosticPaths_MapProjectAndPackageSourcesToAssetDatabasePaths()
+        {
+            Assert.That(
+                BetterConsoleDiagnosticBridge.NormalizeAssetPath(
+                    Path.Combine(Application.dataPath, "Client.cs")),
+                Is.EqualTo("Assets/Client.cs"));
+
+            PackageManagerInfo package = PackageManagerInfo.FindForPackageName("com.dans.toolbox");
+            Assert.That(package, Is.Not.Null);
+            Assert.That(
+                BetterConsoleDiagnosticBridge.NormalizeAssetPath(
+                    Path.Combine(package.resolvedPath, "Editor", "BetterConsole", "BetterConsoleDiagnosticBridge.cs")),
+                Is.EqualTo(package.assetPath + "/Editor/BetterConsole/BetterConsoleDiagnosticBridge.cs"));
         }
 
         private static BetterConsoleEntry Entry()

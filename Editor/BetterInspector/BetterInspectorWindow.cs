@@ -17,6 +17,9 @@ namespace DansToolbox.EditorTools.BetterInspector
         private const string MenuPath = "Tools/Dans Toolbox/Better Inspector";
         private const string SearchControlName = "BetterInspectorSearch";
         private const string FavoritesKey = "DansToolbox.BetterInspector.FavoriteTypes";
+        internal const string ExpandedGlyph = "\u25BE";
+        internal const string CollapsedGlyph = "\u25B8";
+        internal const string MetadataSeparator = "\u00B7";
         private const float ToolbarHeight = 38f;
         private const float TargetHeaderHeight = 84f;
         private const float StatusHeight = 22f;
@@ -779,10 +782,13 @@ namespace DansToolbox.EditorTools.BetterInspector
             GUILayout.Space(8f);
             Rect header = GUILayoutUtility.GetRect(1f, 24f, GUILayout.ExpandWidth(true));
             EditorGUI.DrawRect(header, palette.Panel);
-            GUI.Label(new Rect(header.x + 8f, header.y + 2f, 18f, 20f), expanded ? "â–¾" : "â–¸", styles.Foldout);
+            GUI.Label(
+                new Rect(header.x + 8f, header.y + 2f, 18f, 20f),
+                expanded ? ExpandedGlyph : CollapsedGlyph,
+                styles.Foldout);
             GUI.Label(
                 new Rect(header.x + 28f, header.y + 2f, header.width - 36f, 20f),
-                "REFERENCES  Â·  " + references.Count,
+                "REFERENCES  " + MetadataSeparator + "  " + references.Count,
                 styles.SectionLabel);
             if (GUI.Button(header, GUIContent.none, GUIStyle.none))
             {

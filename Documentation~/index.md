@@ -110,9 +110,9 @@ The same call still reaches `Debug.unityLogger`, so player logs and Unity's nati
 
 ## Better Scene
 
-Open **Tools > Dans Toolbox > Better Scene** beside Unity's native Scene view. Its four modes keep spatial authoring compact: Select handles focus, isolation, alignment, distribution, snapping, grounding, scatter, replacement, visibility, and saved views; Place previews and creates prefabs, models, sprites, meshes, or audio from Better Project; Measure captures surface-aware distance and delta; Review shows bounds, pivots, missing references, prefab changes, inactive objects, and related Better Console signals.
+Open **Tools > Dans Toolbox > Better Scene** to use its native Unity Scene overlay. Drag or dock the toolbar anywhere, collapse it, switch between horizontal, vertical, and compact-panel presentations from Unity's overlay menu, right-click tools to reorder or hide them, and use `...` to configure utility groups or restore the default contents. Create, Transform, Place, View, Visibility, Measure, and Review each open a separate movable, collapsible mega-panel beside the toolbar's current position, with visual action cards, compact settings, and recent-asset thumbnails where useful. The dockable tab remains a selection-aware companion and category navigator with collapsible active-tool, saved-view, and Scene-health sections.
 
-Visibility bands preserve the pre-filter hidden and picking state, along with visible and locked layer masks. Scene-camera bookmarks retain scene path, pivot, rotation, size, projection, and 2D mode. Alt+1 through Alt+4 switch modes, F frames the selection, and Escape leaves an active spatial workflow.
+Visibility bands preserve the pre-filter hidden and picking state, along with visible and locked layer masks. Scene-camera bookmarks retain scene path, pivot, rotation, size, projection, and 2D mode. Alt+1 through Alt+4 open Transform, Place, Measure, and Review; F frames the selection; Escape clears or collapses the active spatial workflow. Switching panels or choosing a native Unity tool always removes transient measurement and placement feedback.
 
 ## Package updates
 

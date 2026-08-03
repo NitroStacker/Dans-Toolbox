@@ -16,13 +16,6 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         private const BindingFlags InstanceInternal =
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-        private static EditorWindow nativeHierarchyWindow;
-        private static object nativeHierarchy;
-        private static MethodInfo createGameObjectContextMethod;
-        private static MethodInfo nativePrefabMenuMethod;
-        private static MethodInfo hierarchySelectionChangedMethod;
-        private static MethodInfo hierarchySyncMethod;
-
         private static readonly PropertyInfo GenericMenuItemsProperty = typeof(GenericMenu).GetProperty(
             "menuItems",
             BindingFlags.Instance | BindingFlags.NonPublic);
@@ -61,6 +54,18 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             null,
             new[] { typeof(GenericMenu), typeof(GameObject) },
             null);
+
+        [InitializeOnLoadMethod]
+        private static void ScheduleInvalidHierarchyCleanup()
+        {
+            EditorApplication.delayCall -= CleanupInvalidNativeHierarchyWindowsDelayed;
+            EditorApplication.delayCall += CleanupInvalidNativeHierarchyWindowsDelayed;
+        }
+
+        private static void CleanupInvalidNativeHierarchyWindowsDelayed()
+        {
+            CleanupInvalidNativeHierarchyWindows();
+        }
 
         internal static int RegisteredGameObjectItemCount
         {
@@ -127,10 +132,10 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
 
             menu.AddSeparator(string.Empty);
-            if (context != null && EnsureNativeHierarchy())
+            if (context != null)
             {
                 menu.AddItem(new GUIContent("Find References in Scene"), false,
-                    () => InvokeNativeHierarchyCommand("FindReferenceInScene", context));
+                    () => ExecuteRegisteredItem("Assets/Find References In Scene", context, null, false));
             }
             else
             {
@@ -138,20 +143,20 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
 
             menu.AddSeparator(string.Empty);
-            if (context != null && context.scene.IsValid() && EnsureNativeHierarchy())
+            if (context != null && context.scene.IsValid())
             {
-                menu.AddItem(new GUIContent("Set as Default Parent"), false,
-                    () => InvokeNativeHierarchyCommand("SetDefaultParentObject", context, true, context));
+                menu.AddItem(
+                    new GUIContent("Set as Default Parent"),
+                    BetterHierarchyUserSettings.DefaultParent == context,
+                    () => BetterHierarchyUserSettings.DefaultParent =
+                        BetterHierarchyUserSettings.DefaultParent == context ? null : context);
             }
             else
             {
                 menu.AddDisabledItem(new GUIContent("Set as Default Parent"));
             }
 
-            if (!AddNativePrefabItems(menu, context))
-            {
-                AddPrefabItems(menu, context);
-            }
+            AddPrefabItems(menu, context);
             menu.AddSeparator(string.Empty);
         }
 
@@ -196,29 +201,21 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             Action rename,
             Action delete)
         {
-            if (menu == null || !EnsureNativeHierarchy())
+            if (menu == null)
             {
                 return 0;
             }
 
-            int startIndex = menu.GetItemCount();
-            try
-            {
-                hierarchySelectionChangedMethod?.Invoke(nativeHierarchy, null);
-                hierarchySyncMethod?.Invoke(nativeHierarchy, null);
-
-                ParameterInfo contextParameter = createGameObjectContextMethod.GetParameters()[1];
-                object contextId = GetHierarchyContextId(context, contextParameter.ParameterType);
-                createGameObjectContextMethod.Invoke(nativeHierarchy, new[] { menu, contextId });
-
-                PatchStockCallback(menu, startIndex, "Rename", rename);
-                PatchStockCallback(menu, startIndex, "Delete", delete);
-                return menu.GetItemCount() - startIndex;
-            }
-            catch
-            {
-                return 0;
-            }
+            int startCount = menu.GetItemCount();
+            AddStandardObjectItems(menu, context, rename, delete, SelectAllSceneObjects);
+            AddRegisteredGameObjectItems(
+                menu,
+                context,
+                includePath: IsNativeHierarchyRegisteredPath,
+                includeDisabled: true);
+            AddPackageObjectItems(menu, context);
+            AddPrefabItems(menu, context);
+            return menu.GetItemCount() - startCount;
         }
 
         internal static int AddRegisteredGameObjectItems(
@@ -451,6 +448,24 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             Selection.objects = inverted.ToArray();
         }
 
+        private static void SelectAllSceneObjects()
+        {
+            var objects = new List<UnityEngine.Object>();
+            for (int sceneIndex = 0; sceneIndex < SceneManager.sceneCount; sceneIndex++)
+            {
+                Scene scene = SceneManager.GetSceneAt(sceneIndex);
+                if (!scene.isLoaded) continue;
+                foreach (GameObject root in scene.GetRootGameObjects())
+                {
+                    objects.AddRange(root.GetComponentsInChildren<Transform>(true)
+                        .Select(transform => transform.gameObject)
+                        .Where(gameObject =>
+                            (gameObject.hideFlags & (HideFlags.HideAndDontSave | HideFlags.NotEditable)) == 0));
+                }
+            }
+            Selection.objects = objects.ToArray();
+        }
+
         private static void AddPrefabItems(GenericMenu menu, GameObject context)
         {
             GameObject root = context != null
@@ -494,46 +509,6 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                         PrefabUnpackMode.Completely,
                         InteractionMode.UserAction));
             }
-        }
-
-        private static bool AddNativePrefabItems(GenericMenu menu, GameObject context)
-        {
-            if (context == null || !EnsureNativeHierarchy() || nativePrefabMenuMethod == null)
-            {
-                return false;
-            }
-
-            try
-            {
-                int before = menu.GetItemCount();
-                ParameterInfo idParameter = nativePrefabMenuMethod.GetParameters()[1];
-                nativePrefabMenuMethod.Invoke(
-                    nativeHierarchy,
-                    new[] { menu, GetHierarchyContextId(context, idParameter.ParameterType) });
-                return menu.GetItemCount() > before;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static void InvokeNativeHierarchyCommand(
-            string methodName,
-            GameObject context,
-            params object[] arguments)
-        {
-            if (!EnsureNativeHierarchy())
-            {
-                return;
-            }
-
-            Selection.activeGameObject = context;
-            hierarchySelectionChangedMethod?.Invoke(nativeHierarchy, null);
-            hierarchySyncMethod?.Invoke(nativeHierarchy, null);
-            nativeHierarchy.GetType()
-                .GetMethod(methodName, InstanceInternal)
-                ?.Invoke(nativeHierarchy, arguments);
         }
 
         private static void OpenPropertyEditor(GameObject context)
@@ -601,151 +576,27 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
         }
 
-        private static bool EnsureNativeHierarchy()
+        internal static int CleanupInvalidNativeHierarchyWindows()
         {
-            if (nativeHierarchy != null && createGameObjectContextMethod != null)
+            Type windowType = Type.GetType("UnityEditor.SceneHierarchyWindow,UnityEditor");
+            FieldInfo parentField = typeof(EditorWindow).GetField("m_Parent", InstanceInternal);
+            if (windowType == null || parentField == null) return 0;
+
+            int removed = 0;
+            foreach (UnityEngine.Object candidate in Resources.FindObjectsOfTypeAll(windowType))
             {
-                return true;
-            }
-
-            try
-            {
-                Type windowType = Type.GetType("UnityEditor.SceneHierarchyWindow,UnityEditor");
-                if (windowType == null)
-                {
-                    return false;
-                }
-
-                nativeHierarchyWindow = ScriptableObject.CreateInstance(windowType) as EditorWindow;
-                if (nativeHierarchyWindow == null)
-                {
-                    return false;
-                }
-                nativeHierarchyWindow.hideFlags = HideFlags.HideAndDontSave;
-
-                PropertyInfo hierarchyProperty = windowType.GetProperty("sceneHierarchy", InstanceInternal);
-                nativeHierarchy = hierarchyProperty?.GetValue(nativeHierarchyWindow) ??
-                                  windowType.GetField("m_SceneHierarchy", InstanceInternal)
-                                      ?.GetValue(nativeHierarchyWindow);
-                if (nativeHierarchy == null)
-                {
-                    UnityEngine.Object.DestroyImmediate(nativeHierarchyWindow);
-                    nativeHierarchyWindow = null;
-                    return false;
-                }
-
-                Type hierarchyType = nativeHierarchy.GetType();
-                foreach (MethodInfo method in hierarchyType.GetMethods(InstanceInternal))
-                {
-                    ParameterInfo[] parameters = method.GetParameters();
-                    if (method.Name == "CreateGameObjectContextClick" &&
-                        parameters.Length == 2 &&
-                        parameters[0].ParameterType == typeof(GenericMenu))
-                    {
-                        createGameObjectContextMethod = method;
-                        break;
-                    }
-                }
-
-                foreach (MethodInfo method in hierarchyType.GetMethods(InstanceInternal))
-                {
-                    ParameterInfo[] parameters = method.GetParameters();
-                    if (method.Name == "PopulateGenericMenuWithPrefabMenuItems" &&
-                        parameters.Length == 2 &&
-                        parameters[0].ParameterType == typeof(GenericMenu))
-                    {
-                        nativePrefabMenuMethod = method;
-                        break;
-                    }
-                }
-
-                hierarchySelectionChangedMethod = hierarchyType.GetMethod(
-                    "OnSelectionChange",
-                    InstanceInternal,
-                    null,
-                    Type.EmptyTypes,
-                    null);
-                hierarchySyncMethod = hierarchyType.GetMethod(
-                    "SyncIfNeeded",
-                    InstanceInternal,
-                    null,
-                    Type.EmptyTypes,
-                    null);
-                return createGameObjectContextMethod != null;
-            }
-            catch
-            {
-                if (nativeHierarchyWindow != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(nativeHierarchyWindow);
-                }
-                nativeHierarchyWindow = null;
-                nativeHierarchy = null;
-                createGameObjectContextMethod = null;
-                return false;
-            }
-        }
-
-        private static object GetHierarchyContextId(GameObject context, Type idType)
-        {
-            if (idType == typeof(int))
-            {
-                return context != null ? context.GetInstanceID() : 0;
-            }
-
-            if (context != null)
-            {
-                MethodInfo getEntityId = typeof(UnityEngine.Object).GetMethod(
-                    "GetEntityId",
-                    InstanceInternal,
-                    null,
-                    Type.EmptyTypes,
-                    null);
-                if (getEntityId != null && idType.IsAssignableFrom(getEntityId.ReturnType))
-                {
-                    return getEntityId.Invoke(context, null);
-                }
-            }
-
-            return idType.IsValueType ? Activator.CreateInstance(idType) : null;
-        }
-
-        private static void PatchStockCallback(
-            GenericMenu menu,
-            int startIndex,
-            string label,
-            Action callback)
-        {
-            if (callback == null || GenericMenuItemsProperty?.GetValue(menu) is not IList items)
-            {
-                return;
-            }
-
-            for (int index = Math.Max(0, startIndex); index < items.Count; index++)
-            {
-                object item = items[index];
-                if (item == null)
+                if (!(candidate is EditorWindow window) ||
+                    window.hideFlags != HideFlags.HideAndDontSave ||
+                    parentField.GetValue(window) != null)
                 {
                     continue;
                 }
 
-                Type itemType = item.GetType();
-                FieldInfo contentField = itemType.GetField("content", InstanceInternal);
-                GUIContent content = contentField?.GetValue(item) as GUIContent;
-                if (content == null ||
-                    !(string.Equals(content.text, label, StringComparison.Ordinal) ||
-                      content.text.StartsWith(label + " ", StringComparison.Ordinal)))
-                {
-                    continue;
-                }
-
-                itemType.GetField("func", InstanceInternal)?.SetValue(
-                    item,
-                    new GenericMenu.MenuFunction(callback.Invoke));
-                itemType.GetField("func2", InstanceInternal)?.SetValue(item, null);
-                itemType.GetField("userData", InstanceInternal)?.SetValue(item, null);
-                return;
+                UnityEngine.Object.DestroyImmediate(window);
+                removed++;
             }
+
+            return removed;
         }
     }
 }

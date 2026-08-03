@@ -11,6 +11,41 @@ namespace DansToolbox.EditorTools.BetterScene
         Review
     }
 
+    internal enum BetterScenePanel
+    {
+        None,
+        Create,
+        Transform,
+        Place,
+        View,
+        Visibility,
+        Measure,
+        Review
+    }
+
+    internal enum BetterSceneCreateKind
+    {
+        Empty,
+        Group,
+        Cube,
+        Sphere,
+        Plane,
+        Camera,
+        Light,
+        Audio
+    }
+
+    internal enum BetterSceneViewDirection
+    {
+        Perspective,
+        Top,
+        Bottom,
+        Front,
+        Back,
+        Left,
+        Right
+    }
+
     internal enum BetterSceneSnapMode
     {
         Free,

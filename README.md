@@ -9,7 +9,7 @@ Dans Toolbox is a Unity 6 package containing eight focused tools:
 - **Better Inspector** — inspect scene objects and assets with searchable component cards, pinned targets, favorites, multi-editing, and diagnostics.
 - **Better Project** — browse assets with visual rules, smart collections, rich previews, health diagnostics, batch actions, and dependency impact tracing.
 - **Better Console** — capture, search, group, triage, compare, and export Editor or player logs without losing Unity Console compatibility.
-- **Better Scene** — place, paint, align, measure, and bookmark scene content through focused level-design workflows.
+- **Better Scene** — create, place, transform, measure, review, and bookmark content directly inside the Scene view.
 
 All visual tools are Editor-only. Retro VFX includes a small player-safe recipe/player API, and Better Console includes an optional player-safe structured logging API. Native Window Dock is available only in the Windows Editor.
 
@@ -127,14 +127,17 @@ See [Documentation~/retro-vfx.md](Documentation~/retro-vfx.md) for the full work
 
 ## Better Scene
 
-Open it from `Tools > Dans Toolbox > Better Scene` and keep the native Scene view beside it. Better Scene adds four compact workflows without replacing Unity's renderer:
+Open it from `Tools > Dans Toolbox > Better Scene`. A native Unity Scene overlay opens one focused mega-panel beside the toolbar's current position. Drag its handle to dock, float, or reposition it; use Unity's overlay menu to collapse it or switch between horizontal, vertical, and compact-panel layouts. Right-click a tool to move or hide it, and use `...` to restore tools or hide the history and quick-action groups:
 
-- **Select** provides selection history, focus/isolate/hide/lock actions, active-object alignment, distribution, transform snapping, grounding, deterministic scatter, prefab replacement, reversible visibility bands, layer presets, Scene-camera bookmarks, and camera jumps.
-- **Place** accepts prefabs, model GameObjects, sprites, meshes, and audio clips. Pick an asset or drag it from Better Project into Scene, preview the target, and place with free, grid, surface, or vertex snapping, optional normal alignment, parenting, and repeat placement.
-- **Measure** provides live surface-aware distance and delta measurement with copyable values.
-- **Review** overlays bounds, pivots, missing scripts/references, prefab overrides, inactive objects, and related Better Console diagnostics directly in Scene.
+- **Create** offers common objects in a visual palette, including groups, primitives, cameras, lights, and audio sources.
+- **Transform** groups active-object alignment, distribution, grounding, grouping, mirroring, snapping, and reset actions by working axis.
+- **Place** accepts prefabs, models, sprites, meshes, and audio clips, with recent-asset thumbnails, live preview, and free, grid, surface, or vertex snapping.
+- **View** supplies perspective and orthographic presets, framing, saved views, camera jumps, and camera creation from the Scene view.
+- **Visibility** keeps selection isolation and picking controls beside reversible category filters and layer presets.
+- **Measure** provides two-click surface-aware distance and delta measurement with strict cleanup when another tool is chosen.
+- **Review** keeps selection diagnostics, related Better Console logs, Inspector and prefab navigation, bounds, pivots, and badges together.
 
-Alt+1 through Alt+4 switch modes. F frames the selection and Escape exits an active spatial mode. Visibility filters preserve the previous hidden, picking, visible-layer, and locked-layer state so Restore returns to the exact working context.
+The active mega-panel is also a native movable and collapsible Scene overlay, while the dockable Better Scene tab remains a compact companion: selection context, the seven-category navigator, and collapsible active-tool, saved-view, and Scene-health sections. Alt+1 through Alt+4 open Transform, Place, Measure, and Review. F frames selection and Escape clears or collapses the active Scene tool. Visibility filters preserve the previous hidden, picking, visible-layer, and locked-layer state so Restore returns to the exact working context.
 
 ## Updating users
 

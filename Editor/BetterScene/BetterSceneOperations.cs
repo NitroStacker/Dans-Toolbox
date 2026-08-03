@@ -11,6 +11,151 @@ namespace DansToolbox.EditorTools.BetterScene
 {
     internal static class BetterSceneOperations
     {
+        internal static GameObject Create(BetterSceneCreateKind kind)
+        {
+            if (kind == BetterSceneCreateKind.Group && Selection.gameObjects.Length > 0)
+            {
+                return GroupSelection();
+            }
+
+            GameObject created;
+            switch (kind)
+            {
+                case BetterSceneCreateKind.Cube:
+                    created = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    break;
+                case BetterSceneCreateKind.Sphere:
+                    created = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    break;
+                case BetterSceneCreateKind.Plane:
+                    created = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                    break;
+                case BetterSceneCreateKind.Camera:
+                    created = new GameObject("Camera", typeof(Camera));
+                    break;
+                case BetterSceneCreateKind.Light:
+                    created = new GameObject("Directional Light", typeof(Light));
+                    created.GetComponent<Light>().type = LightType.Directional;
+                    created.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+                    break;
+                case BetterSceneCreateKind.Audio:
+                    created = new GameObject("Audio Source", typeof(AudioSource));
+                    break;
+                case BetterSceneCreateKind.Group:
+                    created = new GameObject("Group");
+                    break;
+                default:
+                    created = new GameObject("GameObject");
+                    break;
+            }
+
+            StageUtility.PlaceGameObjectInCurrentStage(created);
+            Undo.RegisterCreatedObjectUndo(created, "Create " + created.name);
+            SceneView view = SceneView.lastActiveSceneView;
+            created.transform.position = view == null ? Vector3.zero : view.pivot;
+            GameObjectUtility.EnsureUniqueNameForSibling(created);
+            Selection.activeGameObject = created;
+            MarkScenesDirty(new[] { created });
+            return created;
+        }
+
+        internal static GameObject GroupSelection()
+        {
+            GameObject[] selected = Selection.gameObjects.Where(item => item != null).ToArray();
+            if (selected.Length == 0) return null;
+            Undo.IncrementCurrentGroup();
+            int undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Group Scene Objects");
+            Transform commonParent = selected[0].transform.parent;
+            if (selected.Any(item => item.transform.parent != commonParent)) commonParent = null;
+
+            var group = new GameObject("Group");
+            StageUtility.PlaceGameObjectInCurrentStage(group);
+            Undo.RegisterCreatedObjectUndo(group, "Group Scene Objects");
+            if (commonParent != null) Undo.SetTransformParent(group.transform, commonParent, "Parent Scene Group");
+            group.transform.position = GetCombinedBounds(selected).center;
+            foreach (GameObject gameObject in selected)
+            {
+                if (gameObject == null || gameObject == group) continue;
+                Undo.SetTransformParent(gameObject.transform, group.transform, "Group Scene Objects");
+            }
+            GameObjectUtility.EnsureUniqueNameForSibling(group);
+            Selection.activeGameObject = group;
+            Undo.CollapseUndoOperations(undoGroup);
+            MarkScenesDirty(selected.Concat(new[] { group }));
+            return group;
+        }
+
+        internal static void ResetSelection(bool position, bool rotation, bool scale)
+        {
+            Transform[] transforms = Selection.transforms.Where(item => item != null).ToArray();
+            if (transforms.Length == 0) return;
+            Undo.RecordObjects(transforms, "Reset Scene Transforms");
+            foreach (Transform transform in transforms)
+            {
+                if (position) transform.localPosition = Vector3.zero;
+                if (rotation) transform.localRotation = Quaternion.identity;
+                if (scale) transform.localScale = Vector3.one;
+            }
+            MarkScenesDirty(transforms.Select(item => item.gameObject));
+        }
+
+        internal static void MirrorSelection(BetterSceneAxis axis)
+        {
+            GameObject anchor = Selection.activeGameObject;
+            GameObject[] selected = Selection.gameObjects.Where(item => item != null).ToArray();
+            if (anchor == null || selected.Length < 2) return;
+            Undo.RecordObjects(selected.Select(item => item.transform).ToArray(), "Mirror Scene Objects");
+            int dimension = (int)axis;
+            float pivot = anchor.transform.position[dimension];
+            foreach (GameObject gameObject in selected)
+            {
+                if (gameObject == anchor) continue;
+                Vector3 position = gameObject.transform.position;
+                position[dimension] = pivot - (position[dimension] - pivot);
+                gameObject.transform.position = position;
+            }
+            MarkScenesDirty(selected);
+        }
+
+        internal static void SetView(BetterSceneViewDirection direction)
+        {
+            SceneView view = SceneView.lastActiveSceneView;
+            if (view == null) return;
+            Quaternion rotation;
+            bool orthographic = direction != BetterSceneViewDirection.Perspective;
+            switch (direction)
+            {
+                case BetterSceneViewDirection.Top: rotation = Quaternion.Euler(90f, 0f, 0f); break;
+                case BetterSceneViewDirection.Bottom: rotation = Quaternion.Euler(-90f, 0f, 0f); break;
+                case BetterSceneViewDirection.Front: rotation = Quaternion.identity; break;
+                case BetterSceneViewDirection.Back: rotation = Quaternion.Euler(0f, 180f, 0f); break;
+                case BetterSceneViewDirection.Left: rotation = Quaternion.Euler(0f, 90f, 0f); break;
+                case BetterSceneViewDirection.Right: rotation = Quaternion.Euler(0f, -90f, 0f); break;
+                default:
+                    rotation = Quaternion.Euler(25f, -35f, 0f);
+                    orthographic = false;
+                    break;
+            }
+            view.in2DMode = false;
+            view.LookAt(view.pivot, rotation, Mathf.Max(0.1f, view.size), orthographic, false);
+            view.Focus();
+        }
+
+        internal static Camera CreateCameraFromView()
+        {
+            SceneView view = SceneView.lastActiveSceneView;
+            if (view == null || view.camera == null) return null;
+            GameObject created = Create(BetterSceneCreateKind.Camera);
+            Camera camera = created.GetComponent<Camera>();
+            created.transform.position = view.camera.transform.position;
+            created.transform.rotation = view.camera.transform.rotation;
+            camera.orthographic = view.orthographic;
+            camera.orthographicSize = view.size;
+            camera.fieldOfView = view.camera.fieldOfView;
+            MarkScenesDirty(new[] { created });
+            return camera;
+        }
         internal static bool TryGetBounds(GameObject gameObject, out Bounds bounds)
         {
             bounds = default;

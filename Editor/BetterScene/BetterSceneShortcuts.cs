@@ -5,8 +5,8 @@ namespace DansToolbox.EditorTools.BetterScene
 {
     internal static class BetterSceneShortcuts
     {
-        [Shortcut("Dans Toolbox/Better Scene/Select", KeyCode.Alpha1, ShortcutModifiers.Alt)]
-        private static void Select() => BetterSceneController.SetMode(BetterSceneMode.Select);
+        [Shortcut("Dans Toolbox/Better Scene/Transform", KeyCode.Alpha1, ShortcutModifiers.Alt)]
+        private static void Transform() => BetterSceneController.SetMode(BetterSceneMode.Select);
 
         [Shortcut("Dans Toolbox/Better Scene/Place", KeyCode.Alpha2, ShortcutModifiers.Alt)]
         private static void Place() => BetterSceneController.SetMode(BetterSceneMode.Place);

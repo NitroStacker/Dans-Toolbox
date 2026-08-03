@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using PackageManagerInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace DansToolbox.EditorTools.BetterConsole
 {
@@ -42,6 +43,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             new Dictionary<int, BetterConsoleDiagnosticSummary>();
         private static readonly Dictionary<string, BetterConsoleDiagnosticSummary> assetSummaries =
             new Dictionary<string, BetterConsoleDiagnosticSummary>(StringComparer.OrdinalIgnoreCase);
+        private static List<KeyValuePair<string, string>> packageRoots;
         private static int indexedRevision = -1;
 
         static BetterConsoleDiagnosticBridge()
@@ -169,12 +171,86 @@ namespace DansToolbox.EditorTools.BetterConsole
         {
             if (string.IsNullOrWhiteSpace(path)) return string.Empty;
             string normalized = path.Replace('\\', '/').Trim();
-            if (!Path.IsPathRooted(normalized)) return normalized.TrimStart('/');
+            try
+            {
+                if (!Path.IsPathRooted(normalized)) return normalized.TrimStart('/');
 
-            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..")).Replace('\\', '/').TrimEnd('/');
-            return normalized.StartsWith(projectRoot + "/", StringComparison.OrdinalIgnoreCase)
-                ? normalized.Substring(projectRoot.Length + 1)
-                : normalized;
+                string fullPath = Path.GetFullPath(normalized).Replace('\\', '/');
+                string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."))
+                    .Replace('\\', '/')
+                    .TrimEnd('/');
+                if (fullPath.StartsWith(projectRoot + "/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return fullPath.Substring(projectRoot.Length + 1);
+                }
+
+                foreach (KeyValuePair<string, string> packageRoot in GetPackageRoots())
+                {
+                    if (string.Equals(fullPath, packageRoot.Key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return packageRoot.Value;
+                    }
+
+                    if (fullPath.StartsWith(packageRoot.Key + "/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return packageRoot.Value + fullPath.Substring(packageRoot.Key.Length);
+                    }
+                }
+            }
+            catch (ArgumentException)
+            {
+                return string.Empty;
+            }
+            catch (NotSupportedException)
+            {
+                return string.Empty;
+            }
+            catch (PathTooLongException)
+            {
+                return string.Empty;
+            }
+
+            return string.Empty;
+        }
+
+        private static List<KeyValuePair<string, string>> GetPackageRoots()
+        {
+            if (packageRoots != null) return packageRoots;
+
+            packageRoots = new List<KeyValuePair<string, string>>();
+            foreach (PackageManagerInfo package in PackageManagerInfo.GetAllRegisteredPackages())
+            {
+                if (package == null || string.IsNullOrWhiteSpace(package.resolvedPath) ||
+                    string.IsNullOrWhiteSpace(package.assetPath))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    string resolvedPath = Path.GetFullPath(package.resolvedPath)
+                        .Replace('\\', '/')
+                        .TrimEnd('/');
+                    packageRoots.Add(new KeyValuePair<string, string>(
+                        resolvedPath,
+                        package.assetPath.TrimEnd('/')));
+                }
+                catch (ArgumentException)
+                {
+                    // Ignore malformed package metadata rather than breaking diagnostics.
+                }
+                catch (NotSupportedException)
+                {
+                    // Ignore malformed package metadata rather than breaking diagnostics.
+                }
+                catch (PathTooLongException)
+                {
+                    // Ignore malformed package metadata rather than breaking diagnostics.
+                }
+            }
+
+            packageRoots.Sort((left, right) => right.Key.Length.CompareTo(left.Key.Length));
+            return packageRoots;
         }
 
         private static void EnsureIndex()

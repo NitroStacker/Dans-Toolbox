@@ -381,6 +381,10 @@ namespace DansToolbox.Editor.Tests
         [Test]
         public void ContextMenu_ComposesCompleteHierarchyMenuWithoutDisplayingItEarly()
         {
+            System.Type hierarchyWindowType = typeof(EditorWindow).Assembly.GetType(
+                "UnityEditor.SceneHierarchyWindow");
+            BetterHierarchyContextMenus.CleanupInvalidNativeHierarchyWindows();
+            int initialHierarchyWindowCount = Resources.FindObjectsOfTypeAll(hierarchyWindowType).Length;
             GameObject gameObject = new GameObject("Context Menu Test");
             Object[] previousSelection = Selection.objects;
             try
@@ -398,11 +402,39 @@ namespace DansToolbox.Editor.Tests
                 Assert.That(
                     nativeCount,
                     Is.GreaterThan(BetterHierarchyContextMenus.RegisteredGameObjectItemCount));
+                Assert.That(
+                    Resources.FindObjectsOfTypeAll(hierarchyWindowType).Length,
+                    Is.EqualTo(initialHierarchyWindowCount));
             }
             finally
             {
                 Selection.objects = previousSelection;
                 Object.DestroyImmediate(gameObject);
+            }
+        }
+
+        [Test]
+        public void LayoutCleanup_RemovesOnlyOrphanedHiddenNativeHierarchyWindows()
+        {
+            System.Type hierarchyWindowType = typeof(EditorWindow).Assembly.GetType(
+                "UnityEditor.SceneHierarchyWindow");
+            Assert.That(hierarchyWindowType, Is.Not.Null);
+
+            EditorWindow orphan = null;
+            try
+            {
+                orphan = ScriptableObject.CreateInstance(hierarchyWindowType) as EditorWindow;
+                Assert.That(orphan, Is.Not.Null);
+                orphan.hideFlags = HideFlags.HideAndDontSave;
+
+                int removed = BetterHierarchyContextMenus.CleanupInvalidNativeHierarchyWindows();
+
+                Assert.That(removed, Is.GreaterThanOrEqualTo(1));
+                Assert.That(orphan == null, Is.True);
+            }
+            finally
+            {
+                if (orphan != null) Object.DestroyImmediate(orphan);
             }
         }
 

@@ -28,7 +28,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private const float HeaderHeight = 36f;
         private const float ToolbarHeight = 42f;
         private const float LaunchPanelHeight = 82f;
-        private const float CropPanelHeight = 42f;
+        private const float CropPanelHeight = 78f;
         private const float PickerMinimumHeight = 190f;
         private const float PickerMaximumHeight = 420f;
         private const float PickerCardMinimumWidth = 184f;
@@ -57,6 +57,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         [SerializeField] private int cropRight;
         [SerializeField] private int cropBottom;
         [SerializeField] private int panelNumber;
+        [SerializeField] private long reloadTargetHandle;
 
         private IReadOnlyList<NativeWindowCandidate> candidates =
             Array.Empty<NativeWindowCandidate>();
@@ -64,6 +65,9 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private IntPtr claimedTarget;
         private string attachedLabel = string.Empty;
         private string cropProfileKey = string.Empty;
+        private List<CropPreset> cropPresets = new List<CropPreset>();
+        private int selectedCropPreset = -1;
+        private string cropPresetName = string.Empty;
         private string statusMessage =
             "Choose a running window or launch an application";
         private Color statusColor;
@@ -72,7 +76,9 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private double launchDeadline;
         private double nextLaunchPoll;
         private double nextRepaint;
-        private double lastPaint;
+        private double reloadReattachDeadline;
+        private int consecutivePositionFailures;
+        private bool preparingForReload;
         private HashSet<long> windowsBeforeLaunch = new HashSet<long>();
         private Vector2 cropDragStartMouse;
         private NativeWindowCrop cropDragStart;
@@ -137,6 +143,13 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             if (IsWindowsEditor)
             {
                 RefreshCandidates();
+                if (reloadTargetHandle != 0)
+                {
+                    reloadReattachDeadline = EditorApplication.timeSinceStartup + 10d;
+                    SetStatus(
+                        "RECONNECTING  /  restoring the app after Unity reloaded scripts",
+                        NativeWindowDockGui.Warning);
+                }
             }
             else
             {
@@ -151,7 +164,16 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             EditorApplication.update -= Tick;
             AssemblyReloadEvents.beforeAssemblyReload -= DetachForReload;
             ResetThumbnailPreviews();
-            Detach(false);
+            if (!preparingForReload && session != null && EditorApplication.isCompiling)
+            {
+                DetachForReload();
+            }
+
+            if (!preparingForReload)
+            {
+                reloadTargetHandle = 0;
+                Detach(false);
+            }
         }
 
         private void OnFocus()
@@ -164,11 +186,6 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         private void OnGUI()
         {
-            if (Event.current.type == EventType.Repaint)
-            {
-                lastPaint = EditorApplication.timeSinceStartup;
-            }
-
             EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height),
                 NativeWindowDockGui.Canvas);
 
@@ -256,21 +273,32 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     session.SetVisible(IsSelectedDockTab());
                     if (!wasEmbedded && session.IsEmbedded)
                     {
+                        consecutivePositionFailures = 0;
                         SetStatus(
                             "ATTACHED  ·  click the app to type; Detach restores its desktop window",
+                            NativeWindowDockGui.Accent);
+                    }
+                    else if (consecutivePositionFailures > 0)
+                    {
+                        consecutivePositionFailures = 0;
+                        SetStatus(
+                            "ATTACHED  /  native surface reconnected",
                             NativeWindowDockGui.Accent);
                     }
                 }
                 catch (Exception exception)
                 {
-                    NativeWindowSession failedSession = session;
-                    session = null;
-                    failedSession.Dispose();
-                    attachedLabel = string.Empty;
+                    consecutivePositionFailures++;
                     SetStatus(
-                        "ATTACH FAILED  ·  " + exception.Message,
-                        NativeWindowDockGui.Danger);
-                    Debug.LogWarning("Native Window Dock: " + exception);
+                        "RECONNECTING  /  " + exception.Message,
+                        NativeWindowDockGui.Warning);
+                    if (consecutivePositionFailures == 1
+                        || consecutivePositionFailures % 120 == 0)
+                    {
+                        Debug.LogWarning(
+                            "Native Window Dock will keep retrying a transient native positioning failure: "
+                            + exception.Message);
+                    }
                     Repaint();
                 }
             }
@@ -633,6 +661,69 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 cropRight = 0;
                 cropBottom = 0;
                 ApplyCrop();
+            }
+
+            float secondY = rect.y + 44f;
+            float contentWidth = rect.width - 24f;
+            const float gap = 6f;
+            const float saveWidth = 54f;
+            const float updateWidth = 62f;
+            const float deleteWidth = 58f;
+            float nameWidth = Mathf.Clamp(contentWidth * 0.25f, 90f, 140f);
+            float popupWidth = Mathf.Max(
+                92f,
+                contentWidth - nameWidth - saveWidth - updateWidth - deleteWidth - gap * 4f);
+            Rect popupRect = new Rect(rect.x + 12f, secondY, popupWidth, 26f);
+            Rect nameRect = new Rect(popupRect.xMax + gap, secondY, nameWidth, 26f);
+            Rect saveRect = new Rect(nameRect.xMax + gap, secondY, saveWidth, 26f);
+            Rect updateRect = new Rect(saveRect.xMax + gap, secondY, updateWidth, 26f);
+            Rect deleteRect = new Rect(updateRect.xMax + gap, secondY, deleteWidth, 26f);
+
+            string[] presetOptions = new string[cropPresets.Count + 1];
+            presetOptions[0] = "PRESET / CHOOSE";
+            for (int index = 0; index < cropPresets.Count; index++)
+            {
+                presetOptions[index + 1] = cropPresets[index].name;
+            }
+
+            int popupSelection = Mathf.Clamp(selectedCropPreset + 1, 0, cropPresets.Count);
+            int nextSelection = EditorGUI.Popup(popupRect, popupSelection, presetOptions);
+            if (nextSelection != popupSelection)
+            {
+                selectedCropPreset = nextSelection - 1;
+                ApplySelectedCropPreset();
+            }
+
+            cropPresetName = GUI.TextField(
+                nameRect,
+                cropPresetName ?? string.Empty,
+                NativeWindowDockGui.TextField);
+            if (GUI.Button(
+                    saveRect,
+                    new GUIContent("SAVE", "Save the current frame as a new named preset"),
+                    NativeWindowDockGui.PrimaryButton))
+            {
+                SaveNewCropPreset();
+            }
+
+            using (new EditorGUI.DisabledScope(
+                       selectedCropPreset < 0 || selectedCropPreset >= cropPresets.Count))
+            {
+                if (GUI.Button(
+                        updateRect,
+                        new GUIContent("UPDATE", "Replace and rename the selected preset"),
+                        NativeWindowDockGui.Button))
+                {
+                    UpdateSelectedCropPreset();
+                }
+
+                if (GUI.Button(
+                        deleteRect,
+                        new GUIContent("DELETE", "Remove the selected preset"),
+                        NativeWindowDockGui.DangerButton))
+                {
+                    DeleteSelectedCropPreset();
+                }
             }
         }
 
@@ -1108,6 +1199,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             try
             {
                 session = NativeWindowSession.Attach(candidate.Handle);
+                consecutivePositionFailures = 0;
                 attachedLabel = candidate.DisplayLabel;
                 UpdateTitle(candidate.ProcessName);
                 LoadCropProfile(candidate);
@@ -1136,6 +1228,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             IntPtr previousClaim = claimedTarget;
             session = null;
             claimedTarget = IntPtr.Zero;
+            consecutivePositionFailures = 0;
             SaveCropProfile();
             try
             {
@@ -1162,7 +1255,15 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         private void DetachForReload()
         {
+            bool wasShowingCropPanel = showCropPanel;
+            if (session != null)
+            {
+                reloadTargetHandle = session.Target.ToInt64();
+                preparingForReload = true;
+            }
+
             Detach(false);
+            showCropPanel = wasShowingCropPanel;
         }
 
         private void LaunchAndAttach()
@@ -1207,6 +1308,27 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             EnsureRuntimeState();
             DrainThumbnailQueue();
             double now = EditorApplication.timeSinceStartup;
+            if (session == null && reloadTargetHandle != 0)
+            {
+                NativeWindowCandidate reloadCandidate = candidates.FirstOrDefault(
+                    candidate => candidate.Handle.ToInt64() == reloadTargetHandle);
+                if (reloadCandidate != null)
+                {
+                    reloadTargetHandle = 0;
+                    Attach(reloadCandidate);
+                    return;
+                }
+
+                if (now >= reloadReattachDeadline)
+                {
+                    reloadTargetHandle = 0;
+                    SetStatus(
+                        "RECONNECT FAILED  /  the previous application window is no longer available",
+                        NativeWindowDockGui.Warning);
+                    Repaint();
+                }
+            }
+
             if (session != null)
             {
                 if (!session.IsTargetAlive)
@@ -1218,9 +1340,9 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     return;
                 }
 
-                bool tabIsVisible = IsSelectedDockTab() && now - lastPaint < 0.5d;
+                bool tabIsVisible = IsSelectedDockTab();
                 session.SetVisible(tabIsVisible);
-                if (now >= nextRepaint)
+                if (tabIsVisible && now >= nextRepaint)
                 {
                     nextRepaint = now + RepaintIntervalSeconds;
                     Repaint();
@@ -1273,8 +1395,10 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             failedThumbnailHandles ??= new HashSet<long>();
             pendingThumbnailHandles ??= new HashSet<long>();
             queuedThumbnails ??= new ConcurrentQueue<QueuedThumbnail>();
+            cropPresets ??= new List<CropPreset>();
             attachedLabel ??= string.Empty;
             cropProfileKey ??= string.Empty;
+            cropPresetName ??= string.Empty;
             launchPath ??= string.Empty;
             launchArguments ??= string.Empty;
             statusMessage ??= "Choose a running window or launch an application";
@@ -1297,7 +1421,10 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             }
             catch
             {
-                return EditorApplication.timeSinceStartup - lastPaint < 0.5d;
+                // A reflection miss is not evidence that the tab became hidden. Keeping the
+                // child host visible avoids a hide/show pulse; its Unity parent still controls
+                // visibility when the native container is minimized or covered.
+                return true;
             }
         }
 
@@ -1375,6 +1502,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 + candidate.ProcessName
                 + "."
                 + candidate.ClassName;
+            LoadCropPresets();
             string data = EditorPrefs.GetString(cropProfileKey, string.Empty);
             if (string.IsNullOrEmpty(data))
             {
@@ -1414,6 +1542,202 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             EditorPrefs.SetString(cropProfileKey, JsonUtility.ToJson(profile));
         }
 
+        private void LoadCropPresets()
+        {
+            cropPresets.Clear();
+            selectedCropPreset = -1;
+            cropPresetName = string.Empty;
+            if (string.IsNullOrEmpty(cropProfileKey))
+            {
+                return;
+            }
+
+            string data = EditorPrefs.GetString(CropPresetStorageKey, string.Empty);
+            if (string.IsNullOrEmpty(data))
+            {
+                return;
+            }
+
+            try
+            {
+                CropPresetCollection collection =
+                    JsonUtility.FromJson<CropPresetCollection>(data);
+                if (collection?.presets == null)
+                {
+                    return;
+                }
+
+                foreach (CropPreset preset in collection.presets)
+                {
+                    if (preset == null || string.IsNullOrWhiteSpace(preset.name))
+                    {
+                        continue;
+                    }
+
+                    preset.id = string.IsNullOrEmpty(preset.id)
+                        ? Guid.NewGuid().ToString("N")
+                        : preset.id;
+                    preset.name = NativeWindowCandidate.NormalizeDisplayText(
+                        preset.name.Trim(),
+                        48);
+                    cropPresets.Add(preset);
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    "Native Window Dock could not read framing presets: "
+                    + exception.Message);
+            }
+        }
+
+        private void SaveNewCropPreset()
+        {
+            string requestedName = string.IsNullOrWhiteSpace(cropPresetName)
+                ? "Frame " + (cropPresets.Count + 1)
+                : cropPresetName.Trim();
+            CropPreset preset = CreateCropPreset(
+                Guid.NewGuid().ToString("N"),
+                CreateUniqueCropPresetName(requestedName, cropPresets, null),
+                CurrentCrop());
+            cropPresets.Add(preset);
+            selectedCropPreset = cropPresets.Count - 1;
+            cropPresetName = preset.name;
+            PersistCropPresets();
+            SetStatus("PRESET SAVED  /  " + preset.name, NativeWindowDockGui.Accent);
+        }
+
+        private void UpdateSelectedCropPreset()
+        {
+            if (selectedCropPreset < 0 || selectedCropPreset >= cropPresets.Count)
+            {
+                return;
+            }
+
+            CropPreset preset = cropPresets[selectedCropPreset];
+            string requestedName = string.IsNullOrWhiteSpace(cropPresetName)
+                ? preset.name
+                : cropPresetName.Trim();
+            preset.name = CreateUniqueCropPresetName(
+                requestedName,
+                cropPresets,
+                preset.id);
+            SetPresetCrop(preset, CurrentCrop());
+            cropPresetName = preset.name;
+            PersistCropPresets();
+            SetStatus("PRESET UPDATED  /  " + preset.name, NativeWindowDockGui.Accent);
+        }
+
+        private void DeleteSelectedCropPreset()
+        {
+            if (selectedCropPreset < 0 || selectedCropPreset >= cropPresets.Count)
+            {
+                return;
+            }
+
+            string removedName = cropPresets[selectedCropPreset].name;
+            cropPresets.RemoveAt(selectedCropPreset);
+            selectedCropPreset = -1;
+            cropPresetName = string.Empty;
+            PersistCropPresets();
+            SetStatus("PRESET REMOVED  /  " + removedName, NativeWindowDockGui.Muted);
+        }
+
+        private void ApplySelectedCropPreset()
+        {
+            if (selectedCropPreset < 0 || selectedCropPreset >= cropPresets.Count)
+            {
+                cropPresetName = string.Empty;
+                return;
+            }
+
+            CropPreset preset = cropPresets[selectedCropPreset];
+            cropPresetName = preset.name;
+            SetCropValues(new NativeWindowCrop(
+                preset.left,
+                preset.top,
+                preset.right,
+                preset.bottom));
+            ApplyCrop();
+            SetStatus("PRESET APPLIED  /  " + preset.name, NativeWindowDockGui.Accent);
+        }
+
+        private void PersistCropPresets()
+        {
+            if (string.IsNullOrEmpty(cropProfileKey))
+            {
+                return;
+            }
+
+            CropPresetCollection collection = new CropPresetCollection
+            {
+                presets = cropPresets
+            };
+            EditorPrefs.SetString(CropPresetStorageKey, JsonUtility.ToJson(collection));
+        }
+
+        private string CropPresetStorageKey => cropProfileKey + ".Presets.v1";
+
+        private static CropPreset CreateCropPreset(
+            string id,
+            string name,
+            NativeWindowCrop crop)
+        {
+            CropPreset preset = new CropPreset
+            {
+                id = id,
+                name = name
+            };
+            SetPresetCrop(preset, crop);
+            return preset;
+        }
+
+        private static void SetPresetCrop(CropPreset preset, NativeWindowCrop crop)
+        {
+            preset.left = crop.Left;
+            preset.top = crop.Top;
+            preset.right = crop.Right;
+            preset.bottom = crop.Bottom;
+        }
+
+        internal static string CreateUniqueCropPresetName(
+            string requestedName,
+            IEnumerable<CropPreset> presets,
+            string ignoredId)
+        {
+            string baseName = NativeWindowCandidate.NormalizeDisplayText(
+                string.IsNullOrWhiteSpace(requestedName) ? "Frame" : requestedName.Trim(),
+                48);
+            HashSet<string> existingNames = new HashSet<string>(
+                (presets ?? Enumerable.Empty<CropPreset>())
+                    .Where(preset => preset != null
+                                     && !string.Equals(
+                                         preset.id,
+                                         ignoredId,
+                                         StringComparison.Ordinal))
+                    .Select(preset => preset.name),
+                StringComparer.OrdinalIgnoreCase);
+            if (!existingNames.Contains(baseName))
+            {
+                return baseName;
+            }
+
+            int suffix = 2;
+            string candidate;
+            do
+            {
+                string suffixText = " " + suffix;
+                string shortenedBase = NativeWindowCandidate.NormalizeDisplayText(
+                    baseName,
+                    48 - suffixText.Length);
+                candidate = shortenedBase + suffixText;
+                suffix++;
+            }
+            while (existingNames.Contains(candidate));
+
+            return candidate;
+        }
+
         [Serializable]
         private sealed class CropProfile
         {
@@ -1421,6 +1745,23 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             public int top;
             public int right;
             public int bottom;
+        }
+
+        [Serializable]
+        internal sealed class CropPreset
+        {
+            public string id;
+            public string name;
+            public int left;
+            public int top;
+            public int right;
+            public int bottom;
+        }
+
+        [Serializable]
+        private sealed class CropPresetCollection
+        {
+            public List<CropPreset> presets = new List<CropPreset>();
         }
     }
 

@@ -26,9 +26,9 @@ See the [complete Retro VFX guide](retro-vfx.md) and [third-party notices](../TH
 
 ## Native Window Dock
 
-Open **Tools > Dans Toolbox > Native Window Dock** or launch a panel from the Hub, then select one of the numbered live dock regions. Choose an application from the thumbnail gallery and attach it. Every additional panel uses the same region picker, allowing different applications to live in independently selected Unity panes. Use Frame to crop the visible portion with draggable borders.
+Open **Tools > Dans Toolbox > Native Window Dock** or launch a panel from the Hub, then select one of the numbered live dock regions. Choose an application from the thumbnail gallery and attach it. Every additional panel uses the same region picker, allowing different applications to live in independently selected Unity panes. Use Frame to crop the visible portion with draggable borders. Name and save the current frame as an application-specific preset; select it to apply it, or use Update and Delete to edit or remove it.
 
-Detach applications before closing Unity. The recovery guard also attempts to restore attached windows during script reloads.
+Detach applications before closing Unity. During ordinary script reloads the dock restores its previous attachment automatically, while the recovery guard restores any orphaned native window if the reload is interrupted.
 
 ### Native Window Dock compatibility
 

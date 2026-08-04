@@ -117,6 +117,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private IntPtr host;
         private IntPtr hostOwner;
         private NativeWindowCrop crop;
+        private RectInt lastHostBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
         private RectInt lastTargetBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
         private bool embedded;
         private bool disposed;
@@ -200,7 +201,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     "The Unity window containing this tab could not be located.");
             }
 
-            if (!embedded)
+            if (!embedded || !NativeWindowInterop.IsWindow(host))
             {
                 Embed(unityWindow);
             }
@@ -214,7 +215,10 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 }
 
                 hostOwner = unityWindow;
+                lastHostBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
             }
+
+            RepairTargetEmbedding();
 
             NativeWindowInterop.POINT clientOrigin = new NativeWindowInterop.POINT(
                 Mathf.RoundToInt(screenRectInPoints.x * scale),
@@ -226,14 +230,19 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
             int width = Mathf.Max(1, Mathf.RoundToInt(screenRectInPoints.width * scale));
             int height = Mathf.Max(1, Mathf.RoundToInt(screenRectInPoints.height * scale));
-            NativeWindowInterop.SetWindowPos(
-                host,
-                NativeWindowInterop.HWND_TOP,
-                clientOrigin.X,
-                clientOrigin.Y,
-                width,
-                height,
-                NativeWindowInterop.SWP_NOACTIVATE | NativeWindowInterop.SWP_SHOWWINDOW);
+            RectInt hostBounds = new RectInt(clientOrigin.X, clientOrigin.Y, width, height);
+            if (hostBounds != lastHostBounds)
+            {
+                lastHostBounds = hostBounds;
+                NativeWindowInterop.SetWindowPos(
+                    host,
+                    IntPtr.Zero,
+                    hostBounds.x,
+                    hostBounds.y,
+                    hostBounds.width,
+                    hostBounds.height,
+                    NativeWindowInterop.SWP_NOACTIVATE | NativeWindowInterop.SWP_NOZORDER);
+            }
 
             RectInt targetBounds = crop.CalculateTargetBounds(width, height, scale);
             if (targetBounds != lastTargetBounds)
@@ -247,9 +256,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     targetBounds.width,
                     targetBounds.height,
                     NativeWindowInterop.SWP_NOACTIVATE
-                    | NativeWindowInterop.SWP_NOZORDER
-                    | NativeWindowInterop.SWP_SHOWWINDOW);
-                NativeWindowInterop.RedrawEmbeddedWindow(target);
+                    | NativeWindowInterop.SWP_NOZORDER);
             }
         }
 
@@ -324,8 +331,15 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         private void Embed(IntPtr unityWindow)
         {
+            if (NativeWindowInterop.IsWindow(host))
+            {
+                NativeWindowInterop.DestroyHostWindow(host);
+            }
+
             host = NativeWindowInterop.CreateHostWindow(unityWindow);
             hostOwner = unityWindow;
+            lastHostBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
+            lastTargetBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
             if (host == IntPtr.Zero)
             {
                 throw NativeWindowInterop.CreateWin32Exception(
@@ -336,23 +350,8 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             {
                 NativeWindowInterop.ShowWindow(target, NativeWindowInterop.SW_HIDE);
 
-                long childStyle = originalStyle;
-                childStyle &= ~(NativeWindowInterop.WS_CAPTION
-                                | NativeWindowInterop.WS_THICKFRAME
-                                | NativeWindowInterop.WS_SYSMENU
-                                | NativeWindowInterop.WS_MINIMIZEBOX
-                                | NativeWindowInterop.WS_MAXIMIZEBOX
-                                | NativeWindowInterop.WS_POPUP);
-                childStyle |= NativeWindowInterop.WS_CHILD
-                              | NativeWindowInterop.WS_VISIBLE
-                              | NativeWindowInterop.WS_CLIPSIBLINGS
-                              | NativeWindowInterop.WS_CLIPCHILDREN;
-                NativeWindowInterop.SetWindowStyle(target, childStyle);
-
-                long childExtendedStyle = originalExtendedStyle
-                                          & ~(NativeWindowInterop.WS_EX_APPWINDOW
-                                              | NativeWindowInterop.WS_EX_TOPMOST);
-                NativeWindowInterop.SetWindowExtendedStyle(target, childExtendedStyle);
+                NativeWindowInterop.SetWindowStyle(target, EmbeddedStyle);
+                NativeWindowInterop.SetWindowExtendedStyle(target, EmbeddedExtendedStyle);
 
                 NativeWindowInterop.SetParent(target, host);
                 int setParentError = Marshal.GetLastWin32Error();
@@ -376,7 +375,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 NativeWindowInterop.ShowWindow(target, NativeWindowInterop.SW_SHOW);
                 NativeWindowInterop.RedrawEmbeddedWindow(target);
                 embedded = true;
-                visible = true;
+                visible = false;
                 NativeWindowSafetyNet.Register(this);
             }
             catch
@@ -394,6 +393,99 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 embedded = false;
                 throw;
             }
+        }
+
+        private long EmbeddedStyle
+        {
+            get
+            {
+                long childStyle = originalStyle;
+                childStyle &= ~(NativeWindowInterop.WS_CAPTION
+                                | NativeWindowInterop.WS_THICKFRAME
+                                | NativeWindowInterop.WS_SYSMENU
+                                | NativeWindowInterop.WS_MINIMIZEBOX
+                                | NativeWindowInterop.WS_MAXIMIZEBOX
+                                | NativeWindowInterop.WS_POPUP);
+                return childStyle
+                       | NativeWindowInterop.WS_CHILD
+                       | NativeWindowInterop.WS_VISIBLE
+                       | NativeWindowInterop.WS_CLIPSIBLINGS
+                       | NativeWindowInterop.WS_CLIPCHILDREN;
+            }
+        }
+
+        private long EmbeddedExtendedStyle => originalExtendedStyle
+                                              & ~(NativeWindowInterop.WS_EX_APPWINDOW
+                                                  | NativeWindowInterop.WS_EX_TOPMOST);
+
+        private void RepairTargetEmbedding()
+        {
+            if (!NativeWindowInterop.IsWindow(target))
+            {
+                throw new InvalidOperationException(
+                    "The embedded application window is no longer available.");
+            }
+
+            long currentStyle = NativeWindowInterop.GetWindowStyle(target);
+            long currentExtendedStyle = NativeWindowInterop.GetWindowExtendedStyle(target);
+            long requiredStyle = NativeWindowInterop.WS_CHILD
+                                 | NativeWindowInterop.WS_VISIBLE
+                                 | NativeWindowInterop.WS_CLIPSIBLINGS
+                                 | NativeWindowInterop.WS_CLIPCHILDREN;
+            long forbiddenStyle = NativeWindowInterop.WS_CAPTION
+                                  | NativeWindowInterop.WS_THICKFRAME
+                                  | NativeWindowInterop.WS_SYSMENU
+                                  | NativeWindowInterop.WS_MINIMIZEBOX
+                                  | NativeWindowInterop.WS_MAXIMIZEBOX
+                                  | NativeWindowInterop.WS_POPUP;
+            long forbiddenExtendedStyle = NativeWindowInterop.WS_EX_APPWINDOW
+                                          | NativeWindowInterop.WS_EX_TOPMOST;
+            bool parentChanged = NativeWindowInterop.GetParent(target) != host;
+            bool styleChanged = (currentStyle & requiredStyle) != requiredStyle
+                                || (currentStyle & forbiddenStyle) != 0;
+            bool extendedStyleChanged =
+                (currentExtendedStyle & forbiddenExtendedStyle) != 0;
+            if (!parentChanged && !styleChanged && !extendedStyleChanged)
+            {
+                return;
+            }
+
+            if (styleChanged)
+            {
+                NativeWindowInterop.SetWindowStyle(
+                    target,
+                    (currentStyle & ~forbiddenStyle) | requiredStyle);
+            }
+
+            if (extendedStyleChanged)
+            {
+                NativeWindowInterop.SetWindowExtendedStyle(
+                    target,
+                    currentExtendedStyle & ~forbiddenExtendedStyle);
+            }
+            if (parentChanged)
+            {
+                NativeWindowInterop.SetParent(target, host);
+                if (NativeWindowInterop.GetParent(target) != host)
+                {
+                    throw NativeWindowInterop.CreateWin32Exception(
+                        "The embedded application temporarily left its native host and could not be reattached.");
+                }
+            }
+
+            lastTargetBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
+            NativeWindowInterop.SetWindowPos(
+                target,
+                IntPtr.Zero,
+                0,
+                0,
+                1,
+                1,
+                NativeWindowInterop.SWP_NOACTIVATE
+                | NativeWindowInterop.SWP_NOZORDER
+                | NativeWindowInterop.SWP_FRAMECHANGED);
+            NativeWindowInterop.ShowWindow(target, NativeWindowInterop.SW_SHOW);
+            NativeWindowSafetyNet.Register(this);
         }
     }
 
@@ -849,6 +941,14 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 IntPtr.Zero,
                 IntPtr.Zero,
                 IntPtr.Zero);
+        }
+
+        internal static void DestroyHostWindow(IntPtr host)
+        {
+            if (IsWindow(host))
+            {
+                DestroyWindow(host);
+            }
         }
 
         internal static long GetWindowStyle(IntPtr window)

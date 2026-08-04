@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -89,6 +90,38 @@ namespace DansToolbox.EditorTools.NativeWindowDock.Tests
             Assert.AreEqual(95, right.Right);
             Assert.AreEqual(70, top.Top);
             Assert.AreEqual(40, bottom.Bottom);
+        }
+
+        [Test]
+        public void FramingPresetNames_AreUniqueAndIgnoreThePresetBeingEdited()
+        {
+            List<NativeWindowDockWindow.CropPreset> presets =
+                new List<NativeWindowDockWindow.CropPreset>
+                {
+                    new NativeWindowDockWindow.CropPreset
+                    {
+                        id = "first",
+                        name = "Bezi Chat"
+                    },
+                    new NativeWindowDockWindow.CropPreset
+                    {
+                        id = "second",
+                        name = "Bezi Chat 2"
+                    }
+                };
+
+            Assert.AreEqual(
+                "Bezi Chat 3",
+                NativeWindowDockWindow.CreateUniqueCropPresetName(
+                    "Bezi Chat",
+                    presets,
+                    null));
+            Assert.AreEqual(
+                "Bezi Chat",
+                NativeWindowDockWindow.CreateUniqueCropPresetName(
+                    "Bezi Chat",
+                    presets,
+                    "first"));
         }
 
         [Test]

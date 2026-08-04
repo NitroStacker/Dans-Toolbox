@@ -4,6 +4,17 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.18.2] - 2026-08-04
+
+### Added
+
+- Add application-specific Native Window Dock framing presets with save, apply, rename/update, and delete controls.
+
+### Fixed
+
+- Prevent intermittent Native Window Dock flashes by removing repaint-timeout visibility pulses and redundant native reposition/redraw calls.
+- Keep attached applications connected by retrying transient container failures, repairing changed native parents and styles, and reconnecting the previous window after Unity script reloads.
+
 ## [1.18.1] - 2026-08-04
 
 ### Fixed

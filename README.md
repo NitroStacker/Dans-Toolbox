@@ -37,7 +37,7 @@ This tracks the repository's `main` branch. When a newer commit is available, se
 For a project that must stay on an exact release, use a version-tagged URL instead:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.18.1
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.18.2
 ```
 
 Tagged installs are intentionally pinned and do not advance when a newer tag is published.
@@ -73,6 +73,13 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - **Tools > Dans Toolbox > Better Scene**
 
 The Toolbox Hub presents tools as a responsive visual gallery with direct All Tools, Workspace, Create, and Integrate filters. It searches names and jobs, remembers favorites and recent tools, and reports which tools are already open. Click a tile to use its recommended dock or position. Retro SFX and Retro VFX automatically join the Inspector-side dock. Native Window Dock opens a numbered full-Editor picker so each new panel can be attached to a specific Unity pane; floating positions remain available from the tile menu. **Close Tool Windows** closes only Dans Toolbox windows and leaves the user's Unity layout untouched.
+
+## Native Window Dock essentials
+
+- Turn on **Frame** and drag the glowing viewport borders to crop the attached application.
+- Enter a preset name and choose **Save** to keep the current frame for that application. Select a preset to apply it; change its name or frame and choose **Update** to edit it, or choose **Delete** to remove it.
+- Framing presets are stored per application window class, so each attached tool can keep its own reusable views.
+- Attached windows remain connected across ordinary Unity script reloads. The dock also repairs applications that try to reset their native parent or window style.
 
 ## Retro VFX essentials
 
@@ -162,7 +169,7 @@ Use semantic versions and matching Git tags. For each release:
 3. Commit the release and create a tag such as `v1.1.0`.
 4. Push both the commit and tag.
 
-Users who installed with `#main` select **Dans Toolbox** in Package Manager and click **Update** to fetch the latest commit from that branch. Users who installed a version tag remain pinned for reproducible builds and update by changing the tag at the end of their Git URL, for example from `#v1.18.0` to `#v1.18.1`.
+Users who installed with `#main` select **Dans Toolbox** in Package Manager and click **Update** to fetch the latest commit from that branch. Users who installed a version tag remain pinned for reproducible builds and update by changing the tag at the end of their Git URL, for example from `#v1.18.1` to `#v1.18.2`.
 
 ## Migrating an existing project
 

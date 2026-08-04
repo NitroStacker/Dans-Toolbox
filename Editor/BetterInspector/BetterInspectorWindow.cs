@@ -1224,14 +1224,18 @@ namespace DansToolbox.EditorTools.BetterInspector
             Type importerType = null;
             foreach (Object target in targets)
             {
+                string path = AssetDatabase.GetAssetPath(target);
+                if (IsPrefabAssetTarget(target, path))
+                {
+                    return targets;
+                }
                 if (AssetDatabase.IsNativeAsset(target))
                 {
                     return targets;
                 }
 
-                string path = AssetDatabase.GetAssetPath(target);
                 AssetImporter importer = string.IsNullOrEmpty(path) ? null : AssetImporter.GetAtPath(path);
-                if (importer == null || IsNativeFormatImporter(importer))
+                if (importer == null || IsNativeFormatImporter(importer) || IsPrefabImporter(importer))
                 {
                     return targets;
                 }
@@ -1250,6 +1254,20 @@ namespace DansToolbox.EditorTools.BetterInspector
         {
             return importer != null &&
                    string.Equals(importer.GetType().Name, "NativeFormatImporter", StringComparison.Ordinal);
+        }
+
+        internal static bool IsPrefabAssetTarget(Object target, string assetPath)
+        {
+            return target is GameObject &&
+                   (PrefabUtility.IsPartOfPrefabAsset(target) ||
+                    (!string.IsNullOrEmpty(assetPath) &&
+                     assetPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        internal static bool IsPrefabImporter(AssetImporter importer)
+        {
+            return importer != null &&
+                   string.Equals(importer.GetType().Name, "PrefabImporter", StringComparison.Ordinal);
         }
 
         internal static List<BetterInspectorAction> GetContextActions(Type type)
@@ -1305,10 +1323,15 @@ namespace DansToolbox.EditorTools.BetterInspector
 
         private Object[] GetTargets()
         {
-            if (cachedTargets != null) return cachedTargets;
+            if (cachedTargets != null && cachedTargets.All(target => target != null)) return cachedTargets;
             Object[] source = targetLocked ? lockedTargets : Selection.objects;
-            cachedTargets = source?.Where(target => target != null).Distinct().ToArray() ?? Array.Empty<Object>();
+            cachedTargets = FilterValidTargets(source);
             return cachedTargets;
+        }
+
+        internal static Object[] FilterValidTargets(Object[] source)
+        {
+            return source?.Where(target => target != null).Distinct().ToArray() ?? Array.Empty<Object>();
         }
 
         private GameObject[] GetGameObjectTargets(Object[] targets)
@@ -1575,7 +1598,8 @@ namespace DansToolbox.EditorTools.BetterInspector
 
         internal static bool AreEditableSceneGameObjects(Object[] targets)
         {
-            return targets.Length > 0 && targets.All(target =>
+            return targets != null && targets.Length > 0 && targets.All(target =>
+                target != null &&
                 target is GameObject gameObject &&
                 !EditorUtility.IsPersistent(gameObject) &&
                 gameObject.scene.IsValid());
@@ -1622,6 +1646,9 @@ namespace DansToolbox.EditorTools.BetterInspector
 
         private void OnObjectsChanged()
         {
+            cachedTargets = null;
+            cachedGameObjectSource = null;
+            cachedGameObjectTargets = null;
             editorsDirty = true;
             diagnosticsDirty = true;
             foreach (BetterInspectorEditorEntry entry in entries) entry.InvalidateReferenceCache();

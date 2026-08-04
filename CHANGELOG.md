@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.22.1] - 2026-08-04
+
+### Fixed
+
+- Inspect prefab assets through their selected `GameObject` targets instead of constructing Unity's internal `PrefabImporterEditor`, preventing prefab selections from producing `NullReferenceException` errors.
+- Purge destroyed objects from Better Inspector's cached and locked selections before repainting, preventing transient `MissingReferenceException` errors after object lifecycle changes.
+
 ## [1.22.0] - 2026-08-04
 
 ### Changed

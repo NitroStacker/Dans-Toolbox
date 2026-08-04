@@ -130,6 +130,18 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void DestroyedSceneGameObject_IsNotTreatedAsEditable()
+        {
+            var sceneObject = new GameObject("Destroyed Scene Object");
+            Object[] targets = { sceneObject };
+            Object.DestroyImmediate(sceneObject);
+
+            Assert.DoesNotThrow(() => BetterInspectorWindow.AreEditableSceneGameObjects(targets));
+            Assert.That(BetterInspectorWindow.AreEditableSceneGameObjects(targets), Is.False);
+            Assert.That(BetterInspectorWindow.FilterValidTargets(targets), Is.Empty);
+        }
+
+        [Test]
         public void AddComponentCatalog_ExcludesTransformAndAbstractTypes()
         {
             var types = BetterInspectorAddComponentPopup.GetAddableTypes().ToArray();
@@ -308,6 +320,33 @@ namespace DansToolbox.Editor.Tests
             }
             finally
             {
+                AssetDatabase.DeleteAsset(path);
+            }
+        }
+
+        [Test]
+        public void PrefabAsset_UsesTheSelectedGameObjectEditorWithoutImporterExceptions()
+        {
+            const string path = "Assets/BetterInspectorPrefabParityTest.prefab";
+            GameObject source = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            UnityEditor.Editor editor = null;
+            try
+            {
+                GameObject prefab = PrefabUtility.SaveAsPrefabAsset(source, path);
+                Assert.That(prefab, Is.Not.Null);
+
+                Object[] editorTargets = BetterInspectorWindow.GetNativeEditorTargets(
+                    new Object[] { prefab });
+
+                Assert.That(editorTargets, Has.Length.EqualTo(1));
+                Assert.That(editorTargets[0], Is.SameAs(prefab));
+                Assert.DoesNotThrow(() => editor = UnityEditor.Editor.CreateEditor(editorTargets));
+                Assert.That(editor, Is.Not.Null);
+            }
+            finally
+            {
+                if (editor != null) Object.DestroyImmediate(editor);
+                Object.DestroyImmediate(source);
                 AssetDatabase.DeleteAsset(path);
             }
         }

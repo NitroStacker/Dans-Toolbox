@@ -4,6 +4,12 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.20.1] - 2026-08-04
+
+### Fixed
+
+- Preview Retro SFX through an in-memory `AudioClip`, avoiding temporary project-asset imports and the Better Project index refreshes they triggered on every audition.
+
 ## [1.20.0] - 2026-08-04
 
 ### Added

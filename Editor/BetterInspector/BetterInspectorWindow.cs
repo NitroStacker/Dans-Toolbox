@@ -43,12 +43,22 @@ namespace DansToolbox.EditorTools.BetterInspector
         private BetterInspectorStyles styles;
         private string editorSignature = string.Empty;
         private bool editorsDirty = true;
+        private bool diagnosticsDirty = true;
+        private bool requiresConstantRepaint;
+        private double nextConstantRepaintCheck;
         private bool navigatingHistory;
         private bool pointerOverContentElement;
         private BetterInspectorEditorEntry pendingComponentContextEntry;
         private int styledThemeRevision = -1;
         [NonSerialized] private Rect lastSearchRect;
         [NonSerialized] private double revealStartedAt;
+        [NonSerialized] private double nextHoverUpdateAt;
+        [NonSerialized] private Object[] cachedTargets;
+        [NonSerialized] private Object[] cachedGameObjectSource;
+        [NonSerialized] private GameObject[] cachedGameObjectTargets;
+        private static int actionStyleRevision = -1;
+        private static GUIStyle iconButtonLabelStyle;
+        private static GUIStyle flatButtonLabelStyle;
 
         [MenuItem(MenuPath, false, 21)]
         internal static void Open()
@@ -122,13 +132,22 @@ namespace DansToolbox.EditorTools.BetterInspector
             {
                 RebuildEditors(force: false);
             }
+            else if (diagnosticsDirty)
+            {
+                RefreshDiagnostics();
+            }
             DansToolboxPalette palette = DansToolboxTheme.Current;
             Rect canvas = new Rect(0f, 0f, position.width, position.height);
             EditorGUI.DrawRect(canvas, palette.Canvas);
 
             if (Event.current.type == EventType.MouseMove)
             {
-                Repaint();
+                double now = EditorApplication.timeSinceStartup;
+                if (now >= nextHoverUpdateAt)
+                {
+                    nextHoverUpdateAt = now + 1d / 60d;
+                    Repaint();
+                }
             }
 
             if (!DansToolboxSettings.IsToolEnabled(DansToolboxTools.BetterInspectorId))
@@ -161,6 +180,20 @@ namespace DansToolbox.EditorTools.BetterInspector
 
         private void Update()
         {
+            double now = EditorApplication.timeSinceStartup;
+            if (requiresConstantRepaint)
+            {
+                Repaint();
+                return;
+            }
+            if (now < nextConstantRepaintCheck) return;
+            nextConstantRepaintCheck = now + 0.5d;
+            requiresConstantRepaint = CheckRequiresConstantRepaint();
+            if (requiresConstantRepaint) Repaint();
+        }
+
+        private bool CheckRequiresConstantRepaint()
+        {
             foreach (BetterInspectorEditorEntry entry in entries)
             {
                 try
@@ -168,8 +201,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                     if ((entry.Editor != null && entry.Editor.RequiresConstantRepaint()) ||
                         (entry.PreviewEditor != null && entry.PreviewEditor.RequiresConstantRepaint()))
                     {
-                        Repaint();
-                        return;
+                        return true;
                     }
                 }
                 catch (Exception)
@@ -177,6 +209,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                     // A native editor can become invalid while Unity imports or reloads assets.
                 }
             }
+            return false;
         }
 
         private void DrawToolbar(Rect rect, DansToolboxPalette palette, Object[] targets)
@@ -305,7 +338,7 @@ namespace DansToolbox.EditorTools.BetterInspector
 
             if (sceneGameObjects)
             {
-                DrawGameObjectHeaderControls(GetGameObjectActionColumn(rect), targets.Cast<GameObject>().ToArray(), palette);
+                DrawGameObjectHeaderControls(GetGameObjectActionColumn(rect), GetGameObjectTargets(targets), palette);
             }
 
             if (DrawIconButton(
@@ -329,7 +362,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             {
                 PopupWindow.Show(
                     GetAddComponentButtonRect(rect),
-                    new BetterInspectorAddComponentPopup(targets.Cast<GameObject>().ToArray(), OnObjectsChanged));
+                    new BetterInspectorAddComponentPopup(GetGameObjectTargets(targets), OnObjectsChanged));
             }
         }
 
@@ -664,7 +697,13 @@ namespace DansToolbox.EditorTools.BetterInspector
                 EditorGUIUtility.labelWidth = Mathf.Clamp(position.width * 0.36f, 112f, 210f);
                 try
                 {
+                    EditorGUI.BeginChangeCheck();
                     DrawEditorBody(entry);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        entry.InvalidateReferenceCache();
+                        diagnosticsDirty = true;
+                    }
                     DrawContextActions(entry, palette);
                     DrawReferenceSummary(entry, palette);
                 }
@@ -767,8 +806,8 @@ namespace DansToolbox.EditorTools.BetterInspector
 
         private void DrawReferenceSummary(BetterInspectorEditorEntry entry, DansToolboxPalette palette)
         {
-            List<SerializedProperty> references = GetObjectReferenceProperties(entry.Targets);
-            if (references.Count == 0)
+            entry.EnsureReferenceCache();
+            if (entry.ReferenceCount == 0)
             {
                 return;
             }
@@ -784,7 +823,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 styles.Foldout);
             GUI.Label(
                 new Rect(header.x + 28f, header.y + 2f, header.width - 36f, 20f),
-                "REFERENCES  " + MetadataSeparator + "  " + references.Count,
+                "REFERENCES  " + MetadataSeparator + "  " + entry.ReferenceCount,
                 styles.SectionLabel);
             if (GUI.Button(header, GUIContent.none, GUIStyle.none))
             {
@@ -805,47 +844,19 @@ namespace DansToolbox.EditorTools.BetterInspector
             }
 
             EditorGUI.indentLevel++;
-            foreach (SerializedProperty reference in references)
+            SerializedObject referenceObject = entry.ReferenceSerializedObject;
+            referenceObject?.UpdateIfRequiredOrScript();
+            foreach (string propertyPath in entry.ReferencePaths)
             {
-                EditorGUILayout.PropertyField(reference, false);
+                SerializedProperty reference = referenceObject?.FindProperty(propertyPath);
+                if (reference != null) EditorGUILayout.PropertyField(reference, false);
             }
             EditorGUI.indentLevel--;
-            references[0].serializedObject.ApplyModifiedProperties();
-        }
-
-        private static List<SerializedProperty> GetObjectReferenceProperties(Object[] targets)
-        {
-            var result = new List<SerializedProperty>();
-            if (targets == null || targets.Length == 0 || targets.Any(target => target == null))
+            if (referenceObject != null && referenceObject.ApplyModifiedProperties())
             {
-                return result;
+                entry.InvalidateReferenceCache();
+                diagnosticsDirty = true;
             }
-
-            try
-            {
-                var serializedObject = new SerializedObject(targets);
-                serializedObject.UpdateIfRequiredOrScript();
-                SerializedProperty property = serializedObject.GetIterator();
-                bool enterChildren = true;
-                while (property.NextVisible(enterChildren))
-                {
-                    enterChildren = true;
-                    if (property.name == "m_Script" ||
-                        property.propertyType != SerializedPropertyType.ObjectReference ||
-                        (!property.hasMultipleDifferentValues && property.objectReferenceValue == null))
-                    {
-                        continue;
-                    }
-
-                    result.Add(property.Copy());
-                    enterChildren = false;
-                }
-            }
-            catch (Exception)
-            {
-                // Some native object types do not expose a SerializedObject property tree.
-            }
-            return result;
         }
 
         private static bool CanDrawPreview(BetterInspectorEditorEntry entry)
@@ -973,12 +984,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             if (issues.Count == 0)
             {
                 GUILayout.Space(18f);
-                GUIStyle clean = new GUIStyle(styles.HeaderTitle)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = palette.Success }
-                };
-                GUILayout.Label("✓  NO ISSUES FOUND", clean, GUILayout.Height(34f));
+                GUILayout.Label("✓  NO ISSUES FOUND", styles.Clean, GUILayout.Height(34f));
                 GUILayout.Label("Serialized references and component scripts look healthy.", styles.CenteredMuted);
                 return;
             }
@@ -1156,6 +1162,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             if (!force && string.Equals(signature, editorSignature, StringComparison.Ordinal))
             {
                 editorsDirty = false;
+                RefreshDiagnostics();
                 return;
             }
 
@@ -1163,6 +1170,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             editorsDirty = false;
             DisposeEditors();
             issues = BetterInspectorDiagnostics.Scan(targets);
+            diagnosticsDirty = false;
             if (targets.Length == 0)
             {
                 return;
@@ -1178,6 +1186,8 @@ namespace DansToolbox.EditorTools.BetterInspector
                         entries.Add(new BetterInspectorEditorEntry(group.Key, group.Type, group.Components, editor));
                     }
                 }
+                requiresConstantRepaint = CheckRequiresConstantRepaint();
+                nextConstantRepaintCheck = EditorApplication.timeSinceStartup + 0.5d;
                 return;
             }
 
@@ -1199,6 +1209,8 @@ namespace DansToolbox.EditorTools.BetterInspector
                         previewEditor));
                 }
             }
+            requiresConstantRepaint = CheckRequiresConstantRepaint();
+            nextConstantRepaintCheck = EditorApplication.timeSinceStartup + 0.5d;
         }
 
         internal static Object[] GetNativeEditorTargets(Object[] targets)
@@ -1293,8 +1305,19 @@ namespace DansToolbox.EditorTools.BetterInspector
 
         private Object[] GetTargets()
         {
+            if (cachedTargets != null) return cachedTargets;
             Object[] source = targetLocked ? lockedTargets : Selection.objects;
-            return source?.Where(target => target != null).Distinct().ToArray() ?? Array.Empty<Object>();
+            cachedTargets = source?.Where(target => target != null).Distinct().ToArray() ?? Array.Empty<Object>();
+            return cachedTargets;
+        }
+
+        private GameObject[] GetGameObjectTargets(Object[] targets)
+        {
+            if (ReferenceEquals(cachedGameObjectSource, targets) && cachedGameObjectTargets != null)
+                return cachedGameObjectTargets;
+            cachedGameObjectSource = targets;
+            cachedGameObjectTargets = targets?.OfType<GameObject>().ToArray() ?? Array.Empty<GameObject>();
+            return cachedGameObjectTargets;
         }
 
         private void ToggleLock()
@@ -1310,6 +1333,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 lockedTargets = Selection.objects.Where(target => target != null).ToArray();
                 targetLocked = lockedTargets.Length > 0;
             }
+            cachedTargets = null;
             RebuildEditors(force: true);
             Repaint();
         }
@@ -1351,6 +1375,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             historyIndex = next;
             Selection.activeObject = history[next];
             navigatingHistory = false;
+            cachedTargets = null;
             RebuildEditors(force: true);
             Repaint();
         }
@@ -1590,15 +1615,24 @@ namespace DansToolbox.EditorTools.BetterInspector
                 return;
             }
             RecordHistory(Selection.activeObject);
+            cachedTargets = null;
             RebuildEditors(force: true);
             Repaint();
         }
 
         private void OnObjectsChanged()
         {
-            editorSignature = string.Empty;
             editorsDirty = true;
+            diagnosticsDirty = true;
+            foreach (BetterInspectorEditorEntry entry in entries) entry.InvalidateReferenceCache();
             Repaint();
+        }
+
+        private void RefreshDiagnostics()
+        {
+            if (!diagnosticsDirty) return;
+            issues = BetterInspectorDiagnostics.Scan(GetTargets());
+            diagnosticsDirty = false;
         }
 
         private void OnConsoleDiagnosticsChanged()
@@ -1626,6 +1660,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 }
             }
             entries.Clear();
+            requiresConstantRepaint = false;
         }
 
         private void EnsureStyles()
@@ -1686,7 +1721,8 @@ namespace DansToolbox.EditorTools.BetterInspector
                 {
                     normal = { background = MakeTexture(palette.Canvas) },
                     padding = new RectOffset(1, 1, 1, 1)
-                }
+                },
+                Clean = CenteredLabel(palette.Success, 11, FontStyle.Bold)
             };
             styles.ObjectName.clipping = TextClipping.Clip;
             styles.Muted.wordWrap = true;
@@ -1740,13 +1776,11 @@ namespace DansToolbox.EditorTools.BetterInspector
             DansToolboxPalette palette,
             bool active = false)
         {
+            EnsureActionStyles();
             bool hovered = enabled && rect.Contains(Event.current.mousePosition);
             EditorGUI.DrawRect(rect, active ? palette.AccentSoft : hovered ? palette.Raised : palette.Inset);
-            GUI.Label(rect, new GUIContent(label, tooltip), new GUIStyle(EditorStyles.miniBoldLabel)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = !enabled ? palette.Muted : active || hovered ? palette.Accent : palette.Text }
-            });
+            iconButtonLabelStyle.normal.textColor = !enabled ? palette.Muted : active || hovered ? palette.Accent : palette.Text;
+            GUI.Label(rect, new GUIContent(label, tooltip), iconButtonLabelStyle);
             EditorGUI.BeginDisabledGroup(!enabled);
             bool clicked = GUI.Button(rect, GUIContent.none, GUIStyle.none);
             EditorGUI.EndDisabledGroup();
@@ -1760,18 +1794,30 @@ namespace DansToolbox.EditorTools.BetterInspector
             bool accent,
             DansToolboxPalette palette)
         {
+            EnsureActionStyles();
             bool hovered = rect.Contains(Event.current.mousePosition);
             EditorGUI.DrawRect(rect, accent ? palette.Accent : hovered ? palette.BorderStrong : palette.Border);
             EditorGUI.DrawRect(
                 new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f),
                 accent ? palette.AccentSoft : hovered ? palette.Raised : palette.Inset);
-            GUI.Label(rect, new GUIContent(label, tooltip), new GUIStyle(EditorStyles.miniBoldLabel)
+            flatButtonLabelStyle.normal.textColor = palette.Text;
+            GUI.Label(rect, new GUIContent(label, tooltip), flatButtonLabelStyle);
+            return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+        }
+
+        private static void EnsureActionStyles()
+        {
+            if (actionStyleRevision == DansToolboxTheme.Revision && iconButtonLabelStyle != null) return;
+            actionStyleRevision = DansToolboxTheme.Revision;
+            iconButtonLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter
+            };
+            flatButtonLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 8,
-                normal = { textColor = palette.Text }
-            });
-            return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+                fontSize = 8
+            };
         }
     }
 
@@ -1792,6 +1838,9 @@ namespace DansToolbox.EditorTools.BetterInspector
 
     internal sealed class BetterInspectorEditorEntry
     {
+        private SerializedObject referenceSerializedObject;
+        private List<string> referencePaths;
+        private bool referenceCacheValid;
         internal BetterInspectorEditorEntry(
             string key,
             Type type,
@@ -1815,6 +1864,46 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal UnityEditor.Editor PreviewEditor { get; }
         internal IReadOnlyList<BetterInspectorAction> Actions { get; }
         internal string Title { get; }
+        internal SerializedObject ReferenceSerializedObject => referenceSerializedObject;
+        internal IReadOnlyList<string> ReferencePaths => referencePaths ?? (IReadOnlyList<string>)Array.Empty<string>();
+        internal int ReferenceCount => referencePaths?.Count ?? 0;
+
+        internal void EnsureReferenceCache()
+        {
+            if (referenceCacheValid) return;
+            referenceCacheValid = true;
+            referencePaths = new List<string>();
+            referenceSerializedObject = null;
+            if (Targets == null || Targets.Length == 0 || Targets.Any(target => target == null)) return;
+            try
+            {
+                referenceSerializedObject = new SerializedObject(Targets);
+                referenceSerializedObject.UpdateIfRequiredOrScript();
+                SerializedProperty property = referenceSerializedObject.GetIterator();
+                bool enterChildren = true;
+                while (property.NextVisible(enterChildren))
+                {
+                    enterChildren = true;
+                    if (property.name == "m_Script" ||
+                        property.propertyType != SerializedPropertyType.ObjectReference ||
+                        (!property.hasMultipleDifferentValues && property.objectReferenceValue == null)) continue;
+                    referencePaths.Add(property.propertyPath);
+                    enterChildren = false;
+                }
+            }
+            catch (Exception)
+            {
+                referenceSerializedObject = null;
+                referencePaths.Clear();
+            }
+        }
+
+        internal void InvalidateReferenceCache()
+        {
+            referenceCacheValid = false;
+            referenceSerializedObject = null;
+            referencePaths?.Clear();
+        }
 
         internal UnityEditor.Editor GetPreviewEditor()
         {
@@ -1896,5 +1985,6 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal GUIStyle SmallButton;
         internal GUIStyle PrimaryButton;
         internal GUIStyle PreviewBackground;
+        internal GUIStyle Clean;
     }
 }

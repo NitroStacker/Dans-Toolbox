@@ -11,8 +11,11 @@ namespace DansToolbox.EditorTools.RetroVfx
     {
         private PreviewRenderUtility preview;
         private GameObject root;
+        private ParticleSystem[] particleSystems = Array.Empty<ParticleSystem>();
+        private Light effectLight;
         private int recipeHash = int.MinValue;
         private double lastTick;
+        private float duration = 1f;
         private float time;
         private float zoom = 1f;
         private bool playing = true;
@@ -28,10 +31,9 @@ namespace DansToolbox.EditorTools.RetroVfx
                 return false;
             }
 
-            int currentHash = recipe.ComputeStableHash();
-            if (currentHash != recipeHash)
+            if (root == null || recipeHash == int.MinValue)
             {
-                Rebuild(recipe, currentHash);
+                Rebuild(recipe, recipe.ComputeStableHash());
                 return true;
             }
 
@@ -43,22 +45,26 @@ namespace DansToolbox.EditorTools.RetroVfx
                 return false;
             }
 
-            float duration = RetroVfxEffectBuilder.CalculateDuration(recipe);
+            float previousTime = time;
             time += delta;
             if (time > duration)
             {
                 if (recipe.loopPreview)
                 {
                     time %= duration;
+                    SimulateAbsolute(time);
                 }
                 else
                 {
                     time = duration;
+                    SimulateDelta(Mathf.Max(0f, duration - previousTime));
                     playing = false;
                 }
             }
-
-            Simulate(time);
+            else
+            {
+                SimulateDelta(delta);
+            }
             return true;
         }
 
@@ -68,10 +74,9 @@ namespace DansToolbox.EditorTools.RetroVfx
             HandleZoom(rect);
             if (recipe != null)
             {
-                int currentHash = recipe.ComputeStableHash();
-                if (currentHash != recipeHash)
+                if (root == null || recipeHash == int.MinValue)
                 {
-                    Rebuild(recipe, currentHash);
+                    Rebuild(recipe, recipe.ComputeStableHash());
                 }
             }
 
@@ -94,21 +99,16 @@ namespace DansToolbox.EditorTools.RetroVfx
             preview.lights[0].transform.rotation = Quaternion.Euler(35f, 35f, 0f);
             preview.lights[1].intensity = 0.65f;
             preview.ambientColor = new Color(0.18f, 0.18f, 0.2f);
-            if (root != null && recipe != null && recipe.advanced.lightEnabled)
+            if (effectLight != null && recipe != null && recipe.advanced.lightEnabled)
             {
-                Light light = root.GetComponentInChildren<Light>(true);
-                if (light != null)
-                {
-                    float duration = Mathf.Max(0.01f, RetroVfxEffectBuilder.CalculateDuration(recipe));
-                    float normalized = Mathf.Clamp01(time / duration);
-                    light.intensity = recipe.advanced.lightIntensity *
-                                      Mathf.Max(0f, recipe.advanced.lightIntensityOverLifetime.Evaluate(normalized));
-                }
+                float normalized = Mathf.Clamp01(time / duration);
+                effectLight.intensity = recipe.advanced.lightIntensity *
+                                        Mathf.Max(0f, recipe.advanced.lightIntensityOverLifetime.Evaluate(normalized));
             }
             camera.Render();
             preview.EndAndDrawPreview(rect);
 
-            RetroVfxGui.DrawPreviewOverlay(rect, time, recipe == null ? 1f : RetroVfxEffectBuilder.CalculateDuration(recipe), zoom);
+            RetroVfxGui.DrawPreviewOverlay(rect, time, duration, zoom);
         }
 
         internal void TogglePlayback(RetroVfxRecipe recipe)
@@ -119,11 +119,10 @@ namespace DansToolbox.EditorTools.RetroVfx
                 return;
             }
 
-            float duration = recipe == null ? 1f : RetroVfxEffectBuilder.CalculateDuration(recipe);
             if (time >= duration - 0.001f)
             {
                 time = 0f;
-                Simulate(0f);
+                SimulateAbsolute(0f);
             }
             playing = true;
             lastTick = EditorApplication.timeSinceStartup;
@@ -134,21 +133,21 @@ namespace DansToolbox.EditorTools.RetroVfx
             time = 0f;
             playing = true;
             lastTick = EditorApplication.timeSinceStartup;
-            Simulate(0f);
+            SimulateAbsolute(0f);
         }
 
         internal void Stop()
         {
             playing = false;
             time = 0f;
-            Simulate(0f);
+            SimulateAbsolute(0f);
         }
 
         internal void Scrub(float value)
         {
             time = Mathf.Max(0f, value);
             playing = false;
-            Simulate(time);
+            SimulateAbsolute(time);
         }
 
         internal void Invalidate()
@@ -179,25 +178,31 @@ namespace DansToolbox.EditorTools.RetroVfx
             DestroyRoot();
             root = RetroVfxEffectBuilder.Build(recipe, true);
             preview.AddSingleGO(root);
+            particleSystems = root.GetComponentsInChildren<ParticleSystem>(true);
+            effectLight = root.GetComponentInChildren<Light>(true);
+            duration = Mathf.Max(0.01f, RetroVfxEffectBuilder.CalculateDuration(recipe));
             recipeHash = currentHash;
             time = 0f;
             playing = true;
             lastTick = EditorApplication.timeSinceStartup;
-            Simulate(0f);
+            SimulateAbsolute(0f);
         }
 
-        private void Simulate(float targetTime)
+        private void SimulateAbsolute(float targetTime)
         {
-            if (root == null)
+            foreach (ParticleSystem system in particleSystems)
             {
-                return;
+                if (system != null) system.Simulate(targetTime, false, true, false);
             }
+        }
 
-            foreach (ParticleSystem system in root.GetComponentsInChildren<ParticleSystem>(true))
+        private void SimulateDelta(float delta)
+        {
+            if (delta <= 0f) return;
+            foreach (ParticleSystem system in particleSystems)
             {
-                system.Simulate(targetTime, false, true, false);
+                if (system != null) system.Simulate(delta, false, false, false);
             }
-
         }
 
         private void HandleZoom(Rect rect)
@@ -243,6 +248,8 @@ namespace DansToolbox.EditorTools.RetroVfx
                 }
             }
             root = null;
+            particleSystems = Array.Empty<ParticleSystem>();
+            effectLight = null;
         }
     }
 }

@@ -77,6 +77,31 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void PixelEngine_RegionCompositeMatchesFullCompositeWithoutTouchingOutsidePixels()
+        {
+            ArtboardAsset asset = ArtboardAsset.CreateDocument(8, 8, ArtboardMode.PixelArt);
+            try
+            {
+                Color32[] layer = ArtboardPixelEngine.Blank(8, 8);
+                layer[2 * 8 + 2] = new Color32(255, 20, 10, 255);
+                Color32[] destination = ArtboardPixelEngine.Composite(asset, 0, (_, __) => layer, false);
+                Color32 outsideBefore = destination[2 * 8 + 2];
+
+                layer[5 * 8 + 5] = new Color32(10, 40, 255, 180);
+                ArtboardPixelEngine.CompositeRegion(
+                    asset, 0, (_, __) => layer, destination, new RectInt(5, 5, 1, 1), false);
+                Color32[] expected = ArtboardPixelEngine.Composite(asset, 0, (_, __) => layer, false);
+
+                Assert.That(destination[5 * 8 + 5], Is.EqualTo(expected[5 * 8 + 5]));
+                Assert.That(destination[2 * 8 + 2], Is.EqualTo(outsideBefore));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(asset);
+            }
+        }
+
+        [Test]
         public void BrushIndicator_MatchesTheStampedPixelFootprintAndStaysReadable()
         {
             Rect artboard = new Rect(20f, 30f, 80f, 80f);

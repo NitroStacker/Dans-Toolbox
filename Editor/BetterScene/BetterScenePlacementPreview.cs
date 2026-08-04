@@ -19,12 +19,15 @@ namespace DansToolbox.EditorTools.BetterScene
         private static readonly List<RenderPart> parts = new List<RenderPart>();
         private static readonly Dictionary<Sprite, Mesh> spriteMeshes = new Dictionary<Sprite, Mesh>();
         private static UnityEngine.Object cachedAsset;
+        private static string cachedAssetPath = string.Empty;
+        private static Hash128 cachedDependencyHash;
+        private static bool dependenciesMayHaveChanged;
         private static Material ghostMaterial;
         private static Material spriteMaterial;
 
         static BetterScenePlacementPreview()
         {
-            EditorApplication.projectChanged += Invalidate;
+            EditorApplication.projectChanged += MarkDependenciesChanged;
             AssemblyReloadEvents.beforeAssemblyReload += Cleanup;
             EditorApplication.quitting += Cleanup;
         }
@@ -108,6 +111,9 @@ namespace DansToolbox.EditorTools.BetterScene
             spriteMeshes.Clear();
             parts.Clear();
             cachedAsset = null;
+            cachedAssetPath = string.Empty;
+            cachedDependencyHash = default;
+            dependenciesMayHaveChanged = false;
         }
 
         private static void DrawBuiltInPipelinePreview(Camera camera, Matrix4x4 rootMatrix)
@@ -216,9 +222,19 @@ namespace DansToolbox.EditorTools.BetterScene
 
         private static void EnsureAsset(UnityEngine.Object asset)
         {
-            if (asset == cachedAsset) return;
+            if (asset == cachedAsset)
+            {
+                if (!dependenciesMayHaveChanged || string.IsNullOrEmpty(cachedAssetPath)) return;
+                dependenciesMayHaveChanged = false;
+                Hash128 currentHash = AssetDatabase.GetAssetDependencyHash(cachedAssetPath);
+                if (currentHash == cachedDependencyHash) return;
+            }
             Invalidate();
             cachedAsset = asset;
+            cachedAssetPath = asset == null ? string.Empty : AssetDatabase.GetAssetPath(asset);
+            cachedDependencyHash = string.IsNullOrEmpty(cachedAssetPath)
+                ? default
+                : AssetDatabase.GetAssetDependencyHash(cachedAssetPath);
             if (asset is Mesh mesh)
             {
                 AddPart(mesh, Matrix4x4.identity, null);
@@ -357,6 +373,11 @@ namespace DansToolbox.EditorTools.BetterScene
                 Shader shader = Shader.Find("Sprites/Default");
                 if (shader != null) spriteMaterial = CreateMaterial(shader);
             }
+        }
+
+        private static void MarkDependenciesChanged()
+        {
+            dependenciesMayHaveChanged = true;
         }
 
         private static Material CreateMaterial(Shader shader)

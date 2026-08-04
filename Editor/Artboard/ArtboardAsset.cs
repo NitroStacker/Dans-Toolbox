@@ -144,6 +144,7 @@ namespace DansToolbox.EditorTools.Artboard
         [SerializeField, Range(1, 16)] private int exportScale = 4;
         [SerializeField] private List<ArtboardLayer> layers = new List<ArtboardLayer>();
         [SerializeField] private List<ArtboardFrame> frames = new List<ArtboardFrame>();
+        [NonSerialized] private bool integrityValid;
 
         public int Width => width;
         public int Height => height;
@@ -245,6 +246,7 @@ namespace DansToolbox.EditorTools.Artboard
 
         public void EnsureIntegrity()
         {
+            if (integrityValid) return;
             width = Mathf.Clamp(width, MinDimension, MaxDimension);
             height = Mathf.Clamp(height, MinDimension, MaxDimension);
             framesPerSecond = Mathf.Clamp(framesPerSecond, 1, 60);
@@ -258,10 +260,17 @@ namespace DansToolbox.EditorTools.Artboard
             frames.RemoveAll(frame => frame == null);
             if (frames.Count == 0) frames.Add(ArtboardFrame.Create(layers));
             foreach (ArtboardFrame frame in frames) frame.EnsureCels(layers);
+            integrityValid = true;
+        }
+
+        internal void InvalidateIntegrity()
+        {
+            integrityValid = false;
         }
 
         private void OnValidate()
         {
+            integrityValid = false;
             EnsureIntegrity();
         }
     }

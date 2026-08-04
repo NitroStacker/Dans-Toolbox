@@ -15,10 +15,12 @@ namespace DansToolbox.EditorTools.BetterConsole
         private static bool dirty;
         private static bool saveWarningIssued;
         private static double nextSaveAt;
+        private static readonly HashSet<int> nativeLineIndexes = new HashSet<int>();
 
         static BetterConsoleStore()
         {
             data = Load();
+            RebuildNativeLineIndex();
             EnsureEditorSession();
             EditorApplication.update += Update;
             AssemblyReloadEvents.beforeAssemblyReload += SaveNow;
@@ -36,10 +38,38 @@ namespace DansToolbox.EditorTools.BetterConsole
             if (entry == null) return;
             BetterConsoleSession session = PrepareEntry(entry);
             data.entries.Add(entry);
+            if (entry.nativeLineIndex != 0) nativeLineIndexes.Add(entry.nativeLineIndex);
             Increment(session, entry.severity);
+            int overflow = data.entries.Count - BetterConsoleSettings.MaxEntries;
+            if (overflow > 0)
+            {
+                data.entries.RemoveRange(0, overflow);
+                RebuildNativeLineIndex();
+            }
+            MarkChanged();
+        }
+
+        public static void AddRange(IReadOnlyList<BetterConsoleEntry> entries)
+        {
+            if (entries == null || entries.Count == 0) return;
+            int added = 0;
+            foreach (BetterConsoleEntry entry in entries)
+            {
+                if (entry == null) continue;
+                BetterConsoleSession session = PrepareEntry(entry);
+                data.entries.Add(entry);
+                if (entry.nativeLineIndex != 0) nativeLineIndexes.Add(entry.nativeLineIndex);
+                Increment(session, entry.severity);
+                added++;
+            }
+            if (added == 0) return;
 
             int overflow = data.entries.Count - BetterConsoleSettings.MaxEntries;
-            if (overflow > 0) data.entries.RemoveRange(0, overflow);
+            if (overflow > 0)
+            {
+                data.entries.RemoveRange(0, overflow);
+                RebuildNativeLineIndex();
+            }
             MarkChanged();
         }
 
@@ -48,12 +78,17 @@ namespace DansToolbox.EditorTools.BetterConsole
             IReadOnlyList<BetterConsoleEntry> snapshot = nativeEntries ?? Array.Empty<BetterConsoleEntry>();
             List<BetterConsoleEntry> previous = new List<BetterConsoleEntry>(data.entries);
             bool[] used = new bool[previous.Count];
+            Dictionary<string, Queue<int>> lineMatches = BuildNativeMatchIndex(previous, NativeLineKey);
+            Dictionary<string, Queue<int>> exactMatches = BuildNativeMatchIndex(previous, ExactKey);
+            Dictionary<string, Queue<int>> messageMatches = BuildNativeMatchIndex(previous, MessageKey);
             List<BetterConsoleEntry> reconciled = new List<BetterConsoleEntry>(snapshot.Count);
 
             foreach (BetterConsoleEntry native in snapshot)
             {
                 if (native == null) continue;
-                int match = FindNativeMatch(previous, used, native);
+                int match = TakeNativeMatch(lineMatches, NativeLineKey(native), used);
+                if (match < 0) match = TakeNativeMatch(exactMatches, ExactKey(native), used);
+                if (match < 0) match = TakeNativeMatch(messageMatches, MessageKey(native), used);
                 if (match >= 0)
                 {
                     BetterConsoleEntry existing = previous[match];
@@ -72,6 +107,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             if (overflow > 0) reconciled.RemoveRange(0, overflow);
             data.entries.Clear();
             data.entries.AddRange(reconciled);
+            RebuildNativeLineIndex();
             RecalculateSessionCounts();
             MarkChanged();
         }
@@ -183,6 +219,7 @@ namespace DansToolbox.EditorTools.BetterConsole
         public static void Clear()
         {
             data.entries.Clear();
+            nativeLineIndexes.Clear();
             foreach (BetterConsoleSession session in data.sessions)
             {
                 session.logs = 0;
@@ -195,7 +232,7 @@ namespace DansToolbox.EditorTools.BetterConsole
 
         public static bool ContainsNativeLine(int nativeLineIndex)
         {
-            return nativeLineIndex != 0 && data.entries.Any(entry => entry.nativeLineIndex == nativeLineIndex);
+            return nativeLineIndex != 0 && nativeLineIndexes.Contains(nativeLineIndex);
         }
 
         public static void SaveNow()
@@ -270,7 +307,10 @@ namespace DansToolbox.EditorTools.BetterConsole
         {
             entry.id = data.nextEntryId++;
             if (entry.utcTicks <= 0) entry.utcTicks = DateTime.UtcNow.Ticks;
-            BetterConsoleSession session = ActiveSession ?? EnsureEditorSession();
+            BetterConsoleSession session = string.IsNullOrEmpty(entry.sessionId)
+                ? ActiveSession ?? EnsureEditorSession()
+                : data.sessions.FirstOrDefault(item => item != null && item.id == entry.sessionId)
+                  ?? ActiveSession ?? EnsureEditorSession();
             if (string.IsNullOrEmpty(entry.sessionId)) entry.sessionId = session.id;
             if (string.IsNullOrEmpty(entry.sessionLabel)) entry.sessionLabel = session.label;
             entry.sessionKind = session.kind;
@@ -284,45 +324,56 @@ namespace DansToolbox.EditorTools.BetterConsole
             return session;
         }
 
-        private static int FindNativeMatch(
+        private static Dictionary<string, Queue<int>> BuildNativeMatchIndex(
             IReadOnlyList<BetterConsoleEntry> entries,
-            IReadOnlyList<bool> used,
-            BetterConsoleEntry candidate)
+            Func<BetterConsoleEntry, string> keyFor)
         {
-            if (candidate.nativeLineIndex != 0)
-            {
-                for (int index = 0; index < entries.Count; index++)
-                {
-                    BetterConsoleEntry existing = entries[index];
-                    if (!used[index] &&
-                        existing.nativeLineIndex == candidate.nativeLineIndex &&
-                        existing.severity == candidate.severity &&
-                        string.Equals(existing.message, candidate.message, StringComparison.Ordinal))
-                    {
-                        return index;
-                    }
-                }
-            }
-
+            Dictionary<string, Queue<int>> result = new Dictionary<string, Queue<int>>(StringComparer.Ordinal);
             for (int index = 0; index < entries.Count; index++)
             {
-                BetterConsoleEntry existing = entries[index];
-                if (used[index] || existing.severity != candidate.severity) continue;
-                if (string.Equals(existing.message, candidate.message, StringComparison.Ordinal) &&
-                    string.Equals(existing.stackTrace, candidate.stackTrace, StringComparison.Ordinal))
+                BetterConsoleEntry entry = entries[index];
+                string key = keyFor(entry);
+                if (string.IsNullOrEmpty(key)) continue;
+                if (!result.TryGetValue(key, out Queue<int> queue))
                 {
-                    return index;
+                    queue = new Queue<int>();
+                    result.Add(key, queue);
                 }
+                queue.Enqueue(index);
             }
+            return result;
+        }
 
-            for (int index = 0; index < entries.Count; index++)
+        private static int TakeNativeMatch(
+            IReadOnlyDictionary<string, Queue<int>> index,
+            string key,
+            IReadOnlyList<bool> used)
+        {
+            if (string.IsNullOrEmpty(key) || !index.TryGetValue(key, out Queue<int> queue)) return -1;
+            while (queue.Count > 0)
             {
-                BetterConsoleEntry existing = entries[index];
-                if (used[index] || existing.severity != candidate.severity) continue;
-                if (string.Equals(existing.message, candidate.message, StringComparison.Ordinal)) return index;
+                int candidate = queue.Dequeue();
+                if (!used[candidate]) return candidate;
             }
-
             return -1;
+        }
+
+        private static string NativeLineKey(BetterConsoleEntry entry)
+        {
+            return entry == null || entry.nativeLineIndex == 0
+                ? string.Empty
+                : entry.nativeLineIndex + "\u001f" + (int)entry.severity + "\u001f" + entry.message;
+        }
+
+        private static string ExactKey(BetterConsoleEntry entry)
+        {
+            return entry == null ? string.Empty :
+                (int)entry.severity + "\u001f" + entry.message + "\u001f" + entry.stackTrace;
+        }
+
+        private static string MessageKey(BetterConsoleEntry entry)
+        {
+            return entry == null ? string.Empty : (int)entry.severity + "\u001f" + entry.message;
         }
 
         private static void MergeNativeMetadata(BetterConsoleEntry existing, BetterConsoleEntry native)
@@ -362,6 +413,15 @@ namespace DansToolbox.EditorTools.BetterConsole
             Revision++;
             nextSaveAt = EditorApplication.timeSinceStartup + SaveDelaySeconds;
             Changed?.Invoke();
+        }
+
+        private static void RebuildNativeLineIndex()
+        {
+            nativeLineIndexes.Clear();
+            foreach (BetterConsoleEntry entry in data.entries)
+            {
+                if (entry != null && entry.nativeLineIndex != 0) nativeLineIndexes.Add(entry.nativeLineIndex);
+            }
         }
 
         private static void TrimSessions()

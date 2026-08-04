@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using DansToolbox.Editor;
 using UnityEditor;
 using UnityEngine;
@@ -11,6 +12,8 @@ namespace DansToolbox.EditorTools.Artboard
         private static GUIStyle section;
         private static GUIStyle button;
         private static GUIStyle centered;
+        private static readonly Dictionary<ulong, Texture2D> checkerTextures = new Dictionary<ulong, Texture2D>();
+        private static readonly Dictionary<int, Texture2D> dotTextures = new Dictionary<int, Texture2D>();
         private static int revision = -1;
 
         internal static GUIStyle Label { get { Ensure(); return label; } }
@@ -41,25 +44,43 @@ namespace DansToolbox.EditorTools.Artboard
             Color outline = active || primary ? palette.AccentHover : palette.Border;
             EditorGUI.DrawRect(rect, fill);
             Border(rect, outline);
-            GUIStyle style = new GUIStyle(button)
-            {
-                normal = { textColor = primary ? Color.white : active ? palette.Text : palette.Text }
-            };
-            return GUI.Button(rect, new GUIContent(text, tooltip), style);
+            Color previous = GUI.contentColor;
+            GUI.contentColor = primary ? Color.white : palette.Text;
+            bool clicked = GUI.Button(rect, new GUIContent(text, tooltip), button);
+            GUI.contentColor = previous;
+            return clicked;
         }
 
         internal static void Checker(Rect rect, float size, Color a, Color b)
         {
             size = Mathf.Max(2f, size);
-            EditorGUI.DrawRect(rect, a);
-            int columns = Mathf.CeilToInt(rect.width / size);
-            int rows = Mathf.CeilToInt(rect.height / size);
-            for (int y = 0; y < rows; y++)
-                for (int x = 0; x < columns; x++)
-                    if (((x + y) & 1) != 0)
-                        EditorGUI.DrawRect(new Rect(rect.x + x * size, rect.y + y * size,
-                            Mathf.Min(size, rect.xMax - (rect.x + x * size)),
-                            Mathf.Min(size, rect.yMax - (rect.y + y * size))), b);
+            Texture2D texture = GetCheckerTexture(a, b);
+            GUI.DrawTextureWithTexCoords(rect, texture,
+                new Rect(0f, 0f, rect.width / (size * 2f), rect.height / (size * 2f)));
+        }
+
+        internal static void DotPattern(Rect rect, float spacing, Color color)
+        {
+            int size = Mathf.Max(2, Mathf.RoundToInt(spacing));
+            Color32 byteColor = color;
+            int key = size * 397 ^ Pack(byteColor);
+            if (!dotTextures.TryGetValue(key, out Texture2D texture) || texture == null)
+            {
+                texture = new Texture2D(size, size, TextureFormat.RGBA32, false, true)
+                {
+                    hideFlags = HideFlags.HideAndDontSave,
+                    filterMode = FilterMode.Point,
+                    wrapMode = TextureWrapMode.Repeat,
+                    name = "Artboard Dot Pattern"
+                };
+                Color32[] pixels = new Color32[size * size];
+                pixels[0] = byteColor;
+                texture.SetPixels32(pixels);
+                texture.Apply(false, true);
+                dotTextures[key] = texture;
+            }
+            GUI.DrawTextureWithTexCoords(rect, texture,
+                new Rect(0f, 0f, rect.width / size, rect.height / size));
         }
 
         internal static void SectionLabel(Rect rect, string text)
@@ -77,6 +98,30 @@ namespace DansToolbox.EditorTools.Artboard
             section = new GUIStyle(EditorStyles.miniBoldLabel) { fontSize = 9, normal = { textColor = palette.Muted } };
             button = new GUIStyle(GUIStyle.none) { alignment = TextAnchor.MiddleCenter, fontSize = 10, fontStyle = FontStyle.Bold };
             centered = new GUIStyle(label) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
+        }
+
+        private static Texture2D GetCheckerTexture(Color a, Color b)
+        {
+            Color32 first = a;
+            Color32 second = b;
+            ulong key = ((ulong)(uint)Pack(first) << 32) | (uint)Pack(second);
+            if (checkerTextures.TryGetValue(key, out Texture2D texture) && texture != null) return texture;
+            texture = new Texture2D(2, 2, TextureFormat.RGBA32, false, true)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Repeat,
+                name = "Artboard Checker Pattern"
+            };
+            texture.SetPixels32(new[] { first, second, second, first });
+            texture.Apply(false, true);
+            checkerTextures[key] = texture;
+            return texture;
+        }
+
+        private static int Pack(Color32 color)
+        {
+            return color.r | color.g << 8 | color.b << 16 | color.a << 24;
         }
     }
 }

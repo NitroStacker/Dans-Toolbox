@@ -673,12 +673,10 @@ namespace DansToolbox.EditorTools.BetterConsole
         {
             if (count != 0) return;
             float center = rect.y + rect.height * 0.5f;
-            GUIStyle centeredTitle = new GUIStyle(BetterConsoleGui.Title) { alignment = TextAnchor.MiddleCenter };
-            GUIStyle centeredHint = new GUIStyle(BetterConsoleGui.Muted) { alignment = TextAnchor.MiddleCenter };
-            GUI.Label(new Rect(rect.x + 20f, center - 23f, rect.width - 40f, 20f), title, centeredTitle);
+            GUI.Label(new Rect(rect.x + 20f, center - 23f, rect.width - 40f, 20f), title, BetterConsoleGui.CenteredTitle);
             if (rect.height > 120f)
             {
-                GUI.Label(new Rect(rect.x + 20f, center + 1f, rect.width - 40f, 20f), hint, centeredHint);
+                GUI.Label(new Rect(rect.x + 20f, center + 1f, rect.width - 40f, 20f), hint, BetterConsoleGui.CenteredMuted);
             }
         }
 
@@ -694,8 +692,7 @@ namespace DansToolbox.EditorTools.BetterConsole
             string right = EditorApplication.isRemoteConnected ? "REMOTE" : BetterConsoleNativeBridge.Available ? "NATIVE + CALLBACK" : "CALLBACK";
             if (query != null && !query.IsValid) right = query.Error.ToUpperInvariant();
             if (EditorApplication.timeSinceStartup < transientStatusUntil) right = transientStatus;
-            GUIStyle aligned = new GUIStyle(BetterConsoleGui.Tiny) { alignment = TextAnchor.MiddleRight };
-            GUI.Label(new Rect(rect.x + rect.width * 0.5f, rect.y + 1f, rect.width * 0.5f - 8f, rect.height - 1f), right, aligned);
+            GUI.Label(new Rect(rect.x + rect.width * 0.5f, rect.y + 1f, rect.width * 0.5f - 8f, rect.height - 1f), right, BetterConsoleGui.RightTiny);
         }
 
         private void RefreshVisible()

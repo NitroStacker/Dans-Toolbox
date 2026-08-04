@@ -931,9 +931,10 @@ namespace DansToolbox.Editor
         {
             openCounts ??= new Dictionary<string, int>(StringComparer.Ordinal);
             bool changed = false;
+            IReadOnlyDictionary<string, int> currentCounts = DansToolboxToolLauncher.GetOpenCounts();
             foreach (DansToolboxLaunchDescriptor descriptor in DansToolboxToolLauncher.All)
             {
-                int count = DansToolboxToolLauncher.GetOpenCount(descriptor.Id);
+                int count = currentCounts.TryGetValue(descriptor.Id, out int current) ? current : 0;
                 if (!openCounts.TryGetValue(descriptor.Id, out int previous) || previous != count)
                 {
                     openCounts[descriptor.Id] = count;

@@ -199,6 +199,20 @@ namespace DansToolbox.Editor
             return type == null ? 0 : Resources.FindObjectsOfTypeAll(type).Length;
         }
 
+        internal static IReadOnlyDictionary<string, int> GetOpenCounts()
+        {
+            EditorWindow[] windows = Resources.FindObjectsOfTypeAll<EditorWindow>();
+            Dictionary<string, int> counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (DansToolboxLaunchDescriptor descriptor in All)
+            {
+                Type type = ResolveType(descriptor.TypeName);
+                counts[descriptor.Id] = type == null
+                    ? 0
+                    : windows.Count(window => window != null && type.IsAssignableFrom(window.GetType()));
+            }
+            return counts;
+        }
+
         internal static bool Launch(
             string toolId,
             DansToolboxPlacement placement = DansToolboxPlacement.Auto,

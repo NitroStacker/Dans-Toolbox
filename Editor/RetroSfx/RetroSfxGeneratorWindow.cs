@@ -70,6 +70,9 @@ namespace DansToolbox.EditorTools.Audio
         private int generatedSettingsHash = int.MinValue;
         private string statusMessage = "Select a sound family or shape a patch, then audition or render it.";
         private double previewStartedAt;
+        private double nextPreviewRepaintAt;
+        private double nextHoverRepaintAt;
+        private int previewAssetSettingsHash = int.MinValue;
         private bool previewIsActive;
         [NonSerialized] private ReorderableList effectList;
         [NonSerialized] private int pendingEffectRemoval = -1;
@@ -167,22 +170,30 @@ namespace DansToolbox.EditorTools.Audio
                 EditorGUILayout.EndScrollView();
             }
 
+            int settingsHashAfterControls = CalculateCurrentSettingsHash();
+            if (settingsHashBeforeControls != settingsHashAfterControls)
+            {
+                generatedSettingsHash = int.MinValue;
+            }
             EnsureWaveformIsCurrent();
             DrawWaveformDisplay();
             DrawExportBay();
             DrawStatusStrip();
             GUILayout.EndArea();
 
-            if (settingsHashBeforeControls != CalculateCurrentSettingsHash())
+            if (settingsHashBeforeControls != settingsHashAfterControls)
             {
-                generatedSettingsHash = int.MinValue;
-                EnsureWaveformIsCurrent();
                 Repaint();
             }
 
             if (Event.current.type == EventType.MouseMove)
             {
-                Repaint();
+                double now = EditorApplication.timeSinceStartup;
+                if (now >= nextHoverRepaintAt)
+                {
+                    nextHoverRepaintAt = now + 1d / 60d;
+                    Repaint();
+                }
             }
 
             if (DansToolboxMotion.DrawWindowReveal(
@@ -578,14 +589,10 @@ namespace DansToolbox.EditorTools.Audio
                 new Rect(dataRect.x + 6f, dataRect.y + 4f, 100f, 16f),
                 $"{importedAudio.TrimStart * clip.length:0.000} s",
                 RetroSfxSynthGui.TinyStyle);
-            GUIStyle endStyle = new GUIStyle(RetroSfxSynthGui.TinyStyle)
-            {
-                alignment = TextAnchor.UpperRight
-            };
             GUI.Label(
                 new Rect(dataRect.xMax - 106f, dataRect.y + 4f, 100f, 16f),
                 $"{importedAudio.TrimEnd * clip.length:0.000} s",
-                endStyle);
+                RetroSfxSynthGui.RightTinyStyle);
         }
 
         private static ImportWaveformHandle PickImportedWaveformHandle(
@@ -1391,10 +1398,7 @@ namespace DansToolbox.EditorTools.Audio
                 headerRect.y,
                 Mathf.Max(40f, orderRect.x - bypassRect.xMax - 14f),
                 headerRect.height);
-            GUIStyle nameStyle = new GUIStyle(RetroSfxSynthGui.SectionTitleStyle)
-            {
-                alignment = TextAnchor.MiddleLeft
-            };
+            GUIStyle nameStyle = RetroSfxSynthGui.EffectNameStyle;
             nameStyle.normal.textColor = effect.Enabled
                 ? RetroSfxSynthGui.Text
                 : RetroSfxSynthGui.MutedText;
@@ -1825,14 +1829,18 @@ namespace DansToolbox.EditorTools.Audio
 
             try
             {
-                WavFileWriter.WriteMono16(
-                    Path.GetFullPath(PreviewAssetPath),
-                    generatedSamples,
-                    RetroSfxSettings.SampleRate);
-                AssetDatabase.ImportAsset(
-                    PreviewAssetPath,
-                    ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
-                previewClip = AssetDatabase.LoadAssetAtPath<AudioClip>(PreviewAssetPath);
+                if (previewClip == null || previewAssetSettingsHash != generatedSettingsHash)
+                {
+                    WavFileWriter.WriteMono16(
+                        Path.GetFullPath(PreviewAssetPath),
+                        generatedSamples,
+                        RetroSfxSettings.SampleRate);
+                    AssetDatabase.ImportAsset(
+                        PreviewAssetPath,
+                        ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                    previewClip = AssetDatabase.LoadAssetAtPath<AudioClip>(PreviewAssetPath);
+                    previewAssetSettingsHash = previewClip == null ? int.MinValue : generatedSettingsHash;
+                }
             }
             catch (Exception exception)
             {
@@ -1936,6 +1944,7 @@ namespace DansToolbox.EditorTools.Audio
         {
             EditorApplication.update -= UpdatePreviewState;
             StopPreview();
+            CleanupPreviewAsset();
         }
 
         private void UpdatePreviewState()
@@ -1960,11 +1969,15 @@ namespace DansToolbox.EditorTools.Audio
                 !reportedPlaying && EditorApplication.timeSinceStartup - previewStartedAt > 0.1d)
             {
                 previewIsActive = false;
-                CleanupPreviewAsset();
                 statusMessage = "Preview finished";
             }
 
-            Repaint();
+            double now = EditorApplication.timeSinceStartup;
+            if (now >= nextPreviewRepaintAt)
+            {
+                nextPreviewRepaintAt = now + 1d / 60d;
+                Repaint();
+            }
         }
 
         private void StopPreview()
@@ -1972,7 +1985,6 @@ namespace DansToolbox.EditorTools.Audio
             bool wasActive = previewIsActive;
             EditorAudioPreviewService.Stop();
             previewIsActive = false;
-            CleanupPreviewAsset();
             if (wasActive)
             {
                 statusMessage = "STOPPED  ·  preview ended";
@@ -1983,6 +1995,7 @@ namespace DansToolbox.EditorTools.Audio
         private void CleanupPreviewAsset()
         {
             previewClip = null;
+            previewAssetSettingsHash = int.MinValue;
             if (AssetDatabase.LoadMainAssetAtPath(PreviewAssetPath) != null ||
                 File.Exists(PreviewAssetPath))
             {

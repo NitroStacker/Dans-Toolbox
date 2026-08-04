@@ -129,6 +129,11 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private bool disposed;
         private bool visible;
         private bool needsPresentRedraw;
+        private bool geometryDirty = true;
+        private bool hasLastScreenRect;
+        private Rect lastScreenRect;
+        private float lastPixelsPerPoint;
+        private double nextEmbeddingHealthCheck;
 
         private NativeWindowSession(
             IntPtr target,
@@ -154,6 +159,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         {
             crop = value;
             lastTargetBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
+            geometryDirty = true;
         }
 
         internal static NativeWindowSession Attach(IntPtr target)
@@ -199,6 +205,18 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             }
 
             float scale = Mathf.Max(1f, pixelsPerPoint);
+            double now = EditorApplication.timeSinceStartup;
+            bool unchanged = hasLastScreenRect && !geometryDirty &&
+                             Mathf.Approximately(lastPixelsPerPoint, scale) &&
+                             Approximately(lastScreenRect, screenRectInPoints);
+            if (unchanged && embedded && NativeWindowInterop.IsWindow(host) && now < nextEmbeddingHealthCheck)
+            {
+                return;
+            }
+            lastScreenRect = screenRectInPoints;
+            lastPixelsPerPoint = scale;
+            hasLastScreenRect = true;
+            nextEmbeddingHealthCheck = now + 0.75d;
             IntPtr unityWindow = NativeWindowInterop.ResolveUnityContainerWindow(
                 screenRectInPoints,
                 scale);
@@ -266,6 +284,13 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     NativeWindowInterop.SWP_NOACTIVATE
                     | NativeWindowInterop.SWP_NOZORDER);
             }
+            geometryDirty = false;
+        }
+
+        private static bool Approximately(Rect a, Rect b)
+        {
+            return Mathf.Abs(a.x - b.x) < 0.01f && Mathf.Abs(a.y - b.y) < 0.01f &&
+                   Mathf.Abs(a.width - b.width) < 0.01f && Mathf.Abs(a.height - b.height) < 0.01f;
         }
 
         internal void SetVisible(bool shouldBeVisible)

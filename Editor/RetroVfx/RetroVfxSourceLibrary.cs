@@ -83,11 +83,9 @@ namespace DansToolbox.EditorTools.RetroVfx
         };
 
         private static readonly List<string> texturePaths = new List<string>();
-
-        static RetroVfxSourceLibrary()
-        {
-            EditorApplication.projectChanged += Invalidate;
-        }
+        private static readonly HashSet<string> texturePathLookup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> assetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static bool initialized;
 
         internal static IReadOnlyList<RetroVfxSourceDescriptor> Descriptors
         {
@@ -110,20 +108,75 @@ namespace DansToolbox.EditorTools.RetroVfx
         internal static void Refresh()
         {
             texturePaths.Clear();
+            texturePathLookup.Clear();
+            assetPaths.Clear();
+            foreach (RetroVfxSourceDescriptor descriptor in descriptors)
+            {
+                descriptor.DetectedAssetCount = 0;
+            }
+
+            foreach (string path in AssetDatabase.GetAllAssetPaths())
+            {
+                AddAssetPath(path);
+            }
+
             string[] textureGuids = AssetDatabase.FindAssets("t:Texture2D");
             foreach (string guid in textureGuids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (!string.IsNullOrEmpty(path))
+                if (!string.IsNullOrEmpty(path) && texturePathLookup.Add(path))
                 {
                     texturePaths.Add(path);
                 }
             }
+            texturePaths.Sort(StringComparer.OrdinalIgnoreCase);
+            initialized = true;
+        }
 
-            string searchable = string.Join("\n", AssetDatabase.GetAllAssetPaths()).ToLowerInvariant();
-            foreach (RetroVfxSourceDescriptor descriptor in descriptors)
+        internal static void ApplyAssetChanges(
+            IReadOnlyList<string> imported,
+            IReadOnlyList<string> deleted,
+            IReadOnlyList<string> moved,
+            IReadOnlyList<string> movedFrom)
+        {
+            if (!initialized)
             {
-                descriptor.DetectedAssetCount = descriptor.Markers.Sum(marker => CountOccurrences(searchable, marker.ToLowerInvariant()));
+                return;
+            }
+
+            bool texturesChanged = false;
+            if (deleted != null)
+            {
+                foreach (string path in deleted)
+                {
+                    texturesChanged |= RemoveAssetPath(path);
+                }
+            }
+            if (movedFrom != null)
+            {
+                foreach (string path in movedFrom)
+                {
+                    texturesChanged |= RemoveAssetPath(path);
+                }
+            }
+            if (imported != null)
+            {
+                foreach (string path in imported)
+                {
+                    texturesChanged |= AddImportedPath(path);
+                }
+            }
+            if (moved != null)
+            {
+                foreach (string path in moved)
+                {
+                    texturesChanged |= AddImportedPath(path);
+                }
+            }
+
+            if (texturesChanged)
+            {
+                texturePaths.Sort(StringComparer.OrdinalIgnoreCase);
             }
         }
 
@@ -199,15 +252,65 @@ namespace DansToolbox.EditorTools.RetroVfx
 
         private static void EnsureFresh()
         {
-            if (texturePaths.Count == 0)
+            if (!initialized)
             {
                 Refresh();
             }
         }
 
-        private static void Invalidate()
+        private static bool AddImportedPath(string path)
         {
-            texturePaths.Clear();
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            AddAssetPath(path);
+            Type type = AssetDatabase.GetMainAssetTypeAtPath(path);
+            if (type != null && typeof(Texture2D).IsAssignableFrom(type) && texturePathLookup.Add(path))
+            {
+                texturePaths.Add(path);
+                return true;
+            }
+            return false;
+        }
+
+        private static void AddAssetPath(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !assetPaths.Add(path))
+            {
+                return;
+            }
+            ApplyDescriptorDelta(path, 1);
+        }
+
+        private static bool RemoveAssetPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+            if (assetPaths.Remove(path))
+            {
+                ApplyDescriptorDelta(path, -1);
+            }
+            if (!texturePathLookup.Remove(path))
+            {
+                return false;
+            }
+            texturePaths.RemoveAll(item => string.Equals(item, path, StringComparison.OrdinalIgnoreCase));
+            return true;
+        }
+
+        private static void ApplyDescriptorDelta(string path, int delta)
+        {
+            string searchable = path.ToLowerInvariant();
+            foreach (RetroVfxSourceDescriptor descriptor in descriptors)
+            {
+                int occurrences = descriptor.Markers.Sum(marker =>
+                    CountOccurrences(searchable, marker.ToLowerInvariant()));
+                descriptor.DetectedAssetCount = Mathf.Max(0, descriptor.DetectedAssetCount + occurrences * delta);
+            }
         }
 
         private static int CountOccurrences(string source, string value)
@@ -267,6 +370,22 @@ namespace DansToolbox.EditorTools.RetroVfx
                 keywords.AddRange(new[] { "glint", "shine", "star", "sparkle", "pickup" });
             }
             return keywords.Where(item => !string.IsNullOrWhiteSpace(item) && item != "auto").Distinct().ToArray();
+        }
+    }
+
+    internal sealed class RetroVfxSourceAssetPostprocessor : AssetPostprocessor
+    {
+        private static void OnPostprocessAllAssets(
+            string[] importedAssets,
+            string[] deletedAssets,
+            string[] movedAssets,
+            string[] movedFromAssetPaths)
+        {
+            RetroVfxSourceLibrary.ApplyAssetChanges(
+                importedAssets,
+                deletedAssets,
+                movedAssets,
+                movedFromAssetPaths);
         }
     }
 }

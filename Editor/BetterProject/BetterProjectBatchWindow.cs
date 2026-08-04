@@ -19,6 +19,7 @@ namespace DansToolbox.EditorTools.BetterProject
         [SerializeField] private string destination = string.Empty;
         [SerializeField] private Preset importerPreset;
         [SerializeField] private Vector2 scroll;
+        [NonSerialized] private double nextHoverUpdateAt;
 
         internal static void Open(IEnumerable<BetterProjectAssetRecord> selected, string currentFolder)
         {
@@ -85,7 +86,8 @@ namespace DansToolbox.EditorTools.BetterProject
             GUILayout.EndArea();
             if (Event.current.type == EventType.MouseMove)
             {
-                Repaint();
+                double now = EditorApplication.timeSinceStartup;
+                if (BetterProjectWindow.ShouldProcessHoverUpdate(now, ref nextHoverUpdateAt)) Repaint();
             }
         }
 

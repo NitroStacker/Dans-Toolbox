@@ -15,6 +15,9 @@ namespace DansToolbox.EditorTools.BetterConsole
         private static GUIStyle wrapped;
         private static GUIStyle field;
         private static GUIStyle button;
+        private static GUIStyle centeredTitle;
+        private static GUIStyle centeredMuted;
+        private static GUIStyle rightTiny;
 
         public static GUIStyle Label { get { Ensure(); return label; } }
         public static GUIStyle Muted { get { Ensure(); return muted; } }
@@ -23,6 +26,9 @@ namespace DansToolbox.EditorTools.BetterConsole
         public static GUIStyle Mono { get { Ensure(); return mono; } }
         public static GUIStyle Wrapped { get { Ensure(); return wrapped; } }
         public static GUIStyle Field { get { Ensure(); return field; } }
+        public static GUIStyle CenteredTitle { get { Ensure(); return centeredTitle; } }
+        public static GUIStyle CenteredMuted { get { Ensure(); return centeredMuted; } }
+        public static GUIStyle RightTiny { get { Ensure(); return rightTiny; } }
 
         public static void Panel(Rect rect, bool inset = false, bool strong = false)
         {
@@ -101,6 +107,9 @@ namespace DansToolbox.EditorTools.BetterConsole
             button = NewStyle(EditorStyles.label, 10, FontStyle.Bold, palette.Text);
             button.alignment = TextAnchor.MiddleCenter;
             button.clipping = TextClipping.Clip;
+            centeredTitle = new GUIStyle(title) { alignment = TextAnchor.MiddleCenter };
+            centeredMuted = new GUIStyle(muted) { alignment = TextAnchor.MiddleCenter };
+            rightTiny = new GUIStyle(tiny) { alignment = TextAnchor.MiddleRight };
         }
 
         private static GUIStyle NewStyle(GUIStyle source, int size, FontStyle fontStyle, Color color)

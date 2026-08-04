@@ -16,11 +16,11 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         private static int activeAudioListeners;
         private static int activeEventSystems;
         private static int activeMainCameras;
+        private static bool countsDirty = true;
 
         static BetterHierarchyDiagnostics()
         {
             EditorApplication.hierarchyChanged += Invalidate;
-            EditorApplication.projectChanged += Invalidate;
             Undo.undoRedoPerformed += Invalidate;
             EditorSceneManager.sceneOpened += OnSceneOpened;
             EditorSceneManager.sceneClosed += OnSceneClosed;
@@ -40,6 +40,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 return cached;
             }
 
+            EnsureGlobalCounts();
             BetterHierarchyDiagnosticFlags flags = Evaluate(gameObject, deepScan);
             Cache[id] = flags;
             return flags;
@@ -81,18 +82,33 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         internal static void Invalidate()
         {
             Cache.Clear();
-            activeAudioListeners = Resources.FindObjectsOfTypeAll<AudioListener>()
+            countsDirty = true;
+        }
+
+        private static void EnsureGlobalCounts()
+        {
+            if (!countsDirty) return;
+            countsDirty = false;
+            activeAudioListeners = UnityEngine.Object.FindObjectsByType<AudioListener>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None)
                 .Count(listener => listener != null &&
                                    listener.enabled &&
                                    listener.gameObject.activeInHierarchy &&
                                    listener.gameObject.scene.IsValid());
-            activeEventSystems = Resources.FindObjectsOfTypeAll<MonoBehaviour>()
-                .Count(behaviour => behaviour != null &&
-                                    behaviour.enabled &&
-                                    behaviour.gameObject.activeInHierarchy &&
-                                    behaviour.gameObject.scene.IsValid() &&
-                                    behaviour.GetType().FullName == "UnityEngine.EventSystems.EventSystem");
-            activeMainCameras = Resources.FindObjectsOfTypeAll<Camera>()
+            Type eventSystemType = Type.GetType("UnityEngine.EventSystems.EventSystem, UnityEngine.UI");
+            activeEventSystems = eventSystemType == null
+                ? Resources.FindObjectsOfTypeAll<MonoBehaviour>()
+                    .Count(behaviour => behaviour != null && behaviour.enabled &&
+                                        behaviour.gameObject.activeInHierarchy &&
+                                        behaviour.gameObject.scene.IsValid() &&
+                                        behaviour.GetType().FullName == "UnityEngine.EventSystems.EventSystem")
+                : Resources.FindObjectsOfTypeAll(eventSystemType)
+                    .OfType<Behaviour>()
+                    .Count(behaviour => behaviour != null && behaviour.enabled &&
+                                        behaviour.gameObject.activeInHierarchy &&
+                                        behaviour.gameObject.scene.IsValid());
+            activeMainCameras = UnityEngine.Object.FindObjectsByType<Camera>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None)
                 .Count(camera => camera != null &&
                                  camera.enabled &&
                                  camera.gameObject.activeInHierarchy &&

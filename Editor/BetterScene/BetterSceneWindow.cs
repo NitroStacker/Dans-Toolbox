@@ -16,6 +16,7 @@ namespace DansToolbox.EditorTools.BetterScene
         [SerializeField] private bool showSavedViews;
         [SerializeField] private bool showSceneHealth;
         [NonSerialized] private double revealStartedAt;
+        [NonSerialized] private double nextHoverUpdateAt;
 
         [MenuItem(MenuPath, false, 24)]
         internal static void Open()
@@ -72,7 +73,15 @@ namespace DansToolbox.EditorTools.BetterScene
             DansToolboxPalette palette = DansToolboxTheme.Current;
             Rect canvas = new Rect(0f, 0f, position.width, position.height);
             EditorGUI.DrawRect(canvas, palette.Canvas);
-            if (Event.current.type == EventType.MouseMove) Repaint();
+            if (Event.current.type == EventType.MouseMove)
+            {
+                double now = EditorApplication.timeSinceStartup;
+                if (now >= nextHoverUpdateAt)
+                {
+                    nextHoverUpdateAt = now + 1d / 60d;
+                    Repaint();
+                }
+            }
             ReleaseTextFocusOnPointerDown();
 
             if (!DansToolboxSettings.IsToolEnabled(DansToolboxTools.BetterSceneId))
@@ -150,10 +159,8 @@ namespace DansToolbox.EditorTools.BetterScene
             GUI.Label(new Rect(card.x + 14f, card.y + 31f, card.width - 110f, 18f), selected.Length == 1 ? GetPath(active.transform) : selected.Length + " OBJECTS SELECTED", BetterSceneGui.Muted);
             Rect badge = new Rect(card.xMax - 50f, card.y + 10f, 36f, 20f);
             BetterSceneGui.Panel(badge, true);
-            GUIStyle badgeStyle = new GUIStyle(BetterSceneGui.Centered)
-            {
-                normal = { textColor = report.Errors > 0 ? palette.Danger : report.Warnings > 0 ? palette.Warning : palette.Success }
-            };
+            GUIStyle badgeStyle = BetterSceneGui.Centered;
+            badgeStyle.normal.textColor = report.Errors > 0 ? palette.Danger : report.Warnings > 0 ? palette.Warning : palette.Success;
             GUI.Label(badge, report.Badge, badgeStyle);
 
             float y = card.yMax - 29f;
@@ -225,8 +232,7 @@ namespace DansToolbox.EditorTools.BetterScene
             Texture icon = ToolIcon(panel);
             if (icon != null) GUI.DrawTexture(new Rect(card.x + 11f, card.y + 13f, 28f, 28f), icon, ScaleMode.ScaleToFit, true);
             GUI.Label(new Rect(card.x + 48f, card.y + 10f, card.width - 124f, 20f), ActiveTitle(panel), BetterSceneGui.Label);
-            GUIStyle wrapped = new GUIStyle(BetterSceneGui.Muted) { wordWrap = true };
-            GUI.Label(new Rect(card.x + 48f, card.y + 31f, card.width - 62f, 32f), ActiveSummary(panel), wrapped);
+            GUI.Label(new Rect(card.x + 48f, card.y + 31f, card.width - 62f, 32f), ActiveSummary(panel), BetterSceneGui.WrappedMuted);
             Rect open = new Rect(card.xMax - 64f, card.y + 11f, 52f, 22f);
             if (BetterSceneGui.Button(open, new GUIContent(BetterSceneController.PanelExpanded ? "OPEN" : "SHOW", "Show this panel in Scene"), BetterSceneController.PanelExpanded))
             {
@@ -269,7 +275,8 @@ namespace DansToolbox.EditorTools.BetterScene
             Rect row = Inset(GUILayoutUtility.GetRect(10f, 23f, GUILayout.ExpandWidth(true)));
             if (row.Contains(Event.current.mousePosition)) EditorGUI.DrawRect(row, DansToolboxTheme.Current.Hover);
             GUI.Label(new Rect(row.x + 5f, row.y, row.width * 0.7f, row.height), label, BetterSceneGui.Tiny);
-            GUIStyle right = new GUIStyle(BetterSceneGui.Label) { alignment = TextAnchor.MiddleRight, normal = { textColor = color } };
+            GUIStyle right = BetterSceneGui.RightLabel;
+            right.normal.textColor = color;
             GUI.Label(new Rect(row.x + row.width * 0.7f, row.y, row.width * 0.3f - 5f, row.height), value.ToString(), right);
         }
 
@@ -278,7 +285,8 @@ namespace DansToolbox.EditorTools.BetterScene
             Rect rect = Inset(GUILayoutUtility.GetRect(10f, 29f, GUILayout.ExpandWidth(true)));
             BetterSceneGui.Panel(rect, false, true);
             GUI.Label(new Rect(rect.x + 10f, rect.y, rect.width - 74f, rect.height), (expanded ? "-  " : "+  ") + label, BetterSceneGui.Tiny);
-            GUIStyle right = new GUIStyle(BetterSceneGui.Tiny) { alignment = TextAnchor.MiddleRight, normal = { textColor = DansToolboxTheme.Current.Accent } };
+            GUIStyle right = BetterSceneGui.RightTiny;
+            right.normal.textColor = DansToolboxTheme.Current.Accent;
             GUI.Label(new Rect(rect.xMax - 70f, rect.y, 58f, rect.height), badge, right);
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.Link);
             return GUI.Button(rect, GUIContent.none, GUIStyle.none);
@@ -294,8 +302,7 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             Rect rect = Inset(GUILayoutUtility.GetRect(10f, 46f, GUILayout.ExpandWidth(true)));
             BetterSceneGui.Panel(rect, true);
-            GUIStyle wrapped = new GUIStyle(BetterSceneGui.Muted) { alignment = TextAnchor.MiddleLeft, wordWrap = true };
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 5f, rect.width - 20f, rect.height - 10f), message, wrapped);
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 5f, rect.width - 20f, rect.height - 10f), message, BetterSceneGui.WrappedMuted);
         }
 
         private void ShowOptionsMenu(Rect activator)

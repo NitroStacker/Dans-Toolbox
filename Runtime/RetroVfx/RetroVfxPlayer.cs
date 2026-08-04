@@ -29,6 +29,11 @@ namespace DansToolbox.RetroVfx
         [SerializeField] private GameObject decalPrefab;
 
         private float playbackStartedAt = float.NegativeInfinity;
+        private bool childrenCached;
+        private bool suppressEnablePlayback;
+        private MethodInfo visualEffectReinit;
+        private MethodInfo visualEffectPlay;
+        private MethodInfo visualEffectStop;
 
         public float Duration => duration;
         public bool IsPlaying => Time.time - playbackStartedAt <= duration;
@@ -40,7 +45,7 @@ namespace DansToolbox.RetroVfx
 
         private void OnEnable()
         {
-            if (playOnEnable)
+            if (playOnEnable && !suppressEnablePlayback)
             {
                 Play();
             }
@@ -60,12 +65,23 @@ namespace DansToolbox.RetroVfx
             if (destroyAfterPlayback && elapsed > duration)
             {
                 Destroy(gameObject);
+                return;
+            }
+            if (elapsed > duration)
+            {
+                enabled = false;
             }
         }
 
         public void Play()
         {
             CacheChildren();
+            if (!enabled)
+            {
+                suppressEnablePlayback = true;
+                enabled = true;
+                suppressEnablePlayback = false;
+            }
             playbackStartedAt = Time.time;
             foreach (ParticleSystem system in particleSystems)
             {
@@ -84,8 +100,8 @@ namespace DansToolbox.RetroVfx
                 audioSource.Play();
             }
 
-            InvokeVisualEffect("Reinit");
-            InvokeVisualEffect("Play");
+            InvokeVisualEffect(visualEffectReinit);
+            InvokeVisualEffect(visualEffectPlay);
 
             if (requestCameraShake)
             {
@@ -99,7 +115,10 @@ namespace DansToolbox.RetroVfx
             {
                 DecalRequested?.Invoke(this, decalPrefab);
             }
-
+            if (effectLight == null && !destroyAfterPlayback)
+            {
+                enabled = false;
+            }
         }
 
         public void Play(Vector3 position, Vector3 forward)
@@ -135,8 +154,8 @@ namespace DansToolbox.RetroVfx
                 effectLight.intensity = 0f;
             }
 
-            InvokeVisualEffect("Stop");
-
+            InvokeVisualEffect(visualEffectStop);
+            enabled = false;
         }
 
         public void Configure(
@@ -169,10 +188,15 @@ namespace DansToolbox.RetroVfx
             hitStopDuration = Mathf.Clamp(stopDuration, 0f, 0.25f);
             requestDecal = decal;
             decalPrefab = decalAsset;
+            childrenCached = false;
         }
 
         private void CacheChildren()
         {
+            if (childrenCached)
+            {
+                return;
+            }
             if (particleSystems == null || particleSystems.Length == 0)
             {
                 particleSystems = GetComponentsInChildren<ParticleSystem>(true);
@@ -192,22 +216,29 @@ namespace DansToolbox.RetroVfx
                     }
                 }
             }
+            if (visualEffect != null)
+            {
+                Type type = visualEffect.GetType();
+                visualEffectReinit = FindVisualEffectMethod(type, "Reinit");
+                visualEffectPlay = FindVisualEffectMethod(type, "Play");
+                visualEffectStop = FindVisualEffectMethod(type, "Stop");
+            }
+            childrenCached = true;
         }
 
-        private void InvokeVisualEffect(string methodName)
+        private static MethodInfo FindVisualEffectMethod(Type type, string methodName)
         {
-            if (visualEffect == null)
-            {
-                return;
-            }
-
-            MethodInfo method = visualEffect.GetType().GetMethod(
+            return type.GetMethod(
                 methodName,
                 BindingFlags.Instance | BindingFlags.Public,
                 null,
                 Type.EmptyTypes,
                 null);
-            method?.Invoke(visualEffect, null);
+        }
+
+        private void InvokeVisualEffect(MethodInfo method)
+        {
+            if (visualEffect != null) method?.Invoke(visualEffect, null);
         }
     }
 }

@@ -46,6 +46,10 @@ namespace DansToolbox.EditorTools.Audio
         private static GUIStyle tinyStyle;
         private static GUIStyle helpStyle;
         private static GUIStyle inlineValueStyle;
+        private static GUIStyle centeredBoldStyle;
+        private static GUIStyle parameterLabelStyle;
+        private static GUIStyle rightTinyStyle;
+        private static GUIStyle effectNameStyle;
         private static float dragStartValue;
         private static float dragStartMouseY;
 
@@ -71,6 +75,10 @@ namespace DansToolbox.EditorTools.Audio
             tinyStyle = null;
             helpStyle = null;
             inlineValueStyle = null;
+            centeredBoldStyle = null;
+            parameterLabelStyle = null;
+            rightTinyStyle = null;
+            effectNameStyle = null;
         }
 
         internal static GUIStyle PanelStyle => panelStyle ??= CreatePanelStyle(Panel, Border, 10);
@@ -136,6 +144,16 @@ namespace DansToolbox.EditorTools.Audio
             fontStyle = FontStyle.Bold,
             normal = { textColor = Text, background = null },
             alignment = TextAnchor.MiddleRight
+        };
+
+        internal static GUIStyle RightTinyStyle => rightTinyStyle ??= new GUIStyle(TinyStyle)
+        {
+            alignment = TextAnchor.UpperRight
+        };
+
+        internal static GUIStyle EffectNameStyle => effectNameStyle ??= new GUIStyle(SectionTitleStyle)
+        {
+            alignment = TextAnchor.MiddleLeft
         };
 
         internal static GUIStyle PresetButtonStyle =>
@@ -246,7 +264,7 @@ namespace DansToolbox.EditorTools.Audio
                     : selected ? Accent : hovered ? BorderStrong : Border;
                 DrawFlatBox(rect, fill, outline);
 
-                GUIStyle style = new GUIStyle(LabelStyle)
+                GUIStyle style = centeredBoldStyle ??= new GUIStyle(LabelStyle)
                 {
                     alignment = TextAnchor.MiddleCenter,
                     fontStyle = FontStyle.Bold
@@ -379,11 +397,11 @@ namespace DansToolbox.EditorTools.Audio
                     GUIUtility.hotControl != controlId
                         ? Mathf.Clamp(displayedValue.Value, minimum, maximum)
                         : value;
-                GUIStyle parameterLabelStyle = new GUIStyle(TinyStyle)
+                GUIStyle knobParameterLabel = parameterLabelStyle ??= new GUIStyle(TinyStyle)
                 {
                     alignment = TextAnchor.MiddleLeft
                 };
-                parameterLabelStyle.normal.textColor =
+                knobParameterLabel.normal.textColor =
                     automationActive ? Accent : Text;
                 GUI.Label(
                     labelRect,
@@ -392,7 +410,7 @@ namespace DansToolbox.EditorTools.Audio
                             ? $"{label.ToUpperInvariant()}  AUTO"
                             : label.ToUpperInvariant(),
                         tooltip),
-                    parameterLabelStyle);
+                    knobParameterLabel);
                 GUI.Label(
                     valueRect,
                     FormatValue(visualValue, valueFormat),

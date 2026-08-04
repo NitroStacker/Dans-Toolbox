@@ -9,6 +9,7 @@ namespace DansToolbox.EditorTools.BetterProject
     internal sealed class BetterProjectRulesWindow : EditorWindow
     {
         [SerializeField] private Vector2 scroll;
+        [NonSerialized] private double nextHoverUpdateAt;
 
         internal static void Open()
         {
@@ -53,7 +54,8 @@ namespace DansToolbox.EditorTools.BetterProject
             GUILayout.EndArea();
             if (Event.current.type == EventType.MouseMove)
             {
-                Repaint();
+                double now = EditorApplication.timeSinceStartup;
+                if (BetterProjectWindow.ShouldProcessHoverUpdate(now, ref nextHoverUpdateAt)) Repaint();
             }
         }
 

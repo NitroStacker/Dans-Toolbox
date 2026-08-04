@@ -38,7 +38,7 @@ This tracks the repository's `main` branch. When a newer commit is available, se
 For a project that must stay on an exact release, use a version-tagged URL instead:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.20.2
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.22.0
 ```
 
 Tagged installs are intentionally pinned and do not advance when a newer tag is published.

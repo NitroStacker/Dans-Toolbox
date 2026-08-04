@@ -302,6 +302,30 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void SourceLibrary_AppliesDescriptorChangesIncrementally()
+        {
+            RetroVfxSourceLibrary.Refresh();
+            RetroVfxSourceDescriptor descriptor = null;
+            foreach (RetroVfxSourceDescriptor candidate in RetroVfxSourceLibrary.Descriptors)
+            {
+                if (candidate.Id == "brackeys") descriptor = candidate;
+            }
+            Assert.That(descriptor, Is.Not.Null);
+            int before = descriptor.DetectedAssetCount;
+            string path = "Assets/__DansToolbox_brackeys_" + System.Guid.NewGuid().ToString("N") + ".asset";
+            try
+            {
+                RetroVfxSourceLibrary.ApplyAssetChanges(new[] { path }, null, null, null);
+                Assert.That(descriptor.DetectedAssetCount, Is.EqualTo(before + 1));
+            }
+            finally
+            {
+                RetroVfxSourceLibrary.ApplyAssetChanges(null, new[] { path }, null, null);
+            }
+            Assert.That(descriptor.DetectedAssetCount, Is.EqualTo(before));
+        }
+
+        [Test]
         public void EffectBuilder_ConfiguresMeshTrailsAndProductionShader()
         {
             RetroVfxRecipe recipe = RetroVfxPresetFactory.CreateWorkingRecipe("heavy-cleave");

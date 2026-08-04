@@ -8,6 +8,8 @@ namespace DansToolbox.EditorTools.BetterHierarchy
     internal sealed class BetterHierarchyPreviewCache
     {
         private readonly Dictionary<int, Texture2D> previews = new Dictionary<int, Texture2D>();
+        private readonly Dictionary<int, System.Type> representativeTypes = new Dictionary<int, System.Type>();
+        private readonly HashSet<int> assetPreviewIds = new HashSet<int>();
 
         internal Texture2D Get(GameObject gameObject)
         {
@@ -22,12 +24,12 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 return cached;
             }
 
-            Component representative = GetRepresentativeComponent(gameObject);
+            System.Type representative = GetRepresentativeComponentTypeCached(gameObject);
             if (representative != null)
             {
                 Texture2D componentIcon = EditorGUIUtility.ObjectContent(
                     null,
-                    representative.GetType()).image as Texture2D;
+                    representative).image as Texture2D;
                 if (componentIcon != null)
                 {
                     previews[id] = componentIcon;
@@ -76,6 +78,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             if (preview != null)
             {
                 previews[id] = preview;
+                assetPreviewIds.Add(id);
             }
 
             return preview;
@@ -84,6 +87,14 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         internal void Clear()
         {
             previews.Clear();
+            representativeTypes.Clear();
+            assetPreviewIds.Clear();
+        }
+
+        internal void ClearAssets()
+        {
+            foreach (int id in assetPreviewIds) previews.Remove(id);
+            assetPreviewIds.Clear();
         }
 
         private static UnityEngine.Object GetPreviewTarget(GameObject gameObject)
@@ -114,6 +125,15 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             return GetRepresentativeComponent(gameObject)?.GetType();
         }
 
+        private System.Type GetRepresentativeComponentTypeCached(GameObject gameObject)
+        {
+            int id = gameObject.GetInstanceID();
+            if (representativeTypes.TryGetValue(id, out System.Type type)) return type;
+            type = GetRepresentativeComponentType(gameObject);
+            representativeTypes[id] = type;
+            return type;
+        }
+
         private static Component GetRepresentativeComponent(GameObject gameObject)
         {
             if (gameObject == null || HasRenderableGeometry(gameObject))
@@ -127,12 +147,17 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 
         private static bool HasRenderableGeometry(GameObject gameObject)
         {
-            return gameObject.GetComponentsInChildren<MeshFilter>(true)
-                       .Any(filter => filter.sharedMesh != null) ||
-                   gameObject.GetComponentsInChildren<SkinnedMeshRenderer>(true)
-                       .Any(renderer => renderer.sharedMesh != null) ||
-                   gameObject.GetComponentsInChildren<SpriteRenderer>(true)
-                       .Any(renderer => renderer.sprite != null);
+            foreach (Renderer renderer in gameObject.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer is SkinnedMeshRenderer skinned && skinned.sharedMesh != null) return true;
+                if (renderer is SpriteRenderer sprite && sprite.sprite != null) return true;
+                if (renderer is MeshRenderer)
+                {
+                    MeshFilter filter = renderer.GetComponent<MeshFilter>();
+                    if (filter != null && filter.sharedMesh != null) return true;
+                }
+            }
+            return false;
         }
     }
 }

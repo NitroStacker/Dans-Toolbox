@@ -10,6 +10,15 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 {
     internal sealed class BetterHierarchyAtlasView : IDisposable
     {
+        private static readonly BetterHierarchyAtlasSource[] ToolSources =
+        {
+            BetterHierarchyAtlasSource.Scene,
+            BetterHierarchyAtlasSource.Selection,
+            BetterHierarchyAtlasSource.Favorites,
+            BetterHierarchyAtlasSource.Recent,
+            BetterHierarchyAtlasSource.Prefabs
+        };
+        private static readonly string[] ToolLabels = { "ALL", "BRANCH", "★", "RECENT", "CREATE" };
         private readonly BetterHierarchyWindow host;
         private readonly BetterHierarchyPreviewCache previews = new BetterHierarchyPreviewCache();
         private readonly HashSet<int> expandedObjects = new HashSet<int>();
@@ -19,6 +28,12 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         private string cachedSearch = string.Empty;
         private BetterHierarchyAtlasSource cachedSource;
         private List<GameObject> prefabAssets = new List<GameObject>();
+        private int styledThemeRevision = -1;
+        private GUIStyle emptyLabelStyle;
+        private GUIStyle emptyTitleStyle;
+        private GUIStyle nameLabelStyle;
+        private GUIStyle warningLabelStyle;
+        private GUIStyle favoriteLabelStyle;
 
         internal BetterHierarchyAtlasView(BetterHierarchyWindow host)
         {
@@ -33,6 +48,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             ref float tileSize,
             DansToolboxPalette palette)
         {
+            EnsureStyles(palette);
             Rect tools = new Rect(rect.x, rect.y, rect.width, 34f);
             Rect grid = new Rect(rect.x, tools.yMax, rect.width, Mathf.Max(1f, rect.height - tools.height));
             DrawTools(tools, source, ref tileSize, palette, out BetterHierarchyAtlasSource selectedSource);
@@ -56,15 +72,10 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             EditorGUI.DrawRect(rect, palette.Inset);
             selected = source;
             float x = rect.x + 6f;
-            foreach ((BetterHierarchyAtlasSource value, string label) in new[]
-                     {
-                         (BetterHierarchyAtlasSource.Scene, "ALL"),
-                         (BetterHierarchyAtlasSource.Selection, "BRANCH"),
-                         (BetterHierarchyAtlasSource.Favorites, "★"),
-                         (BetterHierarchyAtlasSource.Recent, "RECENT"),
-                         (BetterHierarchyAtlasSource.Prefabs, "CREATE")
-                     })
+            for (int toolIndex = 0; toolIndex < ToolSources.Length; toolIndex++)
             {
+                BetterHierarchyAtlasSource value = ToolSources[toolIndex];
+                string label = ToolLabels[toolIndex];
                 float width = label.Length <= 1 ? 28f : label.Length * 7f + 14f;
                 Rect button = new Rect(x, rect.y + 6f, width, 22f);
                 bool active = source == value;
@@ -89,7 +100,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             EditorGUI.DrawRect(viewport, BetterHierarchyWindow.CanvasColor);
             if (entries.Count == 0)
             {
-                DrawEmpty(viewport, palette);
+                DrawEmpty(viewport);
                 HandleBlankInput(viewport);
                 return;
             }
@@ -159,11 +170,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
             else
             {
-                GUI.Label(previewRect, entry.IsPrefab ? "PREFAB" : "OBJECT", new GUIStyle(EditorStyles.miniBoldLabel)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = palette.Muted }
-                });
+                GUI.Label(previewRect, entry.IsPrefab ? "PREFAB" : "OBJECT", emptyLabelStyle);
             }
 
             float nameLeft = rect.x + 7f;
@@ -184,11 +191,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
 
             Rect nameRect = new Rect(nameLeft, previewRect.yMax + 6f, rect.xMax - nameLeft - 7f, 17f);
-            GUI.Label(nameRect, new GUIContent(entry.Name, entry.Path), new GUIStyle(EditorStyles.miniBoldLabel)
-            {
-                clipping = TextClipping.Clip,
-                normal = { textColor = palette.Text }
-            });
+            GUI.Label(nameRect, new GUIContent(entry.Name, entry.Path), nameLabelStyle);
 
             if (entry.GameObject != null)
             {
@@ -202,17 +205,13 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                         ? palette.Danger
                         : palette.Warning);
                     GUI.Label(warning, new GUIContent("!", BetterHierarchyDiagnostics.GetTooltip(diagnostics)),
-                        new GUIStyle(EditorStyles.miniBoldLabel)
-                        {
-                            alignment = TextAnchor.MiddleCenter,
-                            normal = { textColor = Color.black }
-                        });
+                        warningLabelStyle);
                 }
 
                 if (BetterHierarchyUserSettings.IsFavorite(entry.GameObject))
                 {
                     GUI.Label(new Rect(rect.x + 8f, rect.y + 7f, 16f, 16f), "★",
-                        new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = palette.Accent } });
+                        favoriteLabelStyle);
                 }
             }
 
@@ -524,20 +523,12 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 .ToList();
         }
 
-        private static void DrawEmpty(Rect rect, DansToolboxPalette palette)
+        private void DrawEmpty(Rect rect)
         {
             GUI.Label(new Rect(rect.x + 20f, rect.center.y - 26f, rect.width - 40f, 22f), "NO MATCHES",
-                new GUIStyle(EditorStyles.boldLabel)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = palette.Text }
-                });
+                emptyTitleStyle);
             GUI.Label(new Rect(rect.x + 20f, rect.center.y, rect.width - 40f, 20f), "Clear filters or choose another source.",
-                new GUIStyle(EditorStyles.miniLabel)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = palette.Muted }
-                });
+                emptyLabelStyle);
         }
 
         internal void SelectAllEntries()
@@ -575,12 +566,44 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         internal void InvalidateAssets()
         {
             assetsDirty = true;
-            Invalidate();
+            dirty = true;
+            previews.ClearAssets();
+            host.Repaint();
         }
 
         public void Dispose()
         {
             previews.Clear();
+        }
+
+        private void EnsureStyles(DansToolboxPalette palette)
+        {
+            if (styledThemeRevision == DansToolboxTheme.Revision && emptyLabelStyle != null) return;
+            styledThemeRevision = DansToolboxTheme.Revision;
+            emptyLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = palette.Muted }
+            };
+            emptyTitleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = palette.Text }
+            };
+            nameLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                clipping = TextClipping.Clip,
+                normal = { textColor = palette.Text }
+            };
+            warningLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.black }
+            };
+            favoriteLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                normal = { textColor = palette.Accent }
+            };
         }
 
         private readonly struct AtlasEntry

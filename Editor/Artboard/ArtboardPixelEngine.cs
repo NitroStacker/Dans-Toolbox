@@ -66,28 +66,66 @@ namespace DansToolbox.EditorTools.Artboard
             return output;
         }
 
+        internal static void CompositeRegion(
+            ArtboardAsset asset,
+            int frameIndex,
+            Func<int, int, Color32[]> pixelsForCel,
+            Color32[] destination,
+            RectInt region,
+            bool includeBackground)
+        {
+            int width = asset.Width;
+            int height = asset.Height;
+            int xMin = Mathf.Clamp(region.xMin, 0, width);
+            int xMax = Mathf.Clamp(region.xMax, 0, width);
+            int yMin = Mathf.Clamp(region.yMin, 0, height);
+            int yMax = Mathf.Clamp(region.yMax, 0, height);
+            Color32 clear = includeBackground && !asset.Transparent ? asset.Background : default;
+            for (int y = yMin; y < yMax; y++)
+            {
+                int row = y * width;
+                for (int x = xMin; x < xMax; x++) destination[row + x] = clear;
+            }
+
+            for (int layerIndex = 0; layerIndex < asset.Layers.Count; layerIndex++)
+            {
+                ArtboardLayer layer = asset.Layers[layerIndex];
+                if (!layer.Visible || layer.Opacity <= 0f) continue;
+                Color32[] source = pixelsForCel(frameIndex, layerIndex);
+                if (source == null || source.Length != destination.Length) continue;
+                for (int y = yMin; y < yMax; y++)
+                {
+                    int row = y * width;
+                    for (int x = xMin; x < xMax; x++)
+                    {
+                        int index = row + x;
+                        destination[index] = BlendPixel(destination[index], source[index], layer.Opacity);
+                    }
+                }
+            }
+        }
+
         internal static void BlendOver(Color32[] destination, Color32[] source, float opacity)
         {
             int count = Mathf.Min(destination.Length, source.Length);
             for (int i = 0; i < count; i++)
             {
-                Color32 src = source[i];
-                float sa = src.a / 255f * opacity;
-                if (sa <= 0f) continue;
-                Color32 dst = destination[i];
-                float da = dst.a / 255f;
-                float oa = sa + da * (1f - sa);
-                if (oa <= 0.0001f)
-                {
-                    destination[i] = default;
-                    continue;
-                }
-                destination[i] = new Color32(
-                    (byte)Mathf.Clamp(Mathf.RoundToInt((src.r * sa + dst.r * da * (1f - sa)) / oa), 0, 255),
-                    (byte)Mathf.Clamp(Mathf.RoundToInt((src.g * sa + dst.g * da * (1f - sa)) / oa), 0, 255),
-                    (byte)Mathf.Clamp(Mathf.RoundToInt((src.b * sa + dst.b * da * (1f - sa)) / oa), 0, 255),
-                    (byte)Mathf.Clamp(Mathf.RoundToInt(oa * 255f), 0, 255));
+                destination[i] = BlendPixel(destination[i], source[i], opacity);
             }
+        }
+
+        private static Color32 BlendPixel(Color32 dst, Color32 src, float opacity)
+        {
+            float sa = src.a / 255f * opacity;
+            if (sa <= 0f) return dst;
+            float da = dst.a / 255f;
+            float oa = sa + da * (1f - sa);
+            if (oa <= 0.0001f) return default;
+            return new Color32(
+                (byte)Mathf.Clamp(Mathf.RoundToInt((src.r * sa + dst.r * da * (1f - sa)) / oa), 0, 255),
+                (byte)Mathf.Clamp(Mathf.RoundToInt((src.g * sa + dst.g * da * (1f - sa)) / oa), 0, 255),
+                (byte)Mathf.Clamp(Mathf.RoundToInt((src.b * sa + dst.b * da * (1f - sa)) / oa), 0, 255),
+                (byte)Mathf.Clamp(Mathf.RoundToInt(oa * 255f), 0, 255));
         }
 
         internal static void DrawStroke(

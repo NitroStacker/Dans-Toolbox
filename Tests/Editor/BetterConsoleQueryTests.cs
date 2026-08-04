@@ -124,6 +124,70 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void Store_AddRangePublishesOneRevisionAndIndexesEveryNativeLine()
+        {
+            BetterConsoleStore.Clear();
+            try
+            {
+                int revision = BetterConsoleStore.Revision;
+                BetterConsoleEntry first = Entry();
+                first.message = "First batch entry";
+                first.nativeLineIndex = 7001;
+                BetterConsoleEntry second = Entry();
+                second.message = "Second batch entry";
+                second.nativeLineIndex = 7002;
+
+                BetterConsoleStore.AddRange(new[] { first, second });
+
+                Assert.That(BetterConsoleStore.Revision, Is.EqualTo(revision + 1));
+                Assert.That(BetterConsoleStore.Entries, Has.Count.EqualTo(2));
+                Assert.That(BetterConsoleStore.Entries[0], Is.SameAs(first));
+                Assert.That(BetterConsoleStore.Entries[1], Is.SameAs(second));
+                Assert.That(BetterConsoleStore.ContainsNativeLine(7001), Is.True);
+                Assert.That(BetterConsoleStore.ContainsNativeLine(7002), Is.True);
+            }
+            finally
+            {
+                BetterConsoleStore.Clear();
+            }
+        }
+
+        [Test]
+        public void Store_NativeReconciliationPreservesExistingEntryIdentityAndOrder()
+        {
+            BetterConsoleStore.Clear();
+            try
+            {
+                BetterConsoleEntry first = Entry();
+                first.message = "Repeated native message";
+                first.nativeLineIndex = 8101;
+                BetterConsoleEntry second = Entry();
+                second.message = "Repeated native message";
+                second.nativeLineIndex = 8102;
+                BetterConsoleStore.AddRange(new[] { first, second });
+                long firstId = first.id;
+                long secondId = second.id;
+
+                BetterConsoleEntry nativeSecond = Entry();
+                nativeSecond.message = second.message;
+                nativeSecond.nativeLineIndex = 8102;
+                BetterConsoleEntry nativeFirst = Entry();
+                nativeFirst.message = first.message;
+                nativeFirst.nativeLineIndex = 8101;
+                BetterConsoleStore.ReconcileNativeSnapshot(new[] { nativeSecond, nativeFirst });
+
+                Assert.That(BetterConsoleStore.Entries[0].id, Is.EqualTo(secondId));
+                Assert.That(BetterConsoleStore.Entries[1].id, Is.EqualTo(firstId));
+                Assert.That(BetterConsoleStore.Entries[0], Is.SameAs(second));
+                Assert.That(BetterConsoleStore.Entries[1], Is.SameAs(first));
+            }
+            finally
+            {
+                BetterConsoleStore.Clear();
+            }
+        }
+
+        [Test]
         public void TargetQuery_MatchesContextComponentsAndAssetPathsAsAlternatives()
         {
             GameObject context = new GameObject("Diagnostic Target");

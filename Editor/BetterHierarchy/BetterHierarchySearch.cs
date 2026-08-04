@@ -287,11 +287,27 @@ namespace DansToolbox.EditorTools.BetterHierarchy
     internal static class BetterHierarchyRuleMatcher
     {
         private static readonly Dictionary<string, Regex> RegexCache = new Dictionary<string, Regex>();
+        private static readonly Dictionary<int, CachedStyle> StyleCache = new Dictionary<int, CachedStyle>();
+        private static int revision;
+
+        static BetterHierarchyRuleMatcher()
+        {
+            EditorApplication.hierarchyChanged += Invalidate;
+            EditorApplication.projectChanged += Invalidate;
+            Undo.undoRedoPerformed += Invalidate;
+            BetterHierarchyProjectSettings.Changed += Invalidate;
+        }
 
         internal static BetterHierarchyStyle GetStyle(
             GameObject gameObject,
             BetterHierarchyDiagnosticFlags diagnostics)
         {
+            if (gameObject == null) return default;
+            int id = gameObject.GetInstanceID();
+            if (StyleCache.TryGetValue(id, out CachedStyle cached) &&
+                cached.Revision == revision && cached.Diagnostics == diagnostics)
+                return cached.Style;
+
             BetterHierarchyRule best = null;
             foreach (BetterHierarchyRule rule in BetterHierarchyProjectSettings.Rules)
             {
@@ -306,7 +322,15 @@ namespace DansToolbox.EditorTools.BetterHierarchy
                 }
             }
 
-            return new BetterHierarchyStyle(best);
+            BetterHierarchyStyle style = new BetterHierarchyStyle(best);
+            StyleCache[id] = new CachedStyle(revision, diagnostics, style);
+            return style;
+        }
+
+        internal static void Invalidate()
+        {
+            revision++;
+            StyleCache.Clear();
         }
 
         internal static bool Matches(
@@ -424,6 +448,20 @@ namespace DansToolbox.EditorTools.BetterHierarchy
             }
 
             return regex.IsMatch(input ?? string.Empty);
+        }
+
+        private readonly struct CachedStyle
+        {
+            internal CachedStyle(int revision, BetterHierarchyDiagnosticFlags diagnostics, BetterHierarchyStyle style)
+            {
+                Revision = revision;
+                Diagnostics = diagnostics;
+                Style = style;
+            }
+
+            internal int Revision { get; }
+            internal BetterHierarchyDiagnosticFlags Diagnostics { get; }
+            internal BetterHierarchyStyle Style { get; }
         }
     }
 }

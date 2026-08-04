@@ -38,6 +38,11 @@ namespace DansToolbox.EditorTools.BetterScene
         private static int eraseStrokeControlId;
         private static bool eraseModeChangePending;
         private static bool pendingEraseMode;
+        private static int sceneStyleRevision = -1;
+        private static GUIStyle diagnosticLabelStyle;
+        private static GUIStyle measurementLabelStyle;
+        private static GUIStyle placementLabelStyle;
+        private static GUIStyle eraseLabelStyle;
 
         static BetterSceneController()
         {
@@ -275,7 +280,6 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             if (!DansToolboxSettings.IsToolEnabled(DansToolboxTools.BetterSceneId)) return;
             Event current = Event.current;
-            if (current.type == EventType.MouseMove || current.type == EventType.DragUpdated) sceneView.Repaint();
             if (eraseMode && !CanPlaceAsset(BetterSceneSettings.PlacementAsset))
             {
                 EndEraseStroke();
@@ -307,14 +311,29 @@ namespace DansToolbox.EditorTools.BetterScene
             bool nextShiftSnap = placingAsset && current.shift && snapMode != BetterSceneSnapMode.Vertex;
             if (shiftSnapActive != nextShiftSnap) sceneView.Repaint();
             shiftSnapActive = nextShiftSnap;
-            hasHoverPoint = TryGetWorldPoint(
-                sceneView,
-                current.mousePosition,
-                shiftSnapActive,
-                placementAsset,
-                out hoverPoint,
-                out hoverNormal,
-                out hoverObject);
+            bool needsWorldPoint = placingAsset || mode == BetterSceneMode.Measure;
+            bool pointerUpdate = current.type == EventType.MouseMove ||
+                                 current.type == EventType.MouseDrag ||
+                                 current.type == EventType.MouseDown ||
+                                 current.type == EventType.DragUpdated ||
+                                 current.type == EventType.DragPerform;
+            if (needsWorldPoint && pointerUpdate)
+            {
+                hasHoverPoint = TryGetWorldPoint(
+                    sceneView,
+                    current.mousePosition,
+                    shiftSnapActive,
+                    placementAsset,
+                    out hoverPoint,
+                    out hoverNormal,
+                    out hoverObject);
+                if (pointerUpdate) sceneView.Repaint();
+            }
+            else if (!needsWorldPoint)
+            {
+                hasHoverPoint = false;
+                hoverObject = null;
+            }
             HandleEscape(current);
             if (current.type != EventType.Used)
             {
@@ -644,13 +663,11 @@ namespace DansToolbox.EditorTools.BetterScene
             }
             if (BetterSceneSettings.DrawDiagnostics && mode == BetterSceneMode.Review)
             {
+                EnsureSceneStyles();
                 BetterSceneDiagnosticReport report = BetterSceneDiagnostics.Current;
                 Bounds bounds = BetterSceneOperations.GetCombinedBounds(selected);
-                GUIStyle style = new GUIStyle(EditorStyles.miniBoldLabel)
-                {
-                    normal = { textColor = report.Errors > 0 ? palette.Danger : report.Warnings > 0 ? palette.Warning : palette.Success }
-                };
-                Handles.Label(bounds.max, report.Badge + "  " + selected.Length + " SELECTED", style);
+                diagnosticLabelStyle.normal.textColor = report.Errors > 0 ? palette.Danger : report.Warnings > 0 ? palette.Warning : palette.Success;
+                Handles.Label(bounds.max, report.Badge + "  " + selected.Length + " SELECTED", diagnosticLabelStyle);
             }
             Handles.zTest = previousZ;
         }
@@ -667,9 +684,11 @@ namespace DansToolbox.EditorTools.BetterScene
             Handles.DrawWireDisc(measureStart, SceneView.lastActiveSceneView == null ? Vector3.up : SceneView.lastActiveSceneView.camera.transform.forward, sizeA);
             Handles.DrawWireDisc(end, SceneView.lastActiveSceneView == null ? Vector3.up : SceneView.lastActiveSceneView.camera.transform.forward, sizeB);
             Vector3 delta = end - measureStart;
+            EnsureSceneStyles();
+            measurementLabelStyle.normal.textColor = palette.Text;
             Handles.Label((measureStart + end) * 0.5f,
                 delta.magnitude.ToString("0.###") + " m  ·  " + FormatVector(delta),
-                new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = palette.Text } });
+                measurementLabelStyle);
         }
 
         private static void DrawPlacementPreview(SceneView sceneView)
@@ -695,11 +714,12 @@ namespace DansToolbox.EditorTools.BetterScene
             Handles.DrawLine(hoverPoint, hoverPoint + hoverNormal * size * 1.5f);
             if (labelAsset != null)
             {
+                EnsureSceneStyles();
+                placementLabelStyle.normal.textColor = palette.Signal;
                 string label = shiftSnapActive
                     ? labelAsset.name + "\nSHIFT  ·  SMART SNAP"
                     : labelAsset.name;
-                Handles.Label(hoverPoint + hoverNormal * size * 1.7f, label,
-                    new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = palette.Signal } });
+                Handles.Label(hoverPoint + hoverNormal * size * 1.7f, label, placementLabelStyle);
             }
         }
 
@@ -747,12 +767,9 @@ namespace DansToolbox.EditorTools.BetterScene
                         ? "ERASE " + asset.name + "  ·  NO MATCH"
                         : "HOLD + DRAG TO ERASE  ·  " + eraseHoverObject.name;
                 }
-                GUIStyle style = new GUIStyle(EditorStyles.helpBox)
-                {
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = eraseHoverObject == null ? palette.Muted : palette.Danger }
-                };
+                EnsureSceneStyles();
+                GUIStyle style = eraseLabelStyle;
+                style.normal.textColor = eraseHoverObject == null ? palette.Muted : palette.Danger;
                 GUIContent content = new GUIContent(text);
                 Vector2 labelSize = style.CalcSize(content);
                 Vector2 mouse = Event.current.mousePosition + new Vector2(18f, 18f);
@@ -853,6 +870,20 @@ namespace DansToolbox.EditorTools.BetterScene
             }
         }
 
+        private static void EnsureSceneStyles()
+        {
+            if (sceneStyleRevision == DansToolboxTheme.Revision && diagnosticLabelStyle != null) return;
+            sceneStyleRevision = DansToolboxTheme.Revision;
+            diagnosticLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel);
+            measurementLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel);
+            placementLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel);
+            eraseLabelStyle = new GUIStyle(EditorStyles.helpBox)
+            {
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+        }
+
         private static string FormatVector(Vector3 value)
         {
             return "(" + value.x.ToString("0.##") + ", " + value.y.ToString("0.##") + ", " + value.z.ToString("0.##") + ")";
@@ -862,14 +893,12 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             Changed?.Invoke();
             SceneView.RepaintAll();
-            foreach (BetterSceneWindow window in Resources.FindObjectsOfTypeAll<BetterSceneWindow>()) window.Repaint();
         }
 
         private static void RepaintVisualState()
         {
             Changed?.Invoke();
             SceneView.lastActiveSceneView?.Repaint();
-            foreach (BetterSceneWindow window in Resources.FindObjectsOfTypeAll<BetterSceneWindow>()) window.Repaint();
         }
     }
 }

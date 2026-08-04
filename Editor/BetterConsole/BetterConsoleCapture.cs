@@ -92,6 +92,7 @@ namespace DansToolbox.EditorTools.BetterConsole
         {
             UpdateAutomaticSessions();
             int budget = 500;
+            List<BetterConsoleEntry> captured = null;
             while (budget-- > 0 && pending.TryDequeue(out PendingEntry item))
             {
                 BetterConsoleCategory inferred = BetterConsoleClassification.Categorize(
@@ -135,7 +136,8 @@ namespace DansToolbox.EditorTools.BetterConsole
                     tags = item.tags,
                     properties = item.properties
                 };
-                BetterConsoleStore.Add(entry);
+                captured ??= new List<BetterConsoleEntry>(Mathf.Min(500, pending.Count + 1));
+                captured.Add(entry);
 
                 if (BetterConsoleSettings.ErrorPause &&
                     EditorApplication.isPlaying &&
@@ -144,6 +146,7 @@ namespace DansToolbox.EditorTools.BetterConsole
                     EditorApplication.isPaused = true;
                 }
             }
+            if (captured != null) BetterConsoleStore.AddRange(captured);
 
             if (BetterConsoleSettings.CaptureNativeHistory && EditorApplication.timeSinceStartup >= nextNativePoll)
             {
@@ -155,10 +158,14 @@ namespace DansToolbox.EditorTools.BetterConsole
                 }
                 else
                 {
+                    List<BetterConsoleEntry> additions = null;
                     foreach (BetterConsoleEntry native in nativeRead.Entries)
                     {
-                        if (!IsStoreDuplicate(native)) BetterConsoleStore.Add(native);
+                        if (IsStoreDuplicate(native)) continue;
+                        additions ??= new List<BetterConsoleEntry>(nativeRead.Entries.Count);
+                        additions.Add(native);
                     }
+                    if (additions != null) BetterConsoleStore.AddRange(additions);
                 }
             }
 

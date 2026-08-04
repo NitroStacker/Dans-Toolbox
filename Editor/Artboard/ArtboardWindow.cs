@@ -60,6 +60,8 @@ namespace DansToolbox.EditorTools.Artboard
 
         [NonSerialized] private readonly Dictionary<string, Color32[]> celCache = new Dictionary<string, Color32[]>();
         [NonSerialized] private readonly Dictionary<int, Texture2D> frameTextures = new Dictionary<int, Texture2D>();
+        [NonSerialized] private readonly Dictionary<int, Color32[]> frameComposites = new Dictionary<int, Color32[]>();
+        [NonSerialized] private readonly Dictionary<int, Color32[]> regionBuffers = new Dictionary<int, Color32[]>();
         [NonSerialized] private Rect workspaceRect;
         [NonSerialized] private Rect artboardRect;
         [NonSerialized] private bool drawing;
@@ -150,6 +152,7 @@ namespace DansToolbox.EditorTools.Artboard
 
         private void OnUndoRedo()
         {
+            document?.InvalidateIntegrity();
             document?.EnsureIntegrity();
             ClampSelection();
             ClearCaches();
@@ -629,7 +632,7 @@ namespace DansToolbox.EditorTools.Artboard
             {
                 Color32 replacement = color;
                 if (ArtboardPixelEngine.FloodFill(pixels, document.Width, document.Height, point.x, point.y, replacement) > 0)
-                    CommitPixels("Flood Fill");
+                    CommitPixels("Flood Fill", true);
                 return;
             }
             drawing = true;
@@ -638,7 +641,7 @@ namespace DansToolbox.EditorTools.Artboard
             if (tool == ArtboardTool.Pencil || tool == ArtboardTool.Brush || tool == ArtboardTool.Eraser)
             {
                 DrawFreehand(point, point);
-                InvalidateFrame(activeFrame);
+                UpdateFrameRegion(activeFrame, StrokeBounds(point, point));
             }
         }
 
@@ -648,6 +651,7 @@ namespace DansToolbox.EditorTools.Artboard
             if (tool == ArtboardTool.Pencil || tool == ArtboardTool.Brush || tool == ArtboardTool.Eraser)
             {
                 DrawFreehand(gestureLast, point);
+                UpdateFrameRegion(activeFrame, StrokeBounds(gestureLast, point));
                 gestureLast = point;
             }
             else
@@ -657,14 +661,15 @@ namespace DansToolbox.EditorTools.Artboard
                 DrawShape(gestureStart, point, pixels);
                 gestureLast = point;
             }
-            InvalidateFrame(activeFrame);
+            if (tool != ArtboardTool.Pencil && tool != ArtboardTool.Brush && tool != ArtboardTool.Eraser)
+                UpdateFrameRegion(activeFrame, new RectInt(0, 0, document.Width, document.Height));
         }
 
         private void EndGesture()
         {
             if (!drawing) return;
             drawing = false;
-            CommitPixels(tool == ArtboardTool.Pencil || tool == ArtboardTool.Brush || tool == ArtboardTool.Eraser ? "Paint Stroke" : "Draw Shape");
+            CommitPixels(tool == ArtboardTool.Pencil || tool == ArtboardTool.Brush || tool == ArtboardTool.Eraser ? "Paint Stroke" : "Draw Shape", false);
             gestureBase = null;
         }
 
@@ -675,7 +680,7 @@ namespace DansToolbox.EditorTools.Artboard
             Array.Copy(gestureBase, pixels, pixels.Length);
             drawing = false;
             gestureBase = null;
-            InvalidateFrame(activeFrame);
+            UpdateFrameRegion(activeFrame, new RectInt(0, 0, document.Width, document.Height));
             status = "Gesture cancelled";
         }
 
@@ -704,13 +709,13 @@ namespace DansToolbox.EditorTools.Artboard
             }
         }
 
-        private void CommitPixels(string undoName)
+        private void CommitPixels(string undoName, bool refreshPreview)
         {
             Color32[] pixels = GetCelPixels(activeFrame, activeLayer);
             Undo.RecordObject(document, undoName);
             document.SetCelPixels(activeFrame, activeLayer, ArtboardPixelEngine.Encode(pixels, document.Width, document.Height));
             EditorUtility.SetDirty(document);
-            InvalidateFrame(activeFrame);
+            if (refreshPreview) UpdateFrameRegion(activeFrame, new RectInt(0, 0, document.Width, document.Height));
             status = undoName;
         }
 
@@ -859,6 +864,7 @@ namespace DansToolbox.EditorTools.Artboard
             frameIndex = Mathf.Clamp(frameIndex, 0, document.Frames.Count - 1);
             if (frameTextures.TryGetValue(frameIndex, out Texture2D texture) && texture != null) return texture;
             Color32[] composite = ArtboardPixelEngine.Composite(document, frameIndex, GetCelPixels, false);
+            frameComposites[frameIndex] = composite;
             texture = new Texture2D(document.Width, document.Height, TextureFormat.RGBA32, false, true)
             {
                 name = document.name + " Preview",
@@ -876,12 +882,64 @@ namespace DansToolbox.EditorTools.Artboard
         {
             if (frameTextures.TryGetValue(frameIndex, out Texture2D texture) && texture != null) DestroyImmediate(texture);
             frameTextures.Remove(frameIndex);
+            frameComposites.Remove(frameIndex);
         }
 
         private void InvalidateAllFrames()
         {
             foreach (Texture2D texture in frameTextures.Values) if (texture != null) DestroyImmediate(texture);
             frameTextures.Clear();
+            frameComposites.Clear();
+            regionBuffers.Clear();
+        }
+
+        private void UpdateFrameRegion(int frameIndex, RectInt region)
+        {
+            if (!frameTextures.TryGetValue(frameIndex, out Texture2D texture) || texture == null ||
+                !frameComposites.TryGetValue(frameIndex, out Color32[] composite) || composite == null)
+                return;
+            int xMin = Mathf.Clamp(region.xMin, 0, document.Width);
+            int xMax = Mathf.Clamp(region.xMax, 0, document.Width);
+            int yMin = Mathf.Clamp(region.yMin, 0, document.Height);
+            int yMax = Mathf.Clamp(region.yMax, 0, document.Height);
+            if (xMax <= xMin || yMax <= yMin) return;
+            RectInt clipped = new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
+            ArtboardPixelEngine.CompositeRegion(document, frameIndex, GetCelPixels, composite, clipped, false);
+            int blockLength = clipped.width * clipped.height;
+            if (!regionBuffers.TryGetValue(blockLength, out Color32[] block))
+            {
+                block = new Color32[blockLength];
+                regionBuffers.Add(blockLength, block);
+            }
+            for (int y = 0; y < clipped.height; y++)
+                Array.Copy(composite, (clipped.y + y) * document.Width + clipped.x,
+                    block, y * clipped.width, clipped.width);
+            texture.SetPixels32(clipped.x, clipped.y, clipped.width, clipped.height, block);
+            texture.Apply(false, false);
+        }
+
+        private RectInt StrokeBounds(Vector2Int from, Vector2Int to)
+        {
+            int radius = Mathf.Max(1, brushSize) / 2 + 1;
+            int xMin = Mathf.Min(from.x, to.x) - radius;
+            int xMax = Mathf.Max(from.x, to.x) + radius + 1;
+            int yMin = Mathf.Min(from.y, to.y) - radius;
+            int yMax = Mathf.Max(from.y, to.y) + radius + 1;
+            if (mirrorX)
+            {
+                int mirroredMin = document.Width - xMax;
+                int mirroredMax = document.Width - xMin;
+                xMin = Mathf.Min(xMin, mirroredMin);
+                xMax = Mathf.Max(xMax, mirroredMax);
+            }
+            if (mirrorY)
+            {
+                int mirroredMin = document.Height - yMax;
+                int mirroredMax = document.Height - yMin;
+                yMin = Mathf.Min(yMin, mirroredMin);
+                yMax = Mathf.Max(yMax, mirroredMax);
+            }
+            return new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
         }
 
         private void ClearCaches()
@@ -1018,12 +1076,7 @@ namespace DansToolbox.EditorTools.Artboard
         private void DrawWorkspaceDots(Rect rect, DansToolboxPalette palette)
         {
             Color dot = new Color(palette.Border.r, palette.Border.g, palette.Border.b, 0.55f);
-            const float spacing = 24f;
-            int columns = Mathf.CeilToInt(rect.width / spacing);
-            int rows = Mathf.CeilToInt(rect.height / spacing);
-            for (int y = 0; y <= rows; y++)
-                for (int x = 0; x <= columns; x++)
-                    EditorGUI.DrawRect(new Rect(rect.x + x * spacing, rect.y + y * spacing, 1f, 1f), dot);
+            ArtboardGui.DotPattern(rect, 24f, dot);
         }
 
         private void DrawWorkspaceBadge(Rect rect, DansToolboxPalette palette)

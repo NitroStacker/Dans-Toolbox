@@ -39,6 +39,7 @@ namespace DansToolbox.EditorTools.BetterHierarchy
         private BetterHierarchyAtlasView atlas;
         private GUIStyle toolbarLabel;
         private int styledThemeRevision = -1;
+        [NonSerialized] private double nextHoverUpdateAt;
         [NonSerialized] private Rect lastSearchRect;
         private bool navigatingHistory;
         [NonSerialized] private double revealStartedAt;
@@ -114,7 +115,12 @@ namespace DansToolbox.EditorTools.BetterHierarchy
 
             if (Event.current.type == EventType.MouseMove)
             {
-                Repaint();
+                double now = EditorApplication.timeSinceStartup;
+                if (now >= nextHoverUpdateAt)
+                {
+                    nextHoverUpdateAt = now + 1d / 60d;
+                    Repaint();
+                }
             }
 
             if (!DansToolboxSettings.IsToolEnabled(DansToolboxTools.BetterHierarchyId))

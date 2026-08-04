@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-08-04
+
+### Changed
+
+- Make Retro VFX source discovery incremental, cache preview-stage components, advance particle previews without replaying from zero, and avoid repeated runtime hierarchy and reflection scans.
+- Update Artboard previews by changed pixel region, reuse compositing and upload buffers, cache document integrity, and render checkerboard and workspace patterns with tiled textures.
+- Batch Better Console capture notifications, reconcile native history with indexed linear matching, and make native-line duplicate checks constant time.
+- Cache Better Inspector targets, editors, reference paths, diagnostics, and constant-repaint requirements without changing native inspector presentation or editing behavior.
+- Limit Better Scene spatial queries to relevant pointer events, preserve placement previews across unrelated project changes, and reuse overlay actions and themed GUI styles.
+- Cache Better Hierarchy diagnostics, rule matches, representative component types, previews, and themed Atlas labels while keeping asset and scene invalidation targeted.
+- Reduce repeated window discovery, native dock positioning, hover repaint, and transient GUI allocation work across the Toolbox Hub, Native Window Dock, Better Project utility windows, and Retro SFX.
+
+### Fixed
+
+- Keep Retro SFX previews on Unity's audible asset-backed path while reusing the imported preview clip until its generated audio actually changes.
+- Prevent idle Better Console capture, Better Scene overlays, and hover effects from producing unnecessary per-frame allocations or repaint work.
+- Preserve Artboard visual output while painting by recompositing only the affected region and retaining full refreshes for structural or whole-frame changes.
+
 ## [1.21.0] - 2026-08-04
 
 ### Added

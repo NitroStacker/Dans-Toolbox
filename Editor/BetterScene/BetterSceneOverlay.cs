@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using DansToolbox.Editor;
 using DansToolbox.EditorTools.BetterConsole;
 using UnityEditor;
@@ -18,6 +17,9 @@ namespace DansToolbox.EditorTools.BetterScene
         private static bool savedViews;
         private static bool layerPresets;
         private static BetterScenePanel scrollPanel;
+        private static readonly TileAction[] tileBuffer = new TileAction[4];
+        private static readonly SegmentAction[] segmentBuffer = new SegmentAction[4];
+        private static readonly Metric[] metricBuffer = new Metric[4];
 
         internal static void DrawPanel(Rect panelRect, BetterScenePanel panel)
         {
@@ -74,21 +76,19 @@ namespace DansToolbox.EditorTools.BetterScene
         private static void DrawCreate()
         {
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "CREATE AT SCENE PIVOT", BetterSceneGui.Tiny);
-            DrawTileRow(new[]
-            {
+            DrawTileRow(
                 Tile("EMPTY", "Create an empty GameObject", IconFor(typeof(GameObject)), () => BetterSceneOperations.Create(BetterSceneCreateKind.Empty)),
                 Tile("GROUP", "Group the current selection", IconFor(typeof(Transform)), () => BetterSceneOperations.Create(BetterSceneCreateKind.Group)),
                 Tile("CUBE", "Create a Cube", IconFor(typeof(MeshRenderer)), () => BetterSceneOperations.Create(BetterSceneCreateKind.Cube)),
                 Tile("SPHERE", "Create a Sphere", IconFor(typeof(SphereCollider)), () => BetterSceneOperations.Create(BetterSceneCreateKind.Sphere))
-            });
+            );
             GUILayout.Space(5f);
-            DrawTileRow(new[]
-            {
+            DrawTileRow(
                 Tile("PLANE", "Create a Plane", IconFor(typeof(MeshFilter)), () => BetterSceneOperations.Create(BetterSceneCreateKind.Plane)),
                 Tile("CAMERA", "Create a Camera", IconFor(typeof(Camera)), () => BetterSceneOperations.Create(BetterSceneCreateKind.Camera)),
                 Tile("LIGHT", "Create a Directional Light", IconFor(typeof(Light)), () => BetterSceneOperations.Create(BetterSceneCreateKind.Light)),
                 Tile("AUDIO", "Create an Audio Source", IconFor(typeof(AudioSource)), () => BetterSceneOperations.Create(BetterSceneCreateKind.Audio))
-            });
+            );
             GUILayout.Space(8f);
             DrawHint(Selection.gameObjects.Length > 0
                 ? "GROUP preserves world transforms and remains fully Undoable."
@@ -98,29 +98,26 @@ namespace DansToolbox.EditorTools.BetterScene
         private static void DrawTransform()
         {
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "WORKING AXIS", BetterSceneGui.Tiny);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment("X", transformAxis == BetterSceneAxis.X, () => transformAxis = BetterSceneAxis.X),
                 Segment("Y", transformAxis == BetterSceneAxis.Y, () => transformAxis = BetterSceneAxis.Y),
                 Segment("Z", transformAxis == BetterSceneAxis.Z, () => transformAxis = BetterSceneAxis.Z)
-            });
+            );
             GUILayout.Space(7f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "ALIGN TO ACTIVE", BetterSceneGui.Tiny);
             bool align = Selection.gameObjects.Length >= 2 && Selection.activeGameObject != null;
-            DrawTileRow(new[]
-            {
+            DrawTileRow(
                 Tile("MIN", "Align minimum bounds", IconFor(typeof(BoxCollider)), () => BetterSceneOperations.AlignSelection(transformAxis, BetterSceneAlignAnchor.Minimum), align),
                 Tile("CENTER", "Align bounds centers", IconFor(typeof(Transform)), () => BetterSceneOperations.AlignSelection(transformAxis, BetterSceneAlignAnchor.Center), align),
                 Tile("MAX", "Align maximum bounds", IconFor(typeof(BoxCollider)), () => BetterSceneOperations.AlignSelection(transformAxis, BetterSceneAlignAnchor.Maximum), align)
-            });
+            );
             GUILayout.Space(5f);
-            DrawTileRow(new[]
-            {
+            DrawTileRow(
                 Tile("SPACE", "Distribute evenly on the working axis", IconFor(typeof(Transform)), () => BetterSceneOperations.DistributeSelection(transformAxis), Selection.gameObjects.Length >= 3),
                 Tile("GROUND", "Drop selection to the first surface below", IconFor(typeof(Terrain)), BetterSceneOperations.GroundSelection, Selection.gameObjects.Length > 0),
                 Tile("GROUP", "Group selection under one parent", IconFor(typeof(Transform)), () => BetterSceneOperations.GroupSelection(), Selection.gameObjects.Length > 0),
                 Tile("MIRROR", "Mirror around the active object", IconFor(typeof(Transform)), () => BetterSceneOperations.MirrorSelection(transformAxis), align)
-            });
+            );
             GUILayout.Space(6f);
             if (DrawDisclosure("TRANSFORM EXTRAS", transformExtras))
             {
@@ -130,20 +127,18 @@ namespace DansToolbox.EditorTools.BetterScene
             if (transformExtras)
             {
                 GUILayout.Space(4f);
-                DrawTileRow(new[]
-                {
+                DrawTileRow(
                     Tile("SNAP POS", "Snap position to Unity increments", IconFor(typeof(Transform)), () => BetterSceneOperations.SnapSelection(true, false, false), Selection.transforms.Length > 0),
                     Tile("SNAP ROT", "Snap rotation to Unity increments", IconFor(typeof(Transform)), () => BetterSceneOperations.SnapSelection(false, true, false), Selection.transforms.Length > 0),
                     Tile("SNAP SCALE", "Snap scale to Unity increments", IconFor(typeof(Transform)), () => BetterSceneOperations.SnapSelection(false, false, true), Selection.transforms.Length > 0),
                     Tile("SNAP ALL", "Snap position, rotation and scale", IconFor(typeof(MeshFilter)), () => BetterSceneOperations.SnapSelection(true, true, true), Selection.transforms.Length > 0)
-                });
+                );
                 GUILayout.Space(4f);
-                DrawSegmented(new[]
-                {
+                DrawSegmented(
                     Segment("RESET POS", false, () => BetterSceneOperations.ResetSelection(true, false, false), Selection.transforms.Length > 0),
                     Segment("RESET ROT", false, () => BetterSceneOperations.ResetSelection(false, true, false), Selection.transforms.Length > 0),
                     Segment("RESET SCALE", false, () => BetterSceneOperations.ResetSelection(false, false, true), Selection.transforms.Length > 0)
-                });
+                );
             }
         }
 
@@ -182,26 +177,23 @@ namespace DansToolbox.EditorTools.BetterScene
             {
                 GUILayout.Space(6f);
                 GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "RECENT", BetterSceneGui.Tiny);
-                DrawAssetStrip(recent.Take(5).ToArray());
+                DrawAssetStrip(recent);
             }
             GUILayout.Space(6f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "ACTION", BetterSceneGui.Tiny);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment("PLACE", !BetterSceneController.EraseMode, () => BetterSceneController.SetEraseModeAfterGui(false)),
                 Segment("ERASE CURRENT", BetterSceneController.EraseMode, () => BetterSceneController.SetEraseModeAfterGui(true), current != null)
-            });
+            );
             GUILayout.Space(6f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "SNAP TARGET", BetterSceneGui.Tiny);
-            DrawSegmented(Enum.GetValues(typeof(BetterSceneSnapMode)).Cast<BetterSceneSnapMode>()
-                .Select(candidate => Segment(candidate.ToString().ToUpperInvariant(), BetterSceneController.SnapMode == candidate, () => BetterSceneController.SetSnapMode(candidate))).ToArray());
+            DrawSnapModes();
             GUILayout.Space(5f);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment("ALIGN", BetterSceneSettings.AlignToSurface, () => BetterSceneSettings.AlignToSurface = !BetterSceneSettings.AlignToSurface),
                 Segment("PARENT", BetterSceneSettings.ParentToSurface, () => BetterSceneSettings.ParentToSurface = !BetterSceneSettings.ParentToSurface),
                 Segment("REPEAT", BetterSceneSettings.KeepPlacing, () => BetterSceneSettings.KeepPlacing = !BetterSceneSettings.KeepPlacing)
-            });
+            );
             GUILayout.Space(7f);
             DrawHint(current == null
                 ? "Choose or drag a prefab, model, sprite, mesh, or AudioClip."
@@ -213,41 +205,37 @@ namespace DansToolbox.EditorTools.BetterScene
         private static void DrawView()
         {
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "VIEWPOINT", BetterSceneGui.Tiny);
-            DrawTileRow(new[]
-            {
+            DrawTileRow(
                 Tile("PERSP", "Perspective view", IconFor(typeof(Camera)), () => BetterSceneOperations.SetView(BetterSceneViewDirection.Perspective)),
                 Tile("TOP", "Top orthographic view", IconFor(typeof(Camera)), () => BetterSceneOperations.SetView(BetterSceneViewDirection.Top)),
                 Tile("FRONT", "Front orthographic view", IconFor(typeof(Camera)), () => BetterSceneOperations.SetView(BetterSceneViewDirection.Front)),
                 Tile("RIGHT", "Right orthographic view", IconFor(typeof(Camera)), () => BetterSceneOperations.SetView(BetterSceneViewDirection.Right))
-            });
+            );
             GUILayout.Space(5f);
-            DrawTileRow(new[]
-            {
+            DrawTileRow(
                 Tile("BOTTOM", "Bottom orthographic view", IconFor(typeof(Camera)), () => BetterSceneOperations.SetView(BetterSceneViewDirection.Bottom)),
                 Tile("BACK", "Back orthographic view", IconFor(typeof(Camera)), () => BetterSceneOperations.SetView(BetterSceneViewDirection.Back)),
                 Tile("LEFT", "Left orthographic view", IconFor(typeof(Camera)), () => BetterSceneOperations.SetView(BetterSceneViewDirection.Left)),
                 Tile("CAMERA", "Create a Camera matching this Scene view", IconFor(typeof(Camera)), () => BetterSceneOperations.CreateCameraFromView())
-            });
+            );
             GUILayout.Space(6f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "VIEW BEHAVIOR", BetterSceneGui.Tiny);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment(
                     "ACCOUNT FOR ZOOM",
                     BetterSceneSettings.AccountForViewZoom,
                     () => BetterSceneSettings.AccountForViewZoom = !BetterSceneSettings.AccountForViewZoom)
-            });
+            );
             GUILayout.Space(4f);
             DrawHint(BetterSceneSettings.AccountForViewZoom
                 ? "Directional views preserve the current zoom and framing scale."
                 : "Directional views use a consistent 10-unit framing scale.");
             GUILayout.Space(5f);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment("FRAME", false, () => BetterSceneOperations.FrameSelection(), Selection.activeGameObject != null),
                 Segment("FRAME + LOCK", false, () => BetterSceneOperations.FrameSelection(true), Selection.activeGameObject != null),
                 Segment("SAVE VIEW", false, () => BetterSceneOperations.CaptureBookmark(bookmarkName), SceneView.lastActiveSceneView != null)
-            });
+            );
             GUILayout.Space(6f);
             if (DrawDisclosure("SAVED VIEWS  " + BetterSceneSettings.Bookmarks.Count, savedViews))
             {
@@ -264,11 +252,17 @@ namespace DansToolbox.EditorTools.BetterScene
                     BetterSceneOperations.CaptureBookmark(bookmarkName);
                     bookmarkName = "VIEW";
                 }
-                foreach (BetterSceneBookmark bookmark in BetterSceneSettings.Bookmarks.Take(8).ToArray())
+                int bookmarkCount = Mathf.Min(8, BetterSceneSettings.Bookmarks.Count);
+                for (int bookmarkIndex = 0; bookmarkIndex < bookmarkCount; bookmarkIndex++)
                 {
+                    BetterSceneBookmark bookmark = BetterSceneSettings.Bookmarks[bookmarkIndex];
                     Rect row = GUILayoutUtility.GetRect(10f, 24f, GUILayout.ExpandWidth(true));
                     if (BetterSceneGui.Button(new Rect(row.x, row.y, row.width - 30f, 22f), new GUIContent(bookmark.Name, "Restore saved view"))) BetterSceneOperations.RestoreBookmark(bookmark);
-                    if (BetterSceneGui.Button(new Rect(row.xMax - 26f, row.y, 26f, 22f), new GUIContent("X", "Delete saved view"))) BetterSceneSettings.RemoveBookmark(bookmark.Id);
+                    if (BetterSceneGui.Button(new Rect(row.xMax - 26f, row.y, 26f, 22f), new GUIContent("X", "Delete saved view")))
+                    {
+                        BetterSceneSettings.RemoveBookmark(bookmark.Id);
+                        break;
+                    }
                 }
             }
         }
@@ -277,31 +271,28 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             GameObject[] selected = Selection.gameObjects;
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "SELECTION", BetterSceneGui.Tiny);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment("SOLO", BetterSceneVisibility.IsIsolating, () => BetterSceneVisibility.ToggleIsolation(selected), selected.Length > 0),
                 Segment("HIDE", false, () => BetterSceneVisibility.ToggleHidden(selected), selected.Length > 0),
                 Segment("LOCK", false, () => BetterSceneVisibility.TogglePicking(selected), selected.Length > 0)
-            });
+            );
             GUILayout.Space(7f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "SCENE FILTER", BetterSceneGui.Tiny);
-            DrawTileRow(new[]
-            {
+            DrawTileRow(
                 BandTile(BetterSceneVisibilityBand.Environment, typeof(MeshRenderer)),
                 BandTile(BetterSceneVisibilityBand.Gameplay, typeof(Collider)),
                 BandTile(BetterSceneVisibilityBand.Lighting, typeof(Light)),
                 BandTile(BetterSceneVisibilityBand.Audio, typeof(AudioSource))
-            });
+            );
             GUILayout.Space(5f);
-            DrawTileRow(new[]
-            {
+            DrawTileRow(
                 BandTile(BetterSceneVisibilityBand.UI, typeof(Canvas)),
                 BandTile(BetterSceneVisibilityBand.Cameras, typeof(Camera)),
                 BandTile(BetterSceneVisibilityBand.Debug, typeof(MonoScript)),
                 Tile("RESTORE", "Restore the exact previous visibility state", IconFor(typeof(SceneAsset)), BetterSceneVisibility.Restore, BetterSceneVisibility.HasSnapshot)
-            });
+            );
             GUILayout.Space(5f);
-            DrawSegmented(new[] { Segment("SHOW + UNLOCK ALL", false, BetterSceneVisibility.ShowAndUnlockAll) });
+            DrawSegmented(Segment("SHOW + UNLOCK ALL", false, BetterSceneVisibility.ShowAndUnlockAll));
             GUILayout.Space(6f);
             if (DrawDisclosure("LAYER PRESETS  " + BetterSceneSettings.LayerPresets.Count, layerPresets))
             {
@@ -318,11 +309,17 @@ namespace DansToolbox.EditorTools.BetterScene
                     BetterSceneSettings.AddLayerPreset(layerPresetName, Tools.visibleLayers, Tools.lockedLayers);
                     layerPresetName = "LAYERS";
                 }
-                foreach (BetterSceneLayerPreset preset in BetterSceneSettings.LayerPresets.Take(8).ToArray())
+                int presetCount = Mathf.Min(8, BetterSceneSettings.LayerPresets.Count);
+                for (int presetIndex = 0; presetIndex < presetCount; presetIndex++)
                 {
+                    BetterSceneLayerPreset preset = BetterSceneSettings.LayerPresets[presetIndex];
                     Rect row = GUILayoutUtility.GetRect(10f, 24f, GUILayout.ExpandWidth(true));
                     if (BetterSceneGui.Button(new Rect(row.x, row.y, row.width - 30f, 22f), new GUIContent(preset.Name, "Apply layer preset"))) BetterSceneVisibility.ApplyLayerPreset(preset);
-                    if (BetterSceneGui.Button(new Rect(row.xMax - 26f, row.y, 26f, 22f), new GUIContent("X", "Delete layer preset"))) BetterSceneSettings.RemoveLayerPreset(preset.Id);
+                    if (BetterSceneGui.Button(new Rect(row.xMax - 26f, row.y, 26f, 22f), new GUIContent("X", "Delete layer preset")))
+                    {
+                        BetterSceneSettings.RemoveLayerPreset(preset.Id);
+                        break;
+                    }
                 }
             }
         }
@@ -333,21 +330,21 @@ namespace DansToolbox.EditorTools.BetterScene
             Rect card = GUILayoutUtility.GetRect(10f, 72f, GUILayout.ExpandWidth(true));
             BetterSceneGui.Panel(card, true);
             GUI.Label(new Rect(card.x + 10f, card.y + 8f, card.width * 0.4f, 18f), measurement.HasEnd ? "MEASUREMENT" : "LIVE MEASURE", BetterSceneGui.Tiny);
-            GUIStyle distance = new GUIStyle(BetterSceneGui.Title) { fontSize = 19, normal = { textColor = DansToolboxTheme.Current.Signal } };
+            GUIStyle distance = BetterSceneGui.LargeLabel;
+            distance.normal.textColor = DansToolboxTheme.Current.Signal;
             GUI.Label(new Rect(card.x + 10f, card.y + 27f, card.width * 0.42f, 30f), measurement.HasStart ? measurement.Distance.ToString("0.###") + " m" : "--", distance);
-            GUIStyle delta = new GUIStyle(BetterSceneGui.Label) { alignment = TextAnchor.MiddleRight };
+            GUIStyle delta = BetterSceneGui.RightLabel;
+            delta.normal.textColor = DansToolboxTheme.Current.Text;
             GUI.Label(new Rect(card.x + card.width * 0.42f, card.y + 15f, card.width * 0.55f - 8f, 40f), measurement.HasStart ? FormatVector(measurement.Delta) : "CLICK A START POINT", delta);
             GUILayout.Space(7f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "SNAP TARGET", BetterSceneGui.Tiny);
-            DrawSegmented(Enum.GetValues(typeof(BetterSceneSnapMode)).Cast<BetterSceneSnapMode>()
-                .Select(candidate => Segment(candidate.ToString().ToUpperInvariant(), BetterSceneController.SnapMode == candidate, () => BetterSceneController.SetSnapMode(candidate))).ToArray());
+            DrawSnapModes();
             GUILayout.Space(6f);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment("COPY", false, CopyMeasurement, measurement.HasStart),
                 Segment("CLEAR", false, BetterSceneController.ClearMeasurement, measurement.HasStart),
                 Segment("DONE", false, BetterSceneController.CollapsePanel)
-            });
+            );
             GUILayout.Space(7f);
             DrawHint(measurement.HasEnd ? "Measurement locked. Click again to begin a new one." : "Click start and end points. Switching tools removes the live guide.");
         }
@@ -357,29 +354,26 @@ namespace DansToolbox.EditorTools.BetterScene
             BetterSceneDiagnosticReport report = BetterSceneDiagnostics.Current;
             GameObject active = Selection.activeGameObject;
             bool hasPrefabSource = active != null && !string.IsNullOrEmpty(PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(active));
-            DrawMetricCards(new[]
-            {
+            DrawMetricCards(
                 new Metric("MISSING SCRIPTS", report.MissingScripts, report.MissingScripts > 0),
                 new Metric("MISSING REFS", report.MissingReferences, report.MissingReferences > 0),
                 new Metric("PREFAB CHANGES", report.PrefabOverrides, false),
                 new Metric("INACTIVE", report.InactiveObjects, false)
-            });
+            );
             GUILayout.Space(7f);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment("RELATED LOGS", false, () => BetterConsoleDiagnosticBridge.OpenForTargets(Selection.objects), report.Console.Total > 0),
                 Segment("INSPECT", false, () => EditorApplication.ExecuteMenuItem("Tools/Dans Toolbox/Better Inspector"), Selection.objects.Length > 0),
                 Segment("PREFAB SOURCE", false, () => BetterSceneOperations.RevealPrefabAsset(active), hasPrefabSource)
-            });
+            );
             GUILayout.Space(7f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "SCENE GUIDES", BetterSceneGui.Tiny);
-            DrawSegmented(new[]
-            {
+            DrawSegmented(
                 Segment("BOUNDS", BetterSceneSettings.DrawSelectionBounds, () => BetterSceneSettings.DrawSelectionBounds = !BetterSceneSettings.DrawSelectionBounds),
                 Segment("PIVOTS", BetterSceneSettings.DrawPivot, () => BetterSceneSettings.DrawPivot = !BetterSceneSettings.DrawPivot),
                 Segment("BADGES", BetterSceneSettings.DrawDiagnostics, () => BetterSceneSettings.DrawDiagnostics = !BetterSceneSettings.DrawDiagnostics),
                 Segment("CHILDREN", BetterSceneSettings.IncludeDescendants, () => BetterSceneSettings.IncludeDescendants = !BetterSceneSettings.IncludeDescendants)
-            });
+            );
             GUILayout.Space(7f);
             DrawHint(report.HasIssues ? "Use the actions above to investigate selected-object issues." : "No selected-object issues found. Review remains selection-aware.");
         }
@@ -430,13 +424,30 @@ namespace DansToolbox.EditorTools.BetterScene
             SceneView.RepaintAll();
         }
 
-        private static void DrawTileRow(TileAction[] tiles)
+        private static void DrawTileRow(TileAction first, TileAction second, TileAction third)
         {
-            if (tiles == null || tiles.Length == 0) return;
+            tileBuffer[0] = first;
+            tileBuffer[1] = second;
+            tileBuffer[2] = third;
+            DrawTileRow(tileBuffer, 3);
+        }
+
+        private static void DrawTileRow(TileAction first, TileAction second, TileAction third, TileAction fourth)
+        {
+            tileBuffer[0] = first;
+            tileBuffer[1] = second;
+            tileBuffer[2] = third;
+            tileBuffer[3] = fourth;
+            DrawTileRow(tileBuffer, 4);
+        }
+
+        private static void DrawTileRow(TileAction[] tiles, int count)
+        {
+            if (tiles == null || count == 0) return;
             Rect row = GUILayoutUtility.GetRect(10f, 62f, GUILayout.ExpandWidth(true));
             float gap = 5f;
-            float width = (row.width - gap * (tiles.Length - 1)) / tiles.Length;
-            for (int index = 0; index < tiles.Length; index++)
+            float width = (row.width - gap * (count - 1)) / count;
+            for (int index = 0; index < count; index++)
             {
                 TileAction tile = tiles[index];
                 Rect rect = new Rect(row.x + index * (width + gap), row.y, width, row.height);
@@ -459,11 +470,8 @@ namespace DansToolbox.EditorTools.BetterScene
                 GUI.DrawTexture(new Rect(rect.center.x - 11f, rect.y + 8f, 22f, 22f), tile.Icon, ScaleMode.ScaleToFit, true);
                 GUI.color = previous;
             }
-            GUIStyle label = new GUIStyle(BetterSceneGui.Tiny)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = tile.Enabled ? palette.Text : palette.Muted }
-            };
+            GUIStyle label = BetterSceneGui.CenteredTiny;
+            label.normal.textColor = tile.Enabled ? palette.Text : palette.Muted;
             GUI.Label(new Rect(rect.x + 3f, rect.yMax - 23f, rect.width - 6f, 18f), tile.Label, label);
             EditorGUI.BeginDisabledGroup(!tile.Enabled);
             bool clicked = GUI.Button(rect, new GUIContent(string.Empty, tile.Tooltip), GUIStyle.none);
@@ -472,13 +480,53 @@ namespace DansToolbox.EditorTools.BetterScene
             return clicked;
         }
 
-        private static void DrawSegmented(SegmentAction[] segments)
+        private static void DrawSnapModes()
         {
-            if (segments == null || segments.Length == 0) return;
+            BetterSceneSnapMode current = BetterSceneController.SnapMode;
+            DrawSegmented(
+                Segment("FREE", current == BetterSceneSnapMode.Free, () => BetterSceneController.SetSnapMode(BetterSceneSnapMode.Free)),
+                Segment("GRID", current == BetterSceneSnapMode.Grid, () => BetterSceneController.SetSnapMode(BetterSceneSnapMode.Grid)),
+                Segment("SURFACE", current == BetterSceneSnapMode.Surface, () => BetterSceneController.SetSnapMode(BetterSceneSnapMode.Surface)),
+                Segment("VERTEX", current == BetterSceneSnapMode.Vertex, () => BetterSceneController.SetSnapMode(BetterSceneSnapMode.Vertex)));
+        }
+
+        private static void DrawSegmented(SegmentAction first)
+        {
+            segmentBuffer[0] = first;
+            DrawSegmented(segmentBuffer, 1);
+        }
+
+        private static void DrawSegmented(SegmentAction first, SegmentAction second)
+        {
+            segmentBuffer[0] = first;
+            segmentBuffer[1] = second;
+            DrawSegmented(segmentBuffer, 2);
+        }
+
+        private static void DrawSegmented(SegmentAction first, SegmentAction second, SegmentAction third)
+        {
+            segmentBuffer[0] = first;
+            segmentBuffer[1] = second;
+            segmentBuffer[2] = third;
+            DrawSegmented(segmentBuffer, 3);
+        }
+
+        private static void DrawSegmented(SegmentAction first, SegmentAction second, SegmentAction third, SegmentAction fourth)
+        {
+            segmentBuffer[0] = first;
+            segmentBuffer[1] = second;
+            segmentBuffer[2] = third;
+            segmentBuffer[3] = fourth;
+            DrawSegmented(segmentBuffer, 4);
+        }
+
+        private static void DrawSegmented(SegmentAction[] segments, int count)
+        {
+            if (segments == null || count == 0) return;
             Rect row = GUILayoutUtility.GetRect(10f, 26f, GUILayout.ExpandWidth(true));
             float gap = 4f;
-            float width = (row.width - gap * (segments.Length - 1)) / segments.Length;
-            for (int index = 0; index < segments.Length; index++)
+            float width = (row.width - gap * (count - 1)) / count;
+            for (int index = 0; index < count; index++)
             {
                 SegmentAction segment = segments[index];
                 Rect rect = new Rect(row.x + index * (width + gap), row.y, width, row.height);
@@ -496,34 +544,41 @@ namespace DansToolbox.EditorTools.BetterScene
             {
                 UnityEngine.Object asset = assets[index];
                 Texture preview = AssetPreview.GetAssetPreview(asset) ?? AssetPreview.GetMiniThumbnail(asset);
-                TileAction tile = Tile(asset.name, "Place " + asset.name, preview, () =>
+                TileAction tile = Tile(asset.name, "Place " + asset.name, preview, null);
+                Rect rect = new Rect(row.x + index * (width + gap), row.y, width, row.height);
+                if (DrawTile(rect, tile))
                 {
                     BetterSceneSettings.PlacementAsset = asset;
                     BetterSceneController.SetMode(BetterSceneMode.Place);
-                });
-                Rect rect = new Rect(row.x + index * (width + gap), row.y, width, row.height);
-                if (DrawTile(rect, tile)) tile.Action();
+                }
             }
         }
 
-        private static void DrawMetricCards(Metric[] metrics)
+        private static void DrawMetricCards(Metric first, Metric second, Metric third, Metric fourth)
+        {
+            metricBuffer[0] = first;
+            metricBuffer[1] = second;
+            metricBuffer[2] = third;
+            metricBuffer[3] = fourth;
+            DrawMetricCards(metricBuffer, 4);
+        }
+
+        private static void DrawMetricCards(Metric[] metrics, int count)
         {
             Rect row = GUILayoutUtility.GetRect(10f, 64f, GUILayout.ExpandWidth(true));
             float gap = 5f;
-            float width = (row.width - gap * (metrics.Length - 1)) / metrics.Length;
+            float width = (row.width - gap * (count - 1)) / count;
             DansToolboxPalette palette = DansToolboxTheme.Current;
-            for (int index = 0; index < metrics.Length; index++)
+            for (int index = 0; index < count; index++)
             {
                 Metric metric = metrics[index];
                 Rect rect = new Rect(row.x + index * (width + gap), row.y, width, row.height);
                 BetterSceneGui.Panel(rect, true);
-                GUIStyle value = new GUIStyle(BetterSceneGui.Title)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = metric.Error ? palette.Danger : metric.Value > 0 ? palette.Warning : palette.Success }
-                };
+                GUIStyle value = BetterSceneGui.CenteredTitle;
+                value.normal.textColor = metric.Error ? palette.Danger : metric.Value > 0 ? palette.Warning : palette.Success;
                 GUI.Label(new Rect(rect.x + 3f, rect.y + 7f, rect.width - 6f, 25f), metric.Value.ToString(), value);
-                GUIStyle label = new GUIStyle(BetterSceneGui.Tiny) { alignment = TextAnchor.MiddleCenter };
+                GUIStyle label = BetterSceneGui.CenteredTiny;
+                label.normal.textColor = palette.Muted;
                 GUI.Label(new Rect(rect.x + 3f, rect.y + 35f, rect.width - 6f, 20f), metric.Label, label);
             }
         }
@@ -538,8 +593,7 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             Rect rect = GUILayoutUtility.GetRect(10f, 38f, GUILayout.ExpandWidth(true));
             BetterSceneGui.Panel(rect, true);
-            GUIStyle style = new GUIStyle(BetterSceneGui.Muted) { alignment = TextAnchor.MiddleLeft, wordWrap = true };
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 4f, rect.width - 20f, rect.height - 8f), text, style);
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 4f, rect.width - 20f, rect.height - 8f), text, BetterSceneGui.WrappedMuted);
             EditorGUI.DrawRect(new Rect(rect.x, rect.y, 3f, rect.height), DansToolboxTheme.Current.Signal);
         }
 

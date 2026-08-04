@@ -12,6 +12,7 @@ namespace DansToolbox.EditorTools.BetterProject
         [SerializeField] private UnityEngine.Object replacement;
         [SerializeField] private List<string> matches = new List<string>();
         [SerializeField] private Vector2 scroll;
+        [NonSerialized] private double nextHoverUpdateAt;
 
         internal static void Open(UnityEngine.Object sourceAsset)
         {
@@ -58,7 +59,8 @@ namespace DansToolbox.EditorTools.BetterProject
             GUILayout.EndArea();
             if (Event.current.type == EventType.MouseMove)
             {
-                Repaint();
+                double now = EditorApplication.timeSinceStartup;
+                if (BetterProjectWindow.ShouldProcessHoverUpdate(now, ref nextHoverUpdateAt)) Repaint();
             }
         }
 

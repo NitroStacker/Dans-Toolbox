@@ -14,6 +14,12 @@ namespace DansToolbox.EditorTools.BetterScene
         private static GUIStyle button;
         private static GUIStyle field;
         private static GUIStyle centered;
+        private static GUIStyle rightTiny;
+        private static GUIStyle rightLabel;
+        private static GUIStyle centeredTiny;
+        private static GUIStyle wrappedMuted;
+        private static GUIStyle largeLabel;
+        private static GUIStyle centeredTitle;
 
         internal static GUIStyle Label { get { Ensure(); return label; } }
         internal static GUIStyle Muted { get { Ensure(); return muted; } }
@@ -21,6 +27,12 @@ namespace DansToolbox.EditorTools.BetterScene
         internal static GUIStyle Title { get { Ensure(); return title; } }
         internal static GUIStyle Field { get { Ensure(); return field; } }
         internal static GUIStyle Centered { get { Ensure(); return centered; } }
+        internal static GUIStyle RightTiny { get { Ensure(); return rightTiny; } }
+        internal static GUIStyle RightLabel { get { Ensure(); return rightLabel; } }
+        internal static GUIStyle CenteredTiny { get { Ensure(); return centeredTiny; } }
+        internal static GUIStyle WrappedMuted { get { Ensure(); return wrappedMuted; } }
+        internal static GUIStyle LargeLabel { get { Ensure(); return largeLabel; } }
+        internal static GUIStyle CenteredTitle { get { Ensure(); return centeredTitle; } }
 
         internal static void Panel(Rect rect, bool inset = false, bool strong = false)
         {
@@ -63,11 +75,8 @@ namespace DansToolbox.EditorTools.BetterScene
             GUI.Label(rect, labelText, tiny);
             if (!string.IsNullOrEmpty(badge))
             {
-                GUIStyle right = new GUIStyle(tiny)
-                {
-                    alignment = TextAnchor.MiddleRight,
-                    normal = { textColor = badgeColor ?? palette.Accent }
-                };
+                GUIStyle right = rightTiny;
+                right.normal.textColor = badgeColor ?? palette.Accent;
                 GUI.Label(rect, badge, right);
             }
             EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), palette.Border);
@@ -91,6 +100,12 @@ namespace DansToolbox.EditorTools.BetterScene
             title = Make(EditorStyles.label, 13, FontStyle.Bold, palette.Text);
             centered = Make(EditorStyles.label, 10, FontStyle.Bold, palette.Text);
             centered.alignment = TextAnchor.MiddleCenter;
+            rightTiny = new GUIStyle(tiny) { alignment = TextAnchor.MiddleRight };
+            rightLabel = new GUIStyle(label) { alignment = TextAnchor.MiddleRight };
+            centeredTiny = new GUIStyle(tiny) { alignment = TextAnchor.MiddleCenter };
+            wrappedMuted = new GUIStyle(muted) { alignment = TextAnchor.MiddleLeft, wordWrap = true };
+            largeLabel = new GUIStyle(title) { alignment = TextAnchor.MiddleLeft, fontSize = 19 };
+            centeredTitle = new GUIStyle(title) { alignment = TextAnchor.MiddleCenter };
             button = Make(EditorStyles.label, 9, FontStyle.Bold, palette.Text);
             button.alignment = TextAnchor.MiddleCenter;
             button.clipping = TextClipping.Clip;

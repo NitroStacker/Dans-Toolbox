@@ -4,6 +4,13 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.19.0] - 2026-08-04
+
+### Added
+
+- Check the `main` package manifest for new Dans Toolbox releases, pulse the Unity main-toolbar Toolbox icon orange when an update is available, and provide a one-click Git package update from the Toolbox Hub.
+- Add a manual **Tools > Dans Toolbox > Check for Updates** command, cached background checks, release notes access, and clear update progress or failure feedback.
+
 ## [1.18.2] - 2026-08-04
 
 ### Added

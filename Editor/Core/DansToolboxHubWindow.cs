@@ -12,6 +12,7 @@ namespace DansToolbox.Editor
         private const float PopupHeight = 680f;
         private const float Margin = 16f;
         private const float HeaderHeight = 48f;
+        private const float UpdateBannerHeight = 58f;
         private const float SearchHeight = 38f;
         private const float FooterHeight = 30f;
         private const float CardHeight = 168f;
@@ -72,6 +73,8 @@ namespace DansToolbox.Editor
             RefreshOpenCounts();
             DansToolboxTheme.Changed -= OnThemeChanged;
             DansToolboxTheme.Changed += OnThemeChanged;
+            DansToolboxUpdateService.Changed -= OnUpdateChanged;
+            DansToolboxUpdateService.Changed += OnUpdateChanged;
             wantsMouseMove = true;
         }
 
@@ -91,11 +94,17 @@ namespace DansToolbox.Editor
         private void OnDisable()
         {
             DansToolboxTheme.Changed -= OnThemeChanged;
+            DansToolboxUpdateService.Changed -= OnUpdateChanged;
         }
 
         private void OnThemeChanged()
         {
             styledThemeRevision = -1;
+            Repaint();
+        }
+
+        private void OnUpdateChanged()
+        {
             Repaint();
         }
 
@@ -120,8 +129,14 @@ namespace DansToolbox.Editor
                 EditorGUI.DrawRect(new Rect(0f, 0f, canvas.width, 3f), palette.Accent);
             }
 
-            HubLayoutRegions layout = CalculateLayout(position.size);
+            bool showUpdate = DansToolboxUpdateService.UpdateAvailable ||
+                              DansToolboxUpdateService.IsUpdating;
+            HubLayoutRegions layout = CalculateLayout(position.size, showUpdate);
             DrawHeader(layout.Header, palette);
+            if (showUpdate)
+            {
+                DrawUpdateBanner(layout.Update, palette);
+            }
             DrawSearch(layout.Search);
             DrawGroupFilter(layout.Filter, palette);
             DrawToolGallery(layout.Gallery, palette);
@@ -163,6 +178,66 @@ namespace DansToolbox.Editor
                 Close();
                 EditorApplication.delayCall += DansToolboxSetupWizard.Open;
             }
+        }
+
+        private void DrawUpdateBanner(Rect row, DansToolboxPalette palette)
+        {
+            Color fill = Color.Lerp(palette.Inset, palette.Warning, 0.09f);
+            DrawPanel(row, fill, palette.Warning);
+            EditorGUI.DrawRect(new Rect(row.x + 1f, row.y + 1f, 4f, row.height - 2f), palette.Warning);
+
+            string title = DansToolboxUpdateService.IsUpdating
+                ? "UPDATING DANS TOOLBOX"
+                : "UPDATE AVAILABLE";
+            string body;
+            if (DansToolboxUpdateService.IsUpdating)
+            {
+                body = $"Unity Package Manager is installing v{DansToolboxUpdateService.LatestVersion}...";
+            }
+            else if (!string.IsNullOrEmpty(DansToolboxUpdateService.LastError))
+            {
+                body = DansToolboxUpdateService.LastError;
+            }
+            else
+            {
+                body = $"v{DansToolboxUpdateService.CurrentVersion}  ->  v{DansToolboxUpdateService.LatestVersion}";
+            }
+
+            GUI.Label(
+                new Rect(row.x + 15f, row.y + 6f, row.width - 258f, 18f),
+                title,
+                styles.UpdateTitle);
+            GUI.Label(
+                new Rect(row.x + 15f, row.y + 27f, row.width - 258f, 20f),
+                body,
+                string.IsNullOrEmpty(DansToolboxUpdateService.LastError)
+                    ? styles.UpdateBody
+                    : styles.UpdateError);
+
+            Rect release = new Rect(row.xMax - 230f, row.y + 14f, 108f, 30f);
+            if (DrawButton(release, "RELEASE NOTES", palette, false))
+            {
+                DansToolboxUpdateService.OpenReleasePage();
+            }
+
+            Rect primary = new Rect(row.xMax - 114f, row.y + 14f, 102f, 30f);
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && !DansToolboxUpdateService.IsUpdating;
+            string action = DansToolboxUpdateService.CanAutoUpdate
+                ? DansToolboxUpdateService.IsUpdating ? "UPDATING..." : "UPDATE NOW"
+                : "PACKAGE MGR";
+            if (DrawButton(primary, action, palette, true))
+            {
+                if (DansToolboxUpdateService.CanAutoUpdate)
+                {
+                    DansToolboxUpdateService.BeginUpdate();
+                }
+                else
+                {
+                    DansToolboxUpdateService.OpenPackageManager();
+                }
+            }
+            GUI.enabled = previousEnabled;
         }
 
         private void DrawSearch(Rect rect)
@@ -339,13 +414,22 @@ namespace DansToolbox.Editor
 
         internal static HubLayoutRegions CalculateLayout(Vector2 windowSize)
         {
+            return CalculateLayout(windowSize, false);
+        }
+
+        internal static HubLayoutRegions CalculateLayout(Vector2 windowSize, bool showUpdate)
+        {
             Rect content = new Rect(
                 Margin,
                 Margin + 2f,
                 windowSize.x - Margin * 2f,
                 windowSize.y - Margin * 2f - 2f);
             Rect header = new Rect(content.x, content.y, content.width, HeaderHeight);
-            Rect search = new Rect(content.x, header.yMax + 10f, content.width, SearchHeight);
+            Rect update = showUpdate
+                ? new Rect(content.x, header.yMax + 8f, content.width, UpdateBannerHeight)
+                : default;
+            float searchY = showUpdate ? update.yMax + 8f : header.yMax + 10f;
+            Rect search = new Rect(content.x, searchY, content.width, SearchHeight);
             Rect filter = new Rect(content.x, search.yMax + 8f, content.width, 30f);
             Rect footer = new Rect(
                 content.x,
@@ -357,19 +441,21 @@ namespace DansToolbox.Editor
                 filter.yMax + 10f,
                 content.width,
                 Mathf.Max(120f, footer.y - filter.yMax - 20f));
-            return new HubLayoutRegions(header, search, filter, gallery, footer);
+            return new HubLayoutRegions(header, update, search, filter, gallery, footer);
         }
 
         internal readonly struct HubLayoutRegions
         {
             internal HubLayoutRegions(
                 Rect header,
+                Rect update,
                 Rect search,
                 Rect filter,
                 Rect gallery,
                 Rect footer)
             {
                 Header = header;
+                Update = update;
                 Search = search;
                 Filter = filter;
                 Gallery = gallery;
@@ -377,6 +463,7 @@ namespace DansToolbox.Editor
             }
 
             internal Rect Header { get; }
+            internal Rect Update { get; }
             internal Rect Search { get; }
             internal Rect Filter { get; }
             internal Rect Gallery { get; }
@@ -943,6 +1030,9 @@ namespace DansToolbox.Editor
             {
                 Title = Label(palette.Text, 17, FontStyle.Bold),
                 Subtitle = Label(palette.Muted, 10),
+                UpdateTitle = Label(palette.Warning, 9, FontStyle.Bold),
+                UpdateBody = Label(palette.Text, 10),
+                UpdateError = Label(palette.Danger, 9),
                 Filter = Label(palette.Muted, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 FilterActive = Label(palette.Text, 9, FontStyle.Bold, TextAnchor.MiddleCenter),
                 CardName = Label(palette.Text, 11, FontStyle.Bold),
@@ -999,6 +1089,9 @@ namespace DansToolbox.Editor
         {
             internal GUIStyle Title;
             internal GUIStyle Subtitle;
+            internal GUIStyle UpdateTitle;
+            internal GUIStyle UpdateBody;
+            internal GUIStyle UpdateError;
             internal GUIStyle Filter;
             internal GUIStyle FilterActive;
             internal GUIStyle CardName;

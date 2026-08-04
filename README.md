@@ -37,7 +37,7 @@ This tracks the repository's `main` branch. When a newer commit is available, se
 For a project that must stay on an exact release, use a version-tagged URL instead:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.18.2
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.19.0
 ```
 
 Tagged installs are intentionally pinned and do not advance when a newer tag is published.
@@ -169,7 +169,9 @@ Use semantic versions and matching Git tags. For each release:
 3. Commit the release and create a tag such as `v1.1.0`.
 4. Push both the commit and tag.
 
-Users who installed with `#main` select **Dans Toolbox** in Package Manager and click **Update** to fetch the latest commit from that branch. Users who installed a version tag remain pinned for reproducible builds and update by changing the tag at the end of their Git URL, for example from `#v1.18.1` to `#v1.18.2`.
+Dans Toolbox checks the `main` package manifest in the background and fades its Unity main-toolbar icon orange when a newer release is available. Open the Toolbox Hub and choose **Update Now** to update through Unity Package Manager. `#main` installs keep tracking `main`; version-tagged installs advance to the newest matching release tag. Local and embedded development copies show the release but remain manually managed.
+
+You can also run **Tools > Dans Toolbox > Check for Updates** at any time, or update the package directly from Unity Package Manager.
 
 ## Migrating an existing project
 

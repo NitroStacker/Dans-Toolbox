@@ -120,4 +120,4 @@ Visibility bands preserve the pre-filter hidden and picking state, along with vi
 
 ## Package updates
 
-Releases use the version in `package.json` and a matching Git tag. See the repository README for release and user-update instructions.
+Releases use the version in `package.json` and a matching Git tag. Dans Toolbox checks the `main` package manifest periodically; when a newer version is available, the main-toolbar Toolbox icon fades orange and the Toolbox Hub offers **Update Now**. Git installs update through Unity Package Manager while preserving the `#main` or version-tag release channel. Use **Tools > Dans Toolbox > Check for Updates** for an immediate check. Local and embedded development copies remain manually managed.

@@ -357,6 +357,75 @@ namespace DansToolbox.Editor.Tests
             Assert.That(attribute.defaultDockIndex, Is.EqualTo(2));
         }
 
+        [TestCase("1.19.0", "1.18.2", true)]
+        [TestCase("2.0.0", "1.99.99", true)]
+        [TestCase("1.18.2", "1.18.2", false)]
+        [TestCase("1.18.1", "1.18.2", false)]
+        [TestCase("1.19.0", "1.19.0-beta.2", true)]
+        [TestCase("1.19.0-beta.2", "1.19.0-beta.1", true)]
+        [TestCase("not-a-version", "1.18.2", false)]
+        public void UpdateCheck_ComparesSemanticVersions(
+            string candidate,
+            string current,
+            bool expected)
+        {
+            Assert.That(
+                DansToolboxUpdateService.IsNewerVersion(candidate, current),
+                Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void UpdateCheck_ReadsTheRemotePackageManifest()
+        {
+            Assert.That(
+                DansToolboxUpdateService.TryReadRemoteVersion(
+                    "{\"name\":\"com.dans.toolbox\",\"version\":\"1.19.0\"}",
+                    out string version),
+                Is.True);
+            Assert.That(version, Is.EqualTo("1.19.0"));
+            Assert.That(
+                DansToolboxUpdateService.TryReadRemoteVersion("{\"name\":\"missing\"}", out _),
+                Is.False);
+        }
+
+        [Test]
+        public void UpdateCheck_PreservesMainAndAdvancesPinnedReleaseChannels()
+        {
+            Assert.That(
+                DansToolboxUpdateService.BuildUpdateIdentifier(
+                    "com.dans.toolbox@https://github.com/NitroStacker/Dans-Toolbox.git#main",
+                    "1.19.0"),
+                Is.EqualTo(DansToolboxUpdateService.RepositoryUrl + "#main"));
+            Assert.That(
+                DansToolboxUpdateService.BuildUpdateIdentifier(
+                    "com.dans.toolbox@https://github.com/NitroStacker/Dans-Toolbox.git#v1.18.2",
+                    "1.19.0"),
+                Is.EqualTo(DansToolboxUpdateService.RepositoryUrl + "#v1.19.0"));
+        }
+
+        [Test]
+        public void UpdateIndicator_FadesInALoopingVisibleRange()
+        {
+            float start = DansToolboxToolbarUpdateIndicator.CalculatePulseOpacity(0d);
+            float quarter = DansToolboxToolbarUpdateIndicator.CalculatePulseOpacity(0.4d);
+            float loop = DansToolboxToolbarUpdateIndicator.CalculatePulseOpacity(1.6d);
+
+            Assert.That(start, Is.InRange(0.46f, 1f));
+            Assert.That(quarter, Is.GreaterThan(start));
+            Assert.That(loop, Is.EqualTo(start).Within(0.0001f));
+        }
+
+        [Test]
+        public void ToolboxHub_UpdateBannerKeepsGalleryAboveFooter()
+        {
+            DansToolboxHubWindow.HubLayoutRegions layout =
+                DansToolboxHubWindow.CalculateLayout(new Vector2(680f, 650f), true);
+
+            Assert.That(layout.Update.yMin, Is.GreaterThanOrEqualTo(layout.Header.yMax));
+            Assert.That(layout.Search.yMin, Is.GreaterThanOrEqualTo(layout.Update.yMax));
+            Assert.That(layout.Gallery.yMax, Is.LessThanOrEqualTo(layout.Footer.yMin));
+        }
+
         [Test]
         public void SetupWizard_MovesThroughThreeBoundedSteps()
         {

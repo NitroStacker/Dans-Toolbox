@@ -10,7 +10,6 @@ namespace DansToolbox.Editor
     internal static class DansToolboxToolbarButton
     {
         internal const string ElementPath = "Dans Toolbox/Toolbox Hub";
-        private const string Tooltip = "Open Dans Toolbox Hub";
 
         [MainToolbarElement(
             ElementPath,
@@ -19,7 +18,9 @@ namespace DansToolbox.Editor
         internal static MainToolbarElement Create()
         {
             return new MainToolbarButton(
-                new MainToolbarContent(LoadIcon(), Tooltip),
+                new MainToolbarContent(
+                    DansToolboxToolbarUpdateIndicator.GetToolbarIcon(),
+                    DansToolboxUpdateService.ToolbarTooltip),
                 DansToolboxHubWindow.Open);
         }
 
@@ -38,6 +39,148 @@ namespace DansToolbox.Editor
             }
 
             return EditorGUIUtility.IconContent("Settings").image as Texture2D;
+        }
+    }
+
+    [InitializeOnLoad]
+    internal static class DansToolboxToolbarUpdateIndicator
+    {
+        private const double PulseSeconds = 1.6d;
+        private const double RefreshSeconds = 1d / 12d;
+        private static readonly Color32 UpdateOrange = new Color32(255, 132, 28, 255);
+
+        private static Texture2D pulseIcon;
+        private static Color32[] sourcePixels;
+        private static Color32[] pulsePixels;
+        private static double nextRefresh;
+
+        static DansToolboxToolbarUpdateIndicator()
+        {
+            DansToolboxUpdateService.Changed -= OnUpdateStateChanged;
+            DansToolboxUpdateService.Changed += OnUpdateStateChanged;
+            EditorApplication.delayCall += OnUpdateStateChanged;
+        }
+
+        internal static Texture2D GetToolbarIcon()
+        {
+            Texture2D source = DansToolboxToolbarButton.LoadIcon();
+            if (!DansToolboxUpdateService.UpdateAvailable || source == null)
+            {
+                return source;
+            }
+
+            EnsurePulseIcon(source);
+            UpdatePulseIcon(EditorApplication.timeSinceStartup);
+            return pulseIcon != null ? pulseIcon : source;
+        }
+
+        internal static float CalculatePulseOpacity(double elapsedSeconds)
+        {
+            double normalized = elapsedSeconds / PulseSeconds;
+            float wave = 0.5f + 0.5f * Mathf.Sin((float)(normalized * Math.PI * 2d));
+            return Mathf.Lerp(0.46f, 1f, wave);
+        }
+
+        private static void OnUpdateStateChanged()
+        {
+            EditorApplication.update -= Animate;
+            if (DansToolboxUpdateService.UpdateAvailable)
+            {
+                nextRefresh = 0d;
+                EditorApplication.update += Animate;
+            }
+
+            MainToolbar.Refresh(DansToolboxToolbarButton.ElementPath);
+        }
+
+        private static void Animate()
+        {
+            if (!DansToolboxUpdateService.UpdateAvailable)
+            {
+                EditorApplication.update -= Animate;
+                MainToolbar.Refresh(DansToolboxToolbarButton.ElementPath);
+                return;
+            }
+
+            double now = EditorApplication.timeSinceStartup;
+            if (now < nextRefresh)
+            {
+                return;
+            }
+
+            nextRefresh = now + RefreshSeconds;
+            UpdatePulseIcon(now);
+            MainToolbar.Refresh(DansToolboxToolbarButton.ElementPath);
+        }
+
+        private static void EnsurePulseIcon(Texture2D source)
+        {
+            if (pulseIcon != null &&
+                pulseIcon.width == source.width &&
+                pulseIcon.height == source.height)
+            {
+                return;
+            }
+
+            RenderTexture temporary = RenderTexture.GetTemporary(
+                source.width,
+                source.height,
+                0,
+                RenderTextureFormat.ARGB32,
+                RenderTextureReadWrite.sRGB);
+            RenderTexture previous = RenderTexture.active;
+            try
+            {
+                Graphics.Blit(source, temporary);
+                RenderTexture.active = temporary;
+                pulseIcon = new Texture2D(
+                    source.width,
+                    source.height,
+                    TextureFormat.RGBA32,
+                    false,
+                    false)
+                {
+                    name = "Dans Toolbox Update Pulse",
+                    hideFlags = HideFlags.HideAndDontSave,
+                    filterMode = source.filterMode,
+                    wrapMode = TextureWrapMode.Clamp
+                };
+                pulseIcon.ReadPixels(
+                    new Rect(0f, 0f, source.width, source.height),
+                    0,
+                    0,
+                    false);
+                pulseIcon.Apply(false, false);
+                sourcePixels = pulseIcon.GetPixels32();
+                pulsePixels = new Color32[sourcePixels.Length];
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(temporary);
+            }
+        }
+
+        private static void UpdatePulseIcon(double now)
+        {
+            if (pulseIcon == null || sourcePixels == null || pulsePixels == null)
+            {
+                return;
+            }
+
+            float opacity = CalculatePulseOpacity(now);
+            for (int index = 0; index < sourcePixels.Length; index++)
+            {
+                Color32 source = sourcePixels[index];
+                pulsePixels[index] = new Color32(
+                    UpdateOrange.r,
+                    UpdateOrange.g,
+                    UpdateOrange.b,
+                    (byte)Mathf.RoundToInt(source.a * opacity));
+            }
+
+            pulseIcon.SetPixels32(pulsePixels);
+            pulseIcon.Apply(false, false);
         }
     }
 

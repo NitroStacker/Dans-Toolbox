@@ -4,6 +4,15 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.18.1] - 2026-08-04
+
+### Fixed
+
+- Prevent Better Scene's Place-to-Erase transition from corrupting Unity's IMGUI/D3D12 render frame and leaving the Scene view blank. GPU-backed object picking now runs only for pointer input instead of recursively during Scene layout and repaint events.
+- Defer Erase state changes and floating-overlay synchronization until the active IMGUI pass has completed, and balance Scene GUI scopes during exceptional exits.
+- Avoid filled placement-ghost injection through SRP Scene cameras, while retaining spatial wire feedback in URP projects.
+- Compile the Retro VFX Uber shader correctly under URP by calculating eye depth from the shader's actual vertex input.
+
 ## [1.18.0] - 2026-08-03
 
 ### Added

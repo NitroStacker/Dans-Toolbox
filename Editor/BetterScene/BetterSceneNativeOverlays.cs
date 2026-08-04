@@ -280,6 +280,7 @@ namespace DansToolbox.EditorTools.BetterScene
         internal const float MaximumPanelWidth = 720f;
         internal const float MaximumPanelHeight = 1200f;
         private bool synchronizing;
+        private bool renderingGui;
 
         public override void OnCreated()
         {
@@ -309,14 +310,30 @@ namespace DansToolbox.EditorTools.BetterScene
         public override void OnGUI()
         {
             if (!BetterSceneController.PanelExpanded || BetterSceneController.ActivePanel == BetterScenePanel.None) return;
-            float height = BetterSceneOverlay.DesiredHeight(BetterSceneController.ActivePanel);
-            Rect rect = GUILayoutUtility.GetRect(MinimumPanelWidth, height, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            BetterSceneOverlay.DrawPanel(rect, BetterSceneController.ActivePanel);
+            renderingGui = true;
+            try
+            {
+                float height = BetterSceneOverlay.DesiredHeight(BetterSceneController.ActivePanel);
+                Rect rect = GUILayoutUtility.GetRect(MinimumPanelWidth, height, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                BetterSceneOverlay.DrawPanel(rect, BetterSceneController.ActivePanel);
+            }
+            finally
+            {
+                renderingGui = false;
+            }
         }
 
         internal void Sync()
         {
             if (synchronizing) return;
+            if (renderingGui)
+            {
+                // Controller changes can originate from buttons inside this overlay. Native
+                // overlay state must not change before that IMGUI pass has ended.
+                rootVisualElement?.MarkDirtyRepaint();
+                BetterSceneNativeOverlayUtility.SchedulePanelSync();
+                return;
+            }
             bool shouldDisplay = BetterSceneController.PanelExpanded && BetterSceneController.ActivePanel != BetterScenePanel.None;
             if (shouldDisplay && !displayed)
             {
@@ -325,15 +342,41 @@ namespace DansToolbox.EditorTools.BetterScene
             }
 
             synchronizing = true;
-            if (!shouldDisplay && displayed) displayed = false;
-            if (shouldDisplay)
+            try
             {
-                if (collapsed) collapsed = false;
-                if (floating) ApplyResponsiveSize();
-                displayName = "Better Scene - " + BetterSceneController.ActivePanel;
+                if (!shouldDisplay && displayed) displayed = false;
+                if (shouldDisplay)
+                {
+                    if (collapsed) collapsed = false;
+                    displayName = "Better Scene - " + BetterSceneController.ActivePanel;
+                }
+                rootVisualElement?.MarkDirtyRepaint();
             }
-            rootVisualElement?.MarkDirtyRepaint();
-            synchronizing = false;
+            finally
+            {
+                synchronizing = false;
+            }
+        }
+
+        internal void Resize()
+        {
+            if (synchronizing || !displayed || !floating) return;
+            if (renderingGui)
+            {
+                BetterSceneNativeOverlayUtility.SchedulePanelResize();
+                return;
+            }
+
+            synchronizing = true;
+            try
+            {
+                ApplyResponsiveSize();
+                rootVisualElement?.MarkDirtyRepaint();
+            }
+            finally
+            {
+                synchronizing = false;
+            }
         }
 
         internal Rect GetFloatingCanvasWorldBounds()
@@ -446,10 +489,21 @@ namespace DansToolbox.EditorTools.BetterScene
             EditorApplication.delayCall += ShowPanelNearToolbar;
         }
 
-        internal static void SchedulePanelResize()
+        internal static void SchedulePanelSync()
         {
             EditorApplication.delayCall -= SyncPanelOverlays;
             EditorApplication.delayCall += SyncPanelOverlays;
+        }
+
+        internal static void SchedulePanelResize()
+        {
+            EditorApplication.delayCall -= ResizePanelOverlays;
+            EditorApplication.delayCall += ResizePanelOverlays;
+        }
+
+        private static void ResizePanelOverlays()
+        {
+            foreach (BetterScenePanelOverlay overlay in FindOverlays<BetterScenePanelOverlay>()) overlay.Resize();
         }
 
         internal static void ShowPanelNearToolbar()

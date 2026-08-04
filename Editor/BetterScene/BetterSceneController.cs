@@ -36,6 +36,8 @@ namespace DansToolbox.EditorTools.BetterScene
         private static bool eraseStrokeActive;
         private static int eraseStrokeUndoGroup = -1;
         private static int eraseStrokeControlId;
+        private static bool eraseModeChangePending;
+        private static bool pendingEraseMode;
 
         static BetterSceneController()
         {
@@ -82,11 +84,23 @@ namespace DansToolbox.EditorTools.BetterScene
             eraseMode = value;
             eraseHoverObject = null;
             if (value && mode != BetterSceneMode.Place) SetMode(BetterSceneMode.Place);
-            else
-            {
-                Changed?.Invoke();
-                Repaint();
-            }
+            else RepaintVisualState();
+        }
+
+        internal static void SetEraseModeAfterGui(bool value)
+        {
+            pendingEraseMode = value;
+            if (eraseModeChangePending) return;
+            eraseModeChangePending = true;
+            EditorApplication.delayCall += ApplyPendingEraseMode;
+        }
+
+        private static void ApplyPendingEraseMode()
+        {
+            EditorApplication.delayCall -= ApplyPendingEraseMode;
+            if (!eraseModeChangePending) return;
+            eraseModeChangePending = false;
+            SetEraseMode(pendingEraseMode);
         }
 
         internal static void SetMode(BetterSceneMode value)
@@ -284,11 +298,8 @@ namespace DansToolbox.EditorTools.BetterScene
             UnityEngine.Object draggedAsset = DragAndDrop.objectReferences.FirstOrDefault(CanPlaceAsset);
             bool draggingAsset = draggedAsset != null;
             bool erasing = mode == BetterSceneMode.Place && EraseMode && !draggingAsset;
-            eraseHoverObject = erasing
-                ? BetterSceneOperations.FindPlacementAssetTarget(
-                    HandleUtility.PickGameObject(current.mousePosition, false),
-                    BetterSceneSettings.PlacementAsset)
-                : null;
+            if (erasing) UpdateEraseHover(current);
+            else eraseHoverObject = null;
             bool placingAsset = (mode == BetterSceneMode.Place && !erasing) || draggingAsset;
             UnityEngine.Object placementAsset = draggingAsset
                 ? draggedAsset
@@ -405,6 +416,24 @@ namespace DansToolbox.EditorTools.BetterScene
             {
                 EndEraseStroke();
             }
+        }
+
+        private static void UpdateEraseHover(Event current)
+        {
+            // PickGameObject performs a GPU-backed Scene picking pass. Calling it from
+            // Layout or Repaint recursively enters rendering on URP/D3D12 and can leave
+            // both IMGUI and the native graphics frame unbalanced. Refresh the cached
+            // target only for genuine pointer input; layout and paint events consume it.
+            if (current.type != EventType.MouseMove &&
+                current.type != EventType.MouseDrag &&
+                current.type != EventType.MouseDown)
+            {
+                return;
+            }
+
+            eraseHoverObject = BetterSceneOperations.FindPlacementAssetTarget(
+                HandleUtility.PickGameObject(current.mousePosition, false),
+                BetterSceneSettings.PlacementAsset);
         }
 
         private static void BeginEraseStroke(UnityEngine.Object asset, int controlId)
@@ -647,8 +676,11 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             UnityEngine.Object asset = BetterSceneSettings.PlacementAsset;
             bool dragging = DragAndDrop.objectReferences.Any(CanPlaceAsset);
-            if (EraseMode && !dragging) return;
-            if (!hasHoverPoint || (!dragging && (mode != BetterSceneMode.Place || !CanPlaceAsset(asset)))) return;
+            if ((EraseMode && !dragging) || !hasHoverPoint ||
+                (!dragging && (mode != BetterSceneMode.Place || !CanPlaceAsset(asset))))
+            {
+                return;
+            }
             UnityEngine.Object labelAsset = dragging ? DragAndDrop.objectReferences.FirstOrDefault(CanPlaceAsset) : asset;
             BetterScenePlacementPreview.Draw(
                 labelAsset,
@@ -683,45 +715,57 @@ namespace DansToolbox.EditorTools.BetterScene
             DansToolboxPalette palette = DansToolboxTheme.Current;
             Color previousColor = Handles.color;
             CompareFunction previousZ = Handles.zTest;
-            if (eraseHoverObject != null &&
-                BetterSceneOperations.TryGetBounds(eraseHoverObject, out Bounds bounds))
+            try
             {
-                Handles.color = new Color(palette.Danger.r, palette.Danger.g, palette.Danger.b, 0.95f);
-                Handles.zTest = CompareFunction.Always;
-                Handles.DrawWireCube(bounds.center, bounds.size);
+                if (eraseHoverObject != null &&
+                    BetterSceneOperations.TryGetBounds(eraseHoverObject, out Bounds bounds))
+                {
+                    Handles.color = new Color(palette.Danger.r, palette.Danger.g, palette.Danger.b, 0.95f);
+                    Handles.zTest = CompareFunction.Always;
+                    Handles.DrawWireCube(bounds.center, bounds.size);
+                }
             }
-            Handles.color = previousColor;
-            Handles.zTest = previousZ;
+            finally
+            {
+                Handles.color = previousColor;
+                Handles.zTest = previousZ;
+            }
 
             Handles.BeginGUI();
-            string text;
-            if (eraseStrokeActive)
+            try
             {
-                text = eraseHoverObject == null
-                    ? "ERASING " + asset.name + "  ·  MOVE OVER MATCHES"
-                    : "ERASING  ·  " + eraseHoverObject.name;
+                string text;
+                if (eraseStrokeActive)
+                {
+                    text = eraseHoverObject == null
+                        ? "ERASING " + asset.name + "  ·  MOVE OVER MATCHES"
+                        : "ERASING  ·  " + eraseHoverObject.name;
+                }
+                else
+                {
+                    text = eraseHoverObject == null
+                        ? "ERASE " + asset.name + "  ·  NO MATCH"
+                        : "HOLD + DRAG TO ERASE  ·  " + eraseHoverObject.name;
+                }
+                GUIStyle style = new GUIStyle(EditorStyles.helpBox)
+                {
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = eraseHoverObject == null ? palette.Muted : palette.Danger }
+                };
+                GUIContent content = new GUIContent(text);
+                Vector2 labelSize = style.CalcSize(content);
+                Vector2 mouse = Event.current.mousePosition + new Vector2(18f, 18f);
+                float width = labelSize.x + 16f;
+                mouse.x = Mathf.Clamp(mouse.x, 4f, Mathf.Max(4f, sceneView.position.width - width - 4f));
+                mouse.y = Mathf.Clamp(mouse.y, 4f, Mathf.Max(4f, sceneView.position.height - 28f));
+                Rect labelRect = new Rect(mouse.x, mouse.y, width, 24f);
+                GUI.Label(labelRect, content, style);
             }
-            else
+            finally
             {
-                text = eraseHoverObject == null
-                    ? "ERASE " + asset.name + "  ·  NO MATCH"
-                    : "HOLD + DRAG TO ERASE  ·  " + eraseHoverObject.name;
+                Handles.EndGUI();
             }
-            GUIStyle style = new GUIStyle(EditorStyles.helpBox)
-            {
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = eraseHoverObject == null ? palette.Muted : palette.Danger }
-            };
-            GUIContent content = new GUIContent(text);
-            Vector2 labelSize = style.CalcSize(content);
-            Vector2 mouse = Event.current.mousePosition + new Vector2(18f, 18f);
-            float width = labelSize.x + 16f;
-            mouse.x = Mathf.Clamp(mouse.x, 4f, Mathf.Max(4f, sceneView.position.width - width - 4f));
-            mouse.y = Mathf.Clamp(mouse.y, 4f, Mathf.Max(4f, sceneView.position.height - 28f));
-            Rect labelRect = new Rect(mouse.x, mouse.y, width, 24f);
-            GUI.Label(labelRect, content, style);
-            Handles.EndGUI();
         }
 
         private static void EnterMode(BetterSceneMode value)
@@ -790,6 +834,8 @@ namespace DansToolbox.EditorTools.BetterScene
 
         private static void CleanupTransientState()
         {
+            EditorApplication.delayCall -= ApplyPendingEraseMode;
+            eraseModeChangePending = false;
             ExitMode(mode);
             ClearMeasurementState();
         }
@@ -816,6 +862,13 @@ namespace DansToolbox.EditorTools.BetterScene
         {
             Changed?.Invoke();
             SceneView.RepaintAll();
+            foreach (BetterSceneWindow window in Resources.FindObjectsOfTypeAll<BetterSceneWindow>()) window.Repaint();
+        }
+
+        private static void RepaintVisualState()
+        {
+            Changed?.Invoke();
+            SceneView.lastActiveSceneView?.Repaint();
             foreach (BetterSceneWindow window in Resources.FindObjectsOfTypeAll<BetterSceneWindow>()) window.Repaint();
         }
     }

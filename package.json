@@ -1,6 +1,6 @@
 {
   "name": "com.dans.toolbox",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "displayName": "Dans Toolbox",
   "description": "A polished Unity toolbox containing Retro SFX, Retro VFX, Native Window Dock, Better Hierarchy, Better Inspector, Better Project, Better Console, and Better Scene.",
   "unity": "6000.0",

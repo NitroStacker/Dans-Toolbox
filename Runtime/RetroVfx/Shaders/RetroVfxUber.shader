@@ -81,7 +81,10 @@ Shader "Dans Toolbox/Retro VFX/Uber"
                 output.uv = TRANSFORM_TEX(input.uv, _MainTex);
                 output.color = input.color * _Color;
                 output.projected = ComputeScreenPos(output.vertex);
-                COMPUTE_EYEDEPTH(output.projected.z);
+                // COMPUTE_EYEDEPTH expands to code that references a vertex input named
+                // `v`. This shader intentionally calls that parameter `input`, so write
+                // the equivalent expression explicitly for SRP shader compilation.
+                output.projected.z = -UnityObjectToViewPos(input.vertex).z;
                 UNITY_TRANSFER_FOG(output, output.vertex);
                 return output;
             }

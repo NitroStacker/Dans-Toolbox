@@ -49,8 +49,6 @@ namespace DansToolbox.EditorTools.BetterScene
 
             EnsureAsset(asset);
             if (parts.Count == 0) return false;
-            EnsureMaterials();
-            if (ghostMaterial == null) return false;
 
             Matrix4x4 rootMatrix = CalculatePlacementMatrix(
                 asset,
@@ -61,34 +59,16 @@ namespace DansToolbox.EditorTools.BetterScene
                 out Bounds worldBounds);
             DansToolboxPalette palette = DansToolboxTheme.Current;
             Color fill = new Color(palette.Signal.r, palette.Signal.g, palette.Signal.b, 0.28f);
-            ghostMaterial.SetColor("_Color", fill);
-            if (spriteMaterial != null) spriteMaterial.SetColor("_Color", new Color(fill.r, fill.g, fill.b, 0.48f));
-
-            foreach (RenderPart part in parts)
+            if (GraphicsSettings.currentRenderPipeline == null)
             {
-                if (part.Mesh == null) continue;
-                Matrix4x4 matrix = rootMatrix * part.LocalMatrix;
-                Material material = part.Texture != null && spriteMaterial != null
-                    ? spriteMaterial
-                    : ghostMaterial;
-                if (part.Texture != null) material.mainTexture = part.Texture;
-                int subMeshCount = Mathf.Max(1, part.Mesh.subMeshCount);
-                for (int subMesh = 0; subMesh < subMeshCount; subMesh++)
+                EnsureMaterials();
+                if (ghostMaterial == null) return false;
+                ghostMaterial.SetColor("_Color", fill);
+                if (spriteMaterial != null)
                 {
-                    Graphics.DrawMesh(
-                        part.Mesh,
-                        matrix,
-                        material,
-                        0,
-                        sceneView.camera,
-                        subMesh,
-                        null,
-                        ShadowCastingMode.Off,
-                        false,
-                        null,
-                        LightProbeUsage.Off,
-                        null);
+                    spriteMaterial.SetColor("_Color", new Color(fill.r, fill.g, fill.b, 0.48f));
                 }
+                DrawBuiltInPipelinePreview(sceneView.camera, rootMatrix);
             }
 
             CompareFunction previousZ = Handles.zTest;
@@ -128,6 +108,36 @@ namespace DansToolbox.EditorTools.BetterScene
             spriteMeshes.Clear();
             parts.Clear();
             cachedAsset = null;
+        }
+
+        private static void DrawBuiltInPipelinePreview(Camera camera, Matrix4x4 rootMatrix)
+        {
+            foreach (RenderPart part in parts)
+            {
+                if (part.Mesh == null) continue;
+                Matrix4x4 matrix = rootMatrix * part.LocalMatrix;
+                Material material = part.Texture != null && spriteMaterial != null
+                    ? spriteMaterial
+                    : ghostMaterial;
+                if (part.Texture != null) material.mainTexture = part.Texture;
+                int subMeshCount = Mathf.Max(1, part.Mesh.subMeshCount);
+                for (int subMesh = 0; subMesh < subMeshCount; subMesh++)
+                {
+                    Graphics.DrawMesh(
+                        part.Mesh,
+                        matrix,
+                        material,
+                        0,
+                        camera,
+                        subMesh,
+                        null,
+                        ShadowCastingMode.Off,
+                        false,
+                        null,
+                        LightProbeUsage.Off,
+                        null);
+                }
+            }
         }
 
         private static Matrix4x4 CalculatePlacementMatrix(

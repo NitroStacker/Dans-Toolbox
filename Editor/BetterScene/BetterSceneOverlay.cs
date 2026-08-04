@@ -33,20 +33,32 @@ namespace DansToolbox.EditorTools.BetterScene
 
             Rect content = new Rect(panelRect.x + 10f, panelRect.y + 52f, panelRect.width - 20f, panelRect.height - 62f);
             GUILayout.BeginArea(content);
-            panelScroll = GUILayout.BeginScrollView(panelScroll, false, false);
-            switch (panel)
+            try
             {
-                case BetterScenePanel.Create: DrawCreate(); break;
-                case BetterScenePanel.Transform: DrawTransform(); break;
-                case BetterScenePanel.Place: DrawPlace(); break;
-                case BetterScenePanel.View: DrawView(); break;
-                case BetterScenePanel.Visibility: DrawVisibility(); break;
-                case BetterScenePanel.Measure: DrawMeasure(); break;
-                case BetterScenePanel.Review: DrawReview(); break;
+                panelScroll = GUILayout.BeginScrollView(panelScroll, false, false);
+                try
+                {
+                    switch (panel)
+                    {
+                        case BetterScenePanel.Create: DrawCreate(); break;
+                        case BetterScenePanel.Transform: DrawTransform(); break;
+                        case BetterScenePanel.Place: DrawPlace(); break;
+                        case BetterScenePanel.View: DrawView(); break;
+                        case BetterScenePanel.Visibility: DrawVisibility(); break;
+                        case BetterScenePanel.Measure: DrawMeasure(); break;
+                        case BetterScenePanel.Review: DrawReview(); break;
+                    }
+                    GUILayout.Space(4f);
+                }
+                finally
+                {
+                    GUILayout.EndScrollView();
+                }
             }
-            GUILayout.Space(4f);
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
+            finally
+            {
+                GUILayout.EndArea();
+            }
         }
 
         private static void DrawPanelHeader(Rect rect, BetterScenePanel panel)
@@ -176,8 +188,8 @@ namespace DansToolbox.EditorTools.BetterScene
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "ACTION", BetterSceneGui.Tiny);
             DrawSegmented(new[]
             {
-                Segment("PLACE", !BetterSceneController.EraseMode, () => BetterSceneController.SetEraseMode(false)),
-                Segment("ERASE CURRENT", BetterSceneController.EraseMode, () => BetterSceneController.SetEraseMode(true), current != null)
+                Segment("PLACE", !BetterSceneController.EraseMode, () => BetterSceneController.SetEraseModeAfterGui(false)),
+                Segment("ERASE CURRENT", BetterSceneController.EraseMode, () => BetterSceneController.SetEraseModeAfterGui(true), current != null)
             });
             GUILayout.Space(6f);
             GUI.Label(GUILayoutUtility.GetRect(10f, 18f, GUILayout.ExpandWidth(true)), "SNAP TARGET", BetterSceneGui.Tiny);

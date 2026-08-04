@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-08-04
+
+### Added
+
+- Add centered 50%–200% Native Window Dock zoom controls and preserve zoom with application profiles and framing presets.
+
+### Fixed
+
+- Match the Native Window Dock preset-name field to the Toolbox's flat, square visual language in every interaction state.
+
 ## [1.22.2] - 2026-08-04
 
 ### Fixed

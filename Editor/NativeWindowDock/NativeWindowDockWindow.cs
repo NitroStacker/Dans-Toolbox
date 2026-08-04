@@ -28,7 +28,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private const float HeaderHeight = 36f;
         private const float ToolbarHeight = 42f;
         private const float LaunchPanelHeight = 82f;
-        private const float CropPanelHeight = 78f;
+        private const float CropPanelHeight = 112f;
         private const float PickerMinimumHeight = 190f;
         private const float PickerMaximumHeight = 420f;
         private const float PickerCardMinimumWidth = 184f;
@@ -37,6 +37,9 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private const float StatusHeight = 24f;
         private const int MaxHorizontalCrop = 1200;
         private const int MaxVerticalCrop = 800;
+        private const float MinimumZoom = 0.5f;
+        private const float MaximumZoom = 2f;
+        private const float ZoomStep = 0.1f;
         private const double LaunchTimeoutSeconds = 15d;
         private const double RepaintIntervalSeconds = 1d / 30d;
         private const string BaseTitle = "Native Dock";
@@ -56,6 +59,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         [SerializeField] private int cropTop;
         [SerializeField] private int cropRight;
         [SerializeField] private int cropBottom;
+        [SerializeField] private float viewZoom = 1f;
         [SerializeField] private int panelNumber;
         [SerializeField] private long reloadTargetHandle;
 
@@ -374,7 +378,9 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 showCropPanel = GUI.Toggle(
                     new Rect(rect.xMax - 200, y, 92, 28),
                     showCropPanel,
-                    new GUIContent("FRAME", "Drag the glowing viewport borders to crop the app."),
+                    new GUIContent(
+                        "FRAME",
+                        "Drag the glowing borders to crop the app, or zoom its surface in and out."),
                     NativeWindowDockGui.Button);
 
                 if (GUI.Button(
@@ -636,7 +642,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
             GUI.Label(
                 new Rect(rect.x + 12, rect.y + 8, Mathf.Max(120, rect.width - 250), 26),
-                $"CROP  /  L {cropLeft}   T {cropTop}   R {cropRight}   B {cropBottom}  px",
+                $"FRAME  /  L {cropLeft}   T {cropTop}   R {cropRight}   B {cropBottom}  px",
                 NativeWindowDockGui.Status);
 
             if (GUI.Button(
@@ -648,6 +654,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 cropTop = 0;
                 cropRight = 240;
                 cropBottom = 0;
+                viewZoom = 1f;
                 ApplyCrop();
             }
 
@@ -660,10 +667,40 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 cropTop = 0;
                 cropRight = 0;
                 cropBottom = 0;
+                viewZoom = 1f;
                 ApplyCrop();
             }
 
-            float secondY = rect.y + 44f;
+            float zoomY = rect.y + 42f;
+            GUI.Label(
+                new Rect(rect.x + 12f, zoomY + 4f, Mathf.Max(80f, rect.width - 304f), 20f),
+                $"ZOOM  /  {Mathf.RoundToInt(viewZoom * 100f)}%",
+                NativeWindowDockGui.Status);
+            if (GUI.Button(
+                    new Rect(rect.xMax - 286f, zoomY, 86f, 26f),
+                    new GUIContent("ZOOM OUT", "Shrink the embedded app to reveal more of its surface"),
+                    NativeWindowDockGui.Button))
+            {
+                ChangeZoom(-ZoomStep);
+            }
+
+            if (GUI.Button(
+                    new Rect(rect.xMax - 194f, zoomY, 68f, 26f),
+                    new GUIContent("100%", "Reset the embedded app zoom"),
+                    NativeWindowDockGui.Button))
+            {
+                SetZoom(1f);
+            }
+
+            if (GUI.Button(
+                    new Rect(rect.xMax - 120f, zoomY, 108f, 26f),
+                    new GUIContent("ZOOM IN", "Enlarge the embedded app inside the frame"),
+                    NativeWindowDockGui.Button))
+            {
+                ChangeZoom(ZoomStep);
+            }
+
+            float presetY = rect.y + 78f;
             float contentWidth = rect.width - 24f;
             const float gap = 6f;
             const float saveWidth = 54f;
@@ -673,11 +710,11 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             float popupWidth = Mathf.Max(
                 92f,
                 contentWidth - nameWidth - saveWidth - updateWidth - deleteWidth - gap * 4f);
-            Rect popupRect = new Rect(rect.x + 12f, secondY, popupWidth, 26f);
-            Rect nameRect = new Rect(popupRect.xMax + gap, secondY, nameWidth, 26f);
-            Rect saveRect = new Rect(nameRect.xMax + gap, secondY, saveWidth, 26f);
-            Rect updateRect = new Rect(saveRect.xMax + gap, secondY, updateWidth, 26f);
-            Rect deleteRect = new Rect(updateRect.xMax + gap, secondY, deleteWidth, 26f);
+            Rect popupRect = new Rect(rect.x + 12f, presetY, popupWidth, 26f);
+            Rect nameRect = new Rect(popupRect.xMax + gap, presetY, nameWidth, 26f);
+            Rect saveRect = new Rect(nameRect.xMax + gap, presetY, saveWidth, 26f);
+            Rect updateRect = new Rect(saveRect.xMax + gap, presetY, updateWidth, 26f);
+            Rect deleteRect = new Rect(updateRect.xMax + gap, presetY, deleteWidth, 26f);
 
             string[] presetOptions = new string[cropPresets.Count + 1];
             presetOptions[0] = "PRESET / CHOOSE";
@@ -826,7 +863,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 GUIUtility.hotControl = 0;
                 ApplyCrop(true);
                 SetStatus(
-                    $"FRAMED  /  L {cropLeft}  T {cropTop}  R {cropRight}  B {cropBottom}",
+                    $"FRAMED  /  L {cropLeft}  T {cropTop}  R {cropRight}  B {cropBottom}  /  {Mathf.RoundToInt(viewZoom * 100f)}%",
                     NativeWindowDockGui.Accent);
                 current.Use();
             }
@@ -876,6 +913,30 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             cropTop = crop.Top;
             cropRight = crop.Right;
             cropBottom = crop.Bottom;
+        }
+
+        private void ChangeZoom(float delta)
+        {
+            SetZoom(viewZoom + delta);
+        }
+
+        private void SetZoom(float zoom)
+        {
+            viewZoom = NormalizeZoom(zoom);
+            ApplyCrop();
+            SetStatus(
+                $"ZOOM  /  {Mathf.RoundToInt(viewZoom * 100f)}%",
+                NativeWindowDockGui.Accent);
+        }
+
+        internal static float NormalizeZoom(float zoom)
+        {
+            if (float.IsNaN(zoom) || float.IsInfinity(zoom) || zoom <= 0f)
+            {
+                return 1f;
+            }
+
+            return Mathf.Clamp(zoom, MinimumZoom, MaximumZoom);
         }
 
         private void DrawLaunchPanel(Rect rect)
@@ -1203,7 +1264,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 attachedLabel = candidate.DisplayLabel;
                 UpdateTitle(candidate.ProcessName);
                 LoadCropProfile(candidate);
-                session.SetCrop(CurrentCrop());
+                session.SetFrame(CurrentCrop(), viewZoom);
                 pendingLaunch = false;
                 showLaunchPanel = false;
                 SetStatus(
@@ -1399,6 +1460,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             attachedLabel ??= string.Empty;
             cropProfileKey ??= string.Empty;
             cropPresetName ??= string.Empty;
+            viewZoom = NormalizeZoom(viewZoom);
             launchPath ??= string.Empty;
             launchArguments ??= string.Empty;
             statusMessage ??= "Choose a running window or launch an application";
@@ -1487,7 +1549,8 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             cropTop = Mathf.Max(0, cropTop);
             cropRight = Mathf.Max(0, cropRight);
             cropBottom = Mathf.Max(0, cropBottom);
-            session?.SetCrop(CurrentCrop());
+            viewZoom = NormalizeZoom(viewZoom);
+            session?.SetFrame(CurrentCrop(), viewZoom);
             if (save)
             {
                 SaveCropProfile();
@@ -1510,6 +1573,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 cropTop = 0;
                 cropRight = 0;
                 cropBottom = 0;
+                viewZoom = 1f;
                 return;
             }
 
@@ -1523,6 +1587,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             cropTop = Mathf.Max(0, profile.top);
             cropRight = Mathf.Max(0, profile.right);
             cropBottom = Mathf.Max(0, profile.bottom);
+            viewZoom = NormalizeZoom(profile.zoom);
         }
 
         private void SaveCropProfile()
@@ -1537,7 +1602,8 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 left = cropLeft,
                 top = cropTop,
                 right = cropRight,
-                bottom = cropBottom
+                bottom = cropBottom,
+                zoom = viewZoom
             };
             EditorPrefs.SetString(cropProfileKey, JsonUtility.ToJson(profile));
         }
@@ -1580,6 +1646,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     preset.name = NativeWindowCandidate.NormalizeDisplayText(
                         preset.name.Trim(),
                         48);
+                    preset.zoom = NormalizeZoom(preset.zoom);
                     cropPresets.Add(preset);
                 }
             }
@@ -1599,7 +1666,8 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             CropPreset preset = CreateCropPreset(
                 Guid.NewGuid().ToString("N"),
                 CreateUniqueCropPresetName(requestedName, cropPresets, null),
-                CurrentCrop());
+                CurrentCrop(),
+                viewZoom);
             cropPresets.Add(preset);
             selectedCropPreset = cropPresets.Count - 1;
             cropPresetName = preset.name;
@@ -1623,6 +1691,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 cropPresets,
                 preset.id);
             SetPresetCrop(preset, CurrentCrop());
+            preset.zoom = viewZoom;
             cropPresetName = preset.name;
             PersistCropPresets();
             SetStatus("PRESET UPDATED  /  " + preset.name, NativeWindowDockGui.Accent);
@@ -1658,6 +1727,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 preset.top,
                 preset.right,
                 preset.bottom));
+            viewZoom = NormalizeZoom(preset.zoom);
             ApplyCrop();
             SetStatus("PRESET APPLIED  /  " + preset.name, NativeWindowDockGui.Accent);
         }
@@ -1681,12 +1751,14 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private static CropPreset CreateCropPreset(
             string id,
             string name,
-            NativeWindowCrop crop)
+            NativeWindowCrop crop,
+            float zoom)
         {
             CropPreset preset = new CropPreset
             {
                 id = id,
-                name = name
+                name = name,
+                zoom = NormalizeZoom(zoom)
             };
             SetPresetCrop(preset, crop);
             return preset;
@@ -1745,6 +1817,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             public int top;
             public int right;
             public int bottom;
+            public float zoom;
         }
 
         [Serializable]
@@ -1756,6 +1829,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             public int top;
             public int right;
             public int bottom;
+            public float zoom;
         }
 
         [Serializable]

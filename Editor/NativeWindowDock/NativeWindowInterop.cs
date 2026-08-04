@@ -34,16 +34,30 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             int hostHeight,
             float pixelsPerPoint)
         {
+            return CalculateTargetBounds(hostWidth, hostHeight, pixelsPerPoint, 1f);
+        }
+
+        internal RectInt CalculateTargetBounds(
+            int hostWidth,
+            int hostHeight,
+            float pixelsPerPoint,
+            float zoom)
+        {
             float scale = Mathf.Max(1f, pixelsPerPoint);
+            float safeZoom = float.IsNaN(zoom) || float.IsInfinity(zoom)
+                ? 1f
+                : Mathf.Max(0.01f, zoom);
             int leftPixels = Mathf.RoundToInt(Left * scale);
             int topPixels = Mathf.RoundToInt(Top * scale);
             int rightPixels = Mathf.RoundToInt(Right * scale);
             int bottomPixels = Mathf.RoundToInt(Bottom * scale);
+            int zoomedWidth = Math.Max(1, Mathf.RoundToInt(hostWidth * safeZoom));
+            int zoomedHeight = Math.Max(1, Mathf.RoundToInt(hostHeight * safeZoom));
             return new RectInt(
-                -leftPixels,
-                -topPixels,
-                Math.Max(1, hostWidth + leftPixels + rightPixels),
-                Math.Max(1, hostHeight + topPixels + bottomPixels));
+                Mathf.RoundToInt((hostWidth - zoomedWidth) * 0.5f) - leftPixels,
+                Mathf.RoundToInt((hostHeight - zoomedHeight) * 0.5f) - topPixels,
+                Math.Max(1, zoomedWidth + leftPixels + rightPixels),
+                Math.Max(1, zoomedHeight + topPixels + bottomPixels));
         }
     }
 
@@ -123,6 +137,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private IntPtr host;
         private IntPtr hostOwner;
         private NativeWindowCrop crop;
+        private float zoom = 1f;
         private RectInt lastHostBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
         private RectInt lastTargetBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
         private bool embedded;
@@ -157,7 +172,13 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         internal void SetCrop(NativeWindowCrop value)
         {
+            SetFrame(value, zoom);
+        }
+
+        internal void SetFrame(NativeWindowCrop value, float scale)
+        {
             crop = value;
+            zoom = scale;
             lastTargetBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
             geometryDirty = true;
         }
@@ -270,7 +291,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                     HostPositionFlags);
             }
 
-            RectInt targetBounds = crop.CalculateTargetBounds(width, height, scale);
+            RectInt targetBounds = crop.CalculateTargetBounds(width, height, scale, zoom);
             if (targetBounds != lastTargetBounds)
             {
                 lastTargetBounds = targetBounds;

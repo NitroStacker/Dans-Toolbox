@@ -87,7 +87,7 @@ The Toolbox Hub presents tools as a responsive visual gallery with direct All To
 ## Native Window Dock essentials
 
 - Turn on **Frame** and drag the glowing viewport borders to crop the attached application.
-- Enter a preset name and choose **Save** to keep the current frame for that application. Select a preset to apply it; change its name or frame and choose **Update** to edit it, or choose **Delete** to remove it.
+- Use **Zoom Out**, **100%**, and **Zoom In** while framing to scale the embedded application between 50% and 200%. Enter a preset name and choose **Save** to keep the current crop and zoom for that application. Select a preset to apply it; change its name, crop, or zoom and choose **Update** to edit it, or choose **Delete** to remove it.
 - Framing presets are stored per application window class, so each attached tool can keep its own reusable views.
 - Attached windows remain connected across ordinary Unity script reloads. The dock also repairs applications that try to reset their native parent or window style.
 

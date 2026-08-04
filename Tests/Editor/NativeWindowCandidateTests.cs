@@ -57,6 +57,24 @@ namespace DansToolbox.EditorTools.NativeWindowDock.Tests
         }
 
         [Test]
+        public void CropBounds_ZoomsAroundTheCenterOfTheHost()
+        {
+            NativeWindowCrop crop = new NativeWindowCrop(100, 20, 50, 10);
+
+            UnityEngine.RectInt bounds = crop.CalculateTargetBounds(1000, 600, 1f, 0.5f);
+
+            Assert.AreEqual(new UnityEngine.RectInt(150, 130, 650, 330), bounds);
+        }
+
+        [Test]
+        public void Zoom_NormalizesLegacyAndOutOfRangeValues()
+        {
+            Assert.AreEqual(1f, NativeWindowDockWindow.NormalizeZoom(0f));
+            Assert.AreEqual(0.5f, NativeWindowDockWindow.NormalizeZoom(0.1f));
+            Assert.AreEqual(2f, NativeWindowDockWindow.NormalizeZoom(4f));
+        }
+
+        [Test]
         public void Crop_ClampsNegativeMargins()
         {
             NativeWindowCrop crop = new NativeWindowCrop(-10, -20, -30, -40);

@@ -137,23 +137,36 @@ namespace DansToolbox.EditorTools.NativeWindowDock
             {
                 if (textField == null)
                 {
-                    textField = new GUIStyle(EditorStyles.textField)
+                    Texture2D normalTexture = MakeBorderedTexture(Inset, Border);
+                    Texture2D focusedTexture = MakeBorderedTexture(Inset, Accent);
+                    textField = new GUIStyle
                     {
                         fontSize = 11,
                         fixedHeight = 26,
+                        alignment = TextAnchor.MiddleLeft,
                         border = new RectOffset(1, 1, 1, 1),
-                        padding = new RectOffset(8, 8, 4, 3),
-                        normal =
-                        {
-                            background = MakeBorderedTexture(Inset, Border),
-                            textColor = Text
-                        },
-                        focused =
-                        {
-                            background = MakeBorderedTexture(Inset, AccentSoft),
-                            textColor = Color.white
-                        }
+                        padding = new RectOffset(8, 8, 3, 3),
+                        clipping = TextClipping.Clip
                     };
+
+                    // Build every state from flat textures. Inheriting EditorStyles.textField
+                    // leaks Unity's rounded blue gradient into hover/active/on states.
+                    textField.normal.background = normalTexture;
+                    textField.normal.textColor = Text;
+                    textField.hover.background = normalTexture;
+                    textField.hover.textColor = Text;
+                    textField.active.background = focusedTexture;
+                    textField.active.textColor = Text;
+                    textField.focused.background = focusedTexture;
+                    textField.focused.textColor = Text;
+                    textField.onNormal.background = normalTexture;
+                    textField.onNormal.textColor = Text;
+                    textField.onHover.background = normalTexture;
+                    textField.onHover.textColor = Text;
+                    textField.onActive.background = focusedTexture;
+                    textField.onActive.textColor = Text;
+                    textField.onFocused.background = focusedTexture;
+                    textField.onFocused.textColor = Text;
                 }
 
                 return textField;

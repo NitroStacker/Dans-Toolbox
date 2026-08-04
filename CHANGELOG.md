@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.22.2] - 2026-08-04
+
+### Fixed
+
+- Restore full Better Inspector prefab parity by drawing the prefab root and each attached component through Unity's native editor stack instead of treating the prefab as one empty `GameObject` inspector.
+- Preserve native component enable toggles, help, presets, menus, custom inspector sections, referenced materials, and previews while retaining Better Inspector favorites, search, diagnostics, references, and context actions.
+- Add a direct **Open Prefab** action and reset the content scroll position when changing or navigating targets.
+
 ## [1.22.1] - 2026-08-04
 
 ### Fixed

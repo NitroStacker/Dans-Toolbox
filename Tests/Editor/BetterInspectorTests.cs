@@ -119,6 +119,12 @@ namespace DansToolbox.Editor.Tests
                     BetterInspectorWindow.AreEditableSceneGameObjects(new Object[] { prefab }),
                     Is.False);
                 Assert.That(
+                    BetterInspectorWindow.ArePrefabAssetGameObjects(new Object[] { prefab }),
+                    Is.True);
+                Assert.That(
+                    BetterInspectorWindow.AreInspectableGameObjects(new Object[] { prefab }),
+                    Is.True);
+                Assert.That(
                     BetterInspectorWindow.GetTargetDetail(new Object[] { prefab }),
                     Is.EqualTo("PREFAB ASSET"));
             }
@@ -330,6 +336,7 @@ namespace DansToolbox.Editor.Tests
             const string path = "Assets/BetterInspectorPrefabParityTest.prefab";
             GameObject source = GameObject.CreatePrimitive(PrimitiveType.Cube);
             UnityEditor.Editor editor = null;
+            var componentEditors = new System.Collections.Generic.List<UnityEditor.Editor>();
             try
             {
                 GameObject prefab = PrefabUtility.SaveAsPrefabAsset(source, path);
@@ -342,9 +349,32 @@ namespace DansToolbox.Editor.Tests
                 Assert.That(editorTargets[0], Is.SameAs(prefab));
                 Assert.DoesNotThrow(() => editor = UnityEditor.Editor.CreateEditor(editorTargets));
                 Assert.That(editor, Is.Not.Null);
+
+                var groups = BetterInspectorWindow.BuildComponentGroups(new[] { prefab });
+                Assert.That(
+                    groups.Select(group => group.Type),
+                    Is.EquivalentTo(new[]
+                    {
+                        typeof(Transform),
+                        typeof(MeshFilter),
+                        typeof(MeshRenderer),
+                        typeof(BoxCollider)
+                    }));
+                foreach (BetterInspectorComponentGroup group in groups)
+                {
+                    UnityEditor.Editor componentEditor = null;
+                    Assert.DoesNotThrow(() =>
+                        componentEditor = UnityEditor.Editor.CreateEditor(group.Components.Cast<Object>().ToArray()));
+                    Assert.That(componentEditor, Is.Not.Null);
+                    componentEditors.Add(componentEditor);
+                }
             }
             finally
             {
+                foreach (UnityEditor.Editor componentEditor in componentEditors)
+                {
+                    if (componentEditor != null) Object.DestroyImmediate(componentEditor);
+                }
                 if (editor != null) Object.DestroyImmediate(editor);
                 Object.DestroyImmediate(source);
                 AssetDatabase.DeleteAsset(path);

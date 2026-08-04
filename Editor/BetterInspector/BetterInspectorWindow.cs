@@ -7,6 +7,7 @@ using DansToolbox.Editor;
 using DansToolbox.EditorTools.BetterConsole;
 using UnityEditor;
 using UnityEditorInternal;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -648,6 +649,18 @@ namespace DansToolbox.EditorTools.BetterInspector
 
         private void DrawEditorCard(BetterInspectorEditorEntry entry, DansToolboxPalette palette)
         {
+            if (entry.Presentation == BetterInspectorEditorPresentation.NativeGameObjectHeader)
+            {
+                DrawNativeGameObjectCard(entry, palette);
+                return;
+            }
+
+            if (entry.Presentation == BetterInspectorEditorPresentation.NativeComponent)
+            {
+                DrawNativeComponentCard(entry, palette);
+                return;
+            }
+
             GUILayout.BeginVertical(styles.Card);
             Rect header = GUILayoutUtility.GetRect(1f, 34f, GUILayout.ExpandWidth(true));
             bool expanded = !collapsedKeys.Contains(entry.Key);
@@ -691,37 +704,143 @@ namespace DansToolbox.EditorTools.BetterInspector
 
             if (expanded && entry.Editor != null)
             {
-                GUILayout.Space(5f);
-                GUILayout.BeginVertical(styles.CardBody);
-                float oldLabelWidth = EditorGUIUtility.labelWidth;
-                EditorGUIUtility.labelWidth = Mathf.Clamp(position.width * 0.36f, 112f, 210f);
-                try
-                {
-                    EditorGUI.BeginChangeCheck();
-                    DrawEditorBody(entry);
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        entry.InvalidateReferenceCache();
-                        diagnosticsDirty = true;
-                    }
-                    DrawContextActions(entry, palette);
-                    DrawReferenceSummary(entry, palette);
-                }
-                catch (Exception exception)
-                {
-                    EditorGUILayout.HelpBox(
-                        "This editor could not be drawn: " + exception.GetBaseException().Message,
-                        MessageType.Warning);
-                }
-                finally
-                {
-                    EditorGUIUtility.labelWidth = oldLabelWidth;
-                }
-                GUILayout.EndVertical();
-                GUILayout.Space(4f);
+                DrawExpandedEditorContents(entry, palette);
             }
             GUILayout.EndVertical();
             Rect cardRect = GUILayoutUtility.GetLastRect();
+            pointerOverContentElement |= cardRect.Contains(Event.current.mousePosition);
+            if (entry.Targets.Length > 0 &&
+                entry.Targets.All(target => target is Component) &&
+                BetterInspectorContextMenu.ShouldOpenComponentMenu(
+                    Event.current.type,
+                    cardRect,
+                    Event.current.mousePosition))
+            {
+                pendingComponentContextEntry = entry;
+            }
+        }
+
+        private void DrawNativeComponentCard(
+            BetterInspectorEditorEntry entry,
+            DansToolboxPalette palette)
+        {
+            GUILayout.BeginVertical(styles.Card);
+            bool expanded = !collapsedKeys.Contains(entry.Key);
+            bool favorite = IsFavorite(entry.Type);
+
+            GUILayout.BeginHorizontal();
+            bool updated = EditorGUILayout.InspectorTitlebar(expanded, entry.Editor);
+            if (GUILayout.Button(
+                    favorite ? "\u2605" : "\u2606",
+                    styles.SmallButton,
+                    GUILayout.Width(24f),
+                    GUILayout.Height(22f)))
+            {
+                SetFavorite(entry.Type, !favorite);
+            }
+            GUILayout.EndHorizontal();
+
+            Rect header = GUILayoutUtility.GetLastRect();
+            if (favorite && Event.current.type == EventType.Repaint)
+            {
+                EditorGUI.DrawRect(new Rect(header.x, header.y, 3f, header.height), palette.Accent);
+            }
+            if (updated != expanded)
+            {
+                SetCollapsed(entry.Key, !updated);
+                expanded = updated;
+            }
+
+            if (expanded && entry.Editor != null)
+            {
+                DrawExpandedEditorContents(entry, palette);
+            }
+            GUILayout.EndVertical();
+            TrackEditorCardInteraction(entry, GUILayoutUtility.GetLastRect());
+        }
+
+        private void DrawNativeGameObjectCard(
+            BetterInspectorEditorEntry entry,
+            DansToolboxPalette palette)
+        {
+            GUILayout.BeginVertical(styles.Card);
+            if (entry.Targets.Length == 1 && IsPrefabAssetTarget(
+                    entry.Targets[0],
+                    AssetDatabase.GetAssetPath(entry.Targets[0])))
+            {
+                GUILayout.BeginHorizontal(EditorStyles.toolbar);
+                GUILayout.Label("PREFAB ROOT  " + MetadataSeparator + "  OPEN FOR HIERARCHY EDITING", styles.SectionLabel);
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("OPEN PREFAB", styles.SmallButton, GUILayout.Width(88f), GUILayout.Height(20f)))
+                {
+                    OpenPrefabAsset(entry.Targets[0]);
+                }
+                GUILayout.EndHorizontal();
+            }
+
+            try
+            {
+                using (new BetterInspectorEditorVisibilityScope(entry.Editor.targets))
+                {
+                    entry.Editor.DrawHeader();
+                }
+            }
+            catch (Exception exception)
+            {
+                EditorGUILayout.HelpBox(
+                    "The prefab root header could not be drawn: " + exception.GetBaseException().Message,
+                    MessageType.Warning);
+            }
+
+            GUILayout.EndVertical();
+            TrackEditorCardInteraction(entry, GUILayoutUtility.GetLastRect());
+        }
+
+        private static void OpenPrefabAsset(Object target)
+        {
+            string path = target == null ? string.Empty : AssetDatabase.GetAssetPath(target);
+            if (!string.IsNullOrEmpty(path))
+            {
+                PrefabStageUtility.OpenPrefab(path);
+            }
+        }
+
+        private void DrawExpandedEditorContents(
+            BetterInspectorEditorEntry entry,
+            DansToolboxPalette palette)
+        {
+            GUILayout.Space(5f);
+            GUILayout.BeginVertical(styles.CardBody);
+            float oldLabelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = Mathf.Clamp(position.width * 0.36f, 112f, 210f);
+            try
+            {
+                EditorGUI.BeginChangeCheck();
+                DrawEditorBody(entry);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    entry.InvalidateReferenceCache();
+                    diagnosticsDirty = true;
+                }
+                DrawContextActions(entry, palette);
+                DrawReferenceSummary(entry, palette);
+            }
+            catch (Exception exception)
+            {
+                EditorGUILayout.HelpBox(
+                    "This editor could not be drawn: " + exception.GetBaseException().Message,
+                    MessageType.Warning);
+            }
+            finally
+            {
+                EditorGUIUtility.labelWidth = oldLabelWidth;
+            }
+            GUILayout.EndVertical();
+            GUILayout.Space(4f);
+        }
+
+        private void TrackEditorCardInteraction(BetterInspectorEditorEntry entry, Rect cardRect)
+        {
             pointerOverContentElement |= cardRect.Contains(Event.current.mousePosition);
             if (entry.Targets.Length > 0 &&
                 entry.Targets.All(target => target is Component) &&
@@ -1176,14 +1295,34 @@ namespace DansToolbox.EditorTools.BetterInspector
                 return;
             }
 
-            if (AreEditableSceneGameObjects(targets))
+            if (AreInspectableGameObjects(targets))
             {
-                foreach (BetterInspectorComponentGroup group in BuildComponentGroups(targets.Cast<GameObject>().ToArray()))
+                var gameObjects = targets.Cast<GameObject>().ToArray();
+                if (ArePrefabAssetGameObjects(targets))
+                {
+                    UnityEditor.Editor gameObjectEditor = UnityEditor.Editor.CreateEditor(targets);
+                    if (gameObjectEditor != null)
+                    {
+                        entries.Add(new BetterInspectorEditorEntry(
+                            typeof(GameObject).AssemblyQualifiedName,
+                            typeof(GameObject),
+                            targets,
+                            gameObjectEditor,
+                            presentation: BetterInspectorEditorPresentation.NativeGameObjectHeader));
+                    }
+                }
+
+                foreach (BetterInspectorComponentGroup group in BuildComponentGroups(gameObjects))
                 {
                     UnityEditor.Editor editor = UnityEditor.Editor.CreateEditor(group.Components.Cast<Object>().ToArray());
                     if (editor != null)
                     {
-                        entries.Add(new BetterInspectorEditorEntry(group.Key, group.Type, group.Components, editor));
+                        entries.Add(new BetterInspectorEditorEntry(
+                            group.Key,
+                            group.Type,
+                            group.Components,
+                            editor,
+                            presentation: BetterInspectorEditorPresentation.NativeComponent));
                     }
                 }
                 requiresConstantRepaint = CheckRequiresConstantRepaint();
@@ -1268,6 +1407,25 @@ namespace DansToolbox.EditorTools.BetterInspector
         {
             return importer != null &&
                    string.Equals(importer.GetType().Name, "PrefabImporter", StringComparison.Ordinal);
+        }
+
+        internal static bool AreInspectableGameObjects(Object[] targets)
+        {
+            return AreEditableSceneGameObjects(targets) || ArePrefabAssetGameObjects(targets);
+        }
+
+        internal static bool ArePrefabAssetGameObjects(Object[] targets)
+        {
+            return targets != null && targets.Length > 0 && targets.All(target =>
+            {
+                if (target == null || !(target is GameObject))
+                {
+                    return false;
+                }
+
+                string path = AssetDatabase.GetAssetPath(target);
+                return IsPrefabAssetTarget(target, path);
+            });
         }
 
         internal static List<BetterInspectorAction> GetContextActions(Type type)
@@ -1398,6 +1556,7 @@ namespace DansToolbox.EditorTools.BetterInspector
             historyIndex = next;
             Selection.activeObject = history[next];
             navigatingHistory = false;
+            scroll = Vector2.zero;
             cachedTargets = null;
             RebuildEditors(force: true);
             Repaint();
@@ -1639,6 +1798,7 @@ namespace DansToolbox.EditorTools.BetterInspector
                 return;
             }
             RecordHistory(Selection.activeObject);
+            scroll = Vector2.zero;
             cachedTargets = null;
             RebuildEditors(force: true);
             Repaint();
@@ -1863,6 +2023,13 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal string Key => Type.AssemblyQualifiedName + "#" + Ordinal;
     }
 
+    internal enum BetterInspectorEditorPresentation
+    {
+        Standard,
+        NativeComponent,
+        NativeGameObjectHeader
+    }
+
     internal sealed class BetterInspectorEditorEntry
     {
         private SerializedObject referenceSerializedObject;
@@ -1873,13 +2040,15 @@ namespace DansToolbox.EditorTools.BetterInspector
             Type type,
             Object[] targets,
             UnityEditor.Editor editor,
-            UnityEditor.Editor previewEditor = null)
+            UnityEditor.Editor previewEditor = null,
+            BetterInspectorEditorPresentation presentation = BetterInspectorEditorPresentation.Standard)
         {
             Key = key;
             Type = type;
             Targets = targets;
             Editor = editor;
             PreviewEditor = previewEditor;
+            Presentation = presentation;
             Actions = BetterInspectorWindow.GetContextActions(type);
             Title = ObjectNames.NicifyVariableName(type.Name).ToUpperInvariant();
         }
@@ -1889,6 +2058,7 @@ namespace DansToolbox.EditorTools.BetterInspector
         internal Object[] Targets { get; }
         internal UnityEditor.Editor Editor { get; }
         internal UnityEditor.Editor PreviewEditor { get; }
+        internal BetterInspectorEditorPresentation Presentation { get; }
         internal IReadOnlyList<BetterInspectorAction> Actions { get; }
         internal string Title { get; }
         internal SerializedObject ReferenceSerializedObject => referenceSerializedObject;

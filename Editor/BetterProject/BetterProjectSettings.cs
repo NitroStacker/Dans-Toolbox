@@ -105,6 +105,7 @@ namespace DansToolbox.EditorTools.BetterProject
                 instance.rules ??= new List<BetterProjectStyleRule>();
                 instance.collections ??= new List<BetterProjectCollection>();
                 instance.savedSearches ??= new List<BetterProjectSavedSearch>();
+                if (MigrateDefaultDiagnosticRule()) instance.Save(true);
                 return;
             }
 
@@ -128,8 +129,22 @@ namespace DansToolbox.EditorTools.BetterProject
                 Rule("Textures", BetterProjectRuleMatch.Type, "Texture", new Color32(255, 152, 92, 255), "TEX", 50),
                 Rule("Materials", BetterProjectRuleMatch.Type, "Material", new Color32(245, 192, 86, 255), "MAT", 45),
                 Rule("Packages", BetterProjectRuleMatch.Package, string.Empty, new Color32(132, 139, 151, 255), "PKG", 20),
-                Rule("Issues", BetterProjectRuleMatch.Diagnostic, "any", new Color32(235, 98, 105, 255), "!", 100)
+                Rule("Issues", BetterProjectRuleMatch.Diagnostic, "critical", new Color32(235, 98, 105, 255), "!", 100)
             };
+        }
+
+        private static bool MigrateDefaultDiagnosticRule()
+        {
+            BetterProjectStyleRule defaultIssueRule = instance.rules.FirstOrDefault(rule =>
+                rule != null &&
+                rule.Name == "Issues" &&
+                rule.Match == BetterProjectRuleMatch.Diagnostic &&
+                rule.Value == "any" &&
+                rule.Badge == "!" &&
+                rule.Priority == 100);
+            if (defaultIssueRule == null) return false;
+            defaultIssueRule.Value = "critical";
+            return true;
         }
 
         private static BetterProjectStyleRule Rule(

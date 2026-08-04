@@ -13,7 +13,9 @@ namespace DansToolbox.EditorTools.BetterProject
     [InitializeOnLoad]
     internal static class BetterProjectIndex
     {
-        private const int ReferenceBatchSize = 18;
+        private const int ReferenceBatchLimit = 18;
+        private const double ReferenceBatchBudgetMilliseconds = 3d;
+        private const int IncrementalChangeLimit = 256;
         private const long OversizedTextureBytes = 16L * 1024L * 1024L;
         private const long OversizedAudioBytes = 24L * 1024L * 1024L;
         private const long OversizedGeneralBytes = 64L * 1024L * 1024L;
@@ -32,14 +34,25 @@ namespace DansToolbox.EditorTools.BetterProject
             new Dictionary<string, string[]>(StringComparer.Ordinal);
         private static readonly Dictionary<string, BetterProjectDiagnosticFlags> diagnostics =
             new Dictionary<string, BetterProjectDiagnosticFlags>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, BetterProjectStyle> styles =
+            new Dictionary<string, BetterProjectStyle>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, UnityEngine.Object> mainAssets =
+            new Dictionary<string, UnityEngine.Object>(StringComparer.Ordinal);
         private static readonly Dictionary<string, HashSet<string>> references =
             new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, int> duplicateNames =
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> duplicateContentGuids =
             new HashSet<string>(StringComparer.Ordinal);
+        private static readonly HashSet<string> pendingImportedPaths =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> pendingDeletedPaths =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, string> pendingMoves =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         private static int revision;
+        private static bool isReady;
         private static bool refreshQueued;
         private static bool referenceIndexing;
         private static int referenceIndexCursor;
@@ -53,6 +66,7 @@ namespace DansToolbox.EditorTools.BetterProject
         }
 
         internal static event Action Changed;
+        internal static event Action ReferenceProgressChanged;
 
         internal static IReadOnlyList<BetterProjectAssetRecord> Records
         {
@@ -72,7 +86,7 @@ namespace DansToolbox.EditorTools.BetterProject
 
         internal static void EnsureReady()
         {
-            if (records.Count == 0)
+            if (!isReady)
             {
                 Refresh();
             }
@@ -80,6 +94,7 @@ namespace DansToolbox.EditorTools.BetterProject
 
         internal static void Refresh()
         {
+            isReady = false;
             records.Clear();
             byGuid.Clear();
             byPath.Clear();
@@ -87,9 +102,14 @@ namespace DansToolbox.EditorTools.BetterProject
             subAssets.Clear();
             labels.Clear();
             diagnostics.Clear();
+            styles.Clear();
+            mainAssets.Clear();
             references.Clear();
             duplicateNames.Clear();
             duplicateContentGuids.Clear();
+            pendingImportedPaths.Clear();
+            pendingDeletedPaths.Clear();
+            pendingMoves.Clear();
             duplicateContentReady = false;
             CancelReferenceIndex();
             referenceWork = null;
@@ -109,35 +129,10 @@ namespace DansToolbox.EditorTools.BetterProject
                     continue;
                 }
 
-                bool folder = AssetDatabase.IsValidFolder(path);
-                string guid = AssetDatabase.AssetPathToGUID(path);
-                if (string.IsNullOrEmpty(guid))
-                {
-                    continue;
-                }
-
-                string physicalPath = ResolvePhysicalPath(path);
-                Type mainType = folder ? typeof(DefaultAsset) : AssetDatabase.GetMainAssetTypeAtPath(path);
-                AssetImporter importer = folder ? null : AssetImporter.GetAtPath(path);
-                var record = new BetterProjectAssetRecord
-                {
-                    Guid = guid,
-                    Path = path,
-                    ParentPath = Parent(path),
-                    Name = folder ? LastSegment(path) : Path.GetFileNameWithoutExtension(path),
-                    Extension = folder ? string.Empty : Path.GetExtension(path).ToLowerInvariant(),
-                    MainType = mainType,
-                    Kind = ClassifyAsset(path, mainType, folder, importer),
-                    IsFolder = folder,
-                    IsPackage = path.StartsWith("Packages/", StringComparison.Ordinal),
-                    IsReadOnly = path.StartsWith("Packages/", StringComparison.Ordinal),
-                    FileSize = !folder && File.Exists(physicalPath) ? new FileInfo(physicalPath).Length : 0L,
-                    ModifiedUtc = File.Exists(physicalPath) || Directory.Exists(physicalPath)
-                        ? File.GetLastWriteTimeUtc(physicalPath)
-                        : default
-                };
+                BetterProjectAssetRecord record = CreateRecord(path);
+                if (record == null) continue;
                 records.Add(record);
-                byGuid[guid] = record;
+                byGuid[record.Guid] = record;
                 byPath[path] = record;
 
                 if (!children.TryGetValue(record.ParentPath, out List<BetterProjectAssetRecord> siblings))
@@ -147,7 +142,7 @@ namespace DansToolbox.EditorTools.BetterProject
                 }
                 siblings.Add(record);
 
-                string nameKey = record.Name + "|" + record.Extension;
+                string nameKey = DuplicateKey(record);
                 duplicateNames.TryGetValue(nameKey, out int count);
                 duplicateNames[nameKey] = count + 1;
             }
@@ -156,8 +151,42 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 siblingList.Sort(CompareDefault);
             }
+            isReady = true;
             revision++;
             Changed?.Invoke();
+        }
+
+        private static BetterProjectAssetRecord CreateRecord(string rawPath)
+        {
+            string path = Normalize(rawPath);
+            if (!IsIndexablePath(path) || IsTransientAsset(path)) return null;
+
+            bool folder = AssetDatabase.IsValidFolder(path);
+            string guid = AssetDatabase.AssetPathToGUID(path);
+            if (string.IsNullOrEmpty(guid)) return null;
+
+            string physicalPath = ResolvePhysicalPath(path);
+            Type mainType = folder ? typeof(DefaultAsset) : AssetDatabase.GetMainAssetTypeAtPath(path);
+            AssetImporter importer = folder ? null : AssetImporter.GetAtPath(path);
+            bool physicalFile = !string.IsNullOrEmpty(physicalPath) && File.Exists(physicalPath);
+            bool physicalDirectory = !string.IsNullOrEmpty(physicalPath) && Directory.Exists(physicalPath);
+            return new BetterProjectAssetRecord
+            {
+                Guid = guid,
+                Path = path,
+                ParentPath = Parent(path),
+                Name = folder ? LastSegment(path) : Path.GetFileNameWithoutExtension(path),
+                Extension = folder ? string.Empty : Path.GetExtension(path).ToLowerInvariant(),
+                MainType = mainType,
+                Kind = ClassifyAsset(path, mainType, folder, importer),
+                IsFolder = folder,
+                IsPackage = path.StartsWith("Packages/", StringComparison.Ordinal),
+                IsReadOnly = path.StartsWith("Packages/", StringComparison.Ordinal),
+                FileSize = !folder && physicalFile ? new FileInfo(physicalPath).Length : 0L,
+                ModifiedUtc = physicalFile || physicalDirectory
+                    ? File.GetLastWriteTimeUtc(physicalPath)
+                    : default
+            };
         }
 
         internal static BetterProjectAssetRecord GetByGuid(string guid)
@@ -200,6 +229,18 @@ namespace DansToolbox.EditorTools.BetterProject
                 .ToArray();
             subAssets[record.Guid] = cached;
             return cached;
+        }
+
+        internal static UnityEngine.Object LoadMainAsset(BetterProjectAssetRecord record)
+        {
+            if (record == null) return null;
+            if (mainAssets.TryGetValue(record.Guid, out UnityEngine.Object cached) && cached != null)
+            {
+                return cached;
+            }
+            UnityEngine.Object asset = AssetDatabase.LoadMainAssetAtPath(record.Path);
+            if (asset != null) mainAssets[record.Guid] = asset;
+            return asset;
         }
 
         internal static BetterProjectAssetKind ClassifyAsset(
@@ -253,7 +294,7 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 return cached;
             }
-            UnityEngine.Object asset = AssetDatabase.LoadMainAssetAtPath(record.Path);
+            UnityEngine.Object asset = LoadMainAsset(record);
             cached = asset == null ? Array.Empty<string>() : AssetDatabase.GetLabels(asset);
             labels[record.Guid] = cached;
             return cached;
@@ -273,7 +314,7 @@ namespace DansToolbox.EditorTools.BetterProject
             BetterProjectDiagnosticFlags flags = BetterProjectDiagnosticFlags.None;
             if (!record.IsFolder)
             {
-                UnityEngine.Object asset = AssetDatabase.LoadMainAssetAtPath(record.Path);
+                UnityEngine.Object asset = LoadMainAsset(record);
                 if (asset == null)
                 {
                     flags |= BetterProjectDiagnosticFlags.MissingAsset;
@@ -308,7 +349,7 @@ namespace DansToolbox.EditorTools.BetterProject
                 flags |= BetterProjectDiagnosticFlags.EmptyFolder;
             }
 
-            string duplicateKey = record.Name + "|" + record.Extension;
+            string duplicateKey = DuplicateKey(record);
             if (!record.IsFolder && duplicateNames.TryGetValue(duplicateKey, out int count) && count > 1)
             {
                 flags |= BetterProjectDiagnosticFlags.DuplicateName;
@@ -330,6 +371,10 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 return default;
             }
+            if (styles.TryGetValue(record.Guid, out BetterProjectStyle cached))
+            {
+                return cached;
+            }
             BetterProjectDiagnosticFlags flags = GetDiagnostics(record);
             BetterProjectStyleRule winner = null;
             foreach (BetterProjectStyleRule rule in BetterProjectSettings.Rules)
@@ -343,7 +388,19 @@ namespace DansToolbox.EditorTools.BetterProject
                     winner = rule;
                 }
             }
-            return new BetterProjectStyle(winner);
+            var style = new BetterProjectStyle(winner);
+            styles[record.Guid] = style;
+            return style;
+        }
+
+        internal static bool HasCriticalDiagnostics(BetterProjectDiagnosticFlags flags)
+        {
+            const BetterProjectDiagnosticFlags critical =
+                BetterProjectDiagnosticFlags.MissingAsset |
+                BetterProjectDiagnosticFlags.MissingScript |
+                BetterProjectDiagnosticFlags.MissingShader |
+                BetterProjectDiagnosticFlags.Importer;
+            return (flags & critical) != 0;
         }
 
         internal static string[] GetDirectDependencies(BetterProjectAssetRecord record)
@@ -388,12 +445,15 @@ namespace DansToolbox.EditorTools.BetterProject
                 record.ReferenceCount = 0;
             }
             diagnostics.Clear();
+            styles.Clear();
             referenceWork = records.Where(record => !record.IsFolder).ToList();
             referenceIndexCursor = 0;
             referenceIndexing = true;
             EditorApplication.update -= BuildReferenceBatch;
             EditorApplication.update += BuildReferenceBatch;
+            revision++;
             Changed?.Invoke();
+            ReferenceProgressChanged?.Invoke();
         }
 
         internal static void CancelReferenceIndex()
@@ -431,6 +491,7 @@ namespace DansToolbox.EditorTools.BetterProject
         internal static void InvalidatePresentation()
         {
             diagnostics.Clear();
+            styles.Clear();
             revision++;
             Changed?.Invoke();
         }
@@ -504,7 +565,45 @@ namespace DansToolbox.EditorTools.BetterProject
 
         internal static void QueueRefresh(params string[][] changedPathGroups)
         {
-            if (!ShouldRefreshForAssetChanges(changedPathGroups))
+            QueueAssetChanges(
+                (changedPathGroups ?? Array.Empty<string[]>()).SelectMany(group => group ?? Array.Empty<string>()).ToArray(),
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>());
+        }
+
+        internal static void QueueAssetChanges(
+            string[] importedAssets,
+            string[] deletedAssets,
+            string[] movedAssets,
+            string[] movedFromAssetPaths)
+        {
+            if (!isReady)
+            {
+                return;
+            }
+            AddPendingPaths(pendingImportedPaths, importedAssets);
+            AddPendingPaths(pendingDeletedPaths, deletedAssets);
+            int moveCount = Math.Min(movedAssets?.Length ?? 0, movedFromAssetPaths?.Length ?? 0);
+            for (int index = 0; index < moveCount; index++)
+            {
+                string from = Normalize(movedFromAssetPaths[index]);
+                string to = Normalize(movedAssets[index]);
+                if (!IsMeaningfulChangePath(from) || !IsMeaningfulChangePath(to)) continue;
+
+                string predecessor = pendingMoves.FirstOrDefault(pair =>
+                    string.Equals(pair.Value, from, StringComparison.OrdinalIgnoreCase)).Key;
+                if (!string.IsNullOrEmpty(predecessor))
+                {
+                    pendingMoves[predecessor] = to;
+                    pendingMoves.Remove(from);
+                }
+                else
+                {
+                    pendingMoves[from] = to;
+                }
+            }
+            if (pendingImportedPaths.Count == 0 && pendingDeletedPaths.Count == 0 && pendingMoves.Count == 0)
             {
                 return;
             }
@@ -516,8 +615,401 @@ namespace DansToolbox.EditorTools.BetterProject
             EditorApplication.delayCall += () =>
             {
                 refreshQueued = false;
-                Refresh();
+                string[] imported = pendingImportedPaths.ToArray();
+                string[] deleted = pendingDeletedPaths.ToArray();
+                KeyValuePair<string, string>[] moves = pendingMoves.ToArray();
+                pendingImportedPaths.Clear();
+                pendingDeletedPaths.Clear();
+                pendingMoves.Clear();
+                ApplyAssetChanges(
+                    imported,
+                    deleted,
+                    moves.Select(pair => pair.Value).ToArray(),
+                    moves.Select(pair => pair.Key).ToArray());
             };
+        }
+
+        internal static void ApplyAssetChanges(
+            string[] importedAssets,
+            string[] deletedAssets,
+            string[] movedAssets,
+            string[] movedFromAssetPaths)
+        {
+            if (!isReady) return;
+
+            importedAssets = FilterChangePaths(importedAssets);
+            deletedAssets = FilterChangePaths(deletedAssets);
+            movedAssets = FilterChangePaths(movedAssets);
+            movedFromAssetPaths = FilterChangePaths(movedFromAssetPaths);
+            int moveCount = Math.Min(movedAssets.Length, movedFromAssetPaths.Length);
+            if (importedAssets.Length == 0 && deletedAssets.Length == 0 && moveCount == 0) return;
+            if (importedAssets.Length + deletedAssets.Length + moveCount * 2 > IncrementalChangeLimit)
+            {
+                Refresh();
+                return;
+            }
+
+            bool referenceWasReady = IsReferenceIndexReady;
+            bool referenceWasIndexing = referenceIndexing;
+            if (referenceWasIndexing)
+            {
+                CancelReferenceIndex();
+                references.Clear();
+                referenceWork = null;
+                referenceIndexCursor = 0;
+                foreach (BetterProjectAssetRecord record in records) record.ReferenceCount = 0;
+                diagnostics.Clear();
+                styles.Clear();
+            }
+
+            var affectedGuids = new HashSet<string>(StringComparer.Ordinal);
+            var affectedDuplicateKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var affectedParents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var deletedRoots = new HashSet<string>(deletedAssets, StringComparer.OrdinalIgnoreCase);
+            var changedOwnerPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var moves = new List<KeyValuePair<string, string>>();
+
+            for (int index = 0; index < moveCount; index++)
+            {
+                string from = movedFromAssetPaths[index];
+                string to = movedAssets[index];
+                moves.Add(new KeyValuePair<string, string>(from, to));
+                MoveIndexedPath(
+                    from,
+                    to,
+                    affectedGuids,
+                    affectedDuplicateKeys,
+                    affectedParents,
+                    changedOwnerPaths);
+            }
+
+            foreach (string path in deletedAssets)
+            {
+                RemoveIndexedPath(
+                    path,
+                    affectedGuids,
+                    affectedDuplicateKeys,
+                    affectedParents);
+            }
+
+            var pathsToImport = new HashSet<string>(importedAssets, StringComparer.OrdinalIgnoreCase);
+            foreach (string movedPath in movedAssets.Take(moveCount)) pathsToImport.Add(movedPath);
+            foreach (string path in pathsToImport)
+            {
+                AddOrUpdateIndexedPath(
+                    path,
+                    affectedGuids,
+                    affectedDuplicateKeys,
+                    affectedParents,
+                    changedOwnerPaths);
+            }
+
+            RefreshSecondaryIndexes(affectedParents, affectedDuplicateKeys);
+            InvalidateRelatedPresentation(affectedGuids, affectedDuplicateKeys, affectedParents);
+            duplicateContentGuids.Clear();
+            duplicateContentReady = false;
+
+            if (referenceWasReady)
+            {
+                UpdateReferencesIncrementally(moves, deletedRoots, changedOwnerPaths);
+            }
+
+            revision++;
+            Changed?.Invoke();
+            ReferenceProgressChanged?.Invoke();
+        }
+
+        private static void AddPendingPaths(HashSet<string> destination, IEnumerable<string> paths)
+        {
+            foreach (string rawPath in paths ?? Array.Empty<string>())
+            {
+                string path = Normalize(rawPath);
+                if (IsMeaningfulChangePath(path)) destination.Add(path);
+            }
+        }
+
+        private static string[] FilterChangePaths(IEnumerable<string> paths)
+        {
+            return (paths ?? Array.Empty<string>())
+                .Select(Normalize)
+                .Where(IsMeaningfulChangePath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static bool IsMeaningfulChangePath(string path)
+        {
+            return !string.IsNullOrEmpty(path) && !IsTransientAsset(path) && IsIndexablePath(path);
+        }
+
+        private static void MoveIndexedPath(
+            string from,
+            string to,
+            HashSet<string> affectedGuids,
+            HashSet<string> affectedDuplicateKeys,
+            HashSet<string> affectedParents,
+            HashSet<string> changedOwnerPaths)
+        {
+            BetterProjectAssetRecord[] movedRecords = records
+                .Where(record => IsPathOrChild(record.Path, from))
+                .OrderBy(record => record.Path.Length)
+                .ToArray();
+            foreach (BetterProjectAssetRecord record in movedRecords)
+            {
+                string oldPath = record.Path;
+                string suffix = oldPath.Length == from.Length ? string.Empty : oldPath.Substring(from.Length);
+                string newPath = to + suffix;
+                affectedGuids.Add(record.Guid);
+                affectedDuplicateKeys.Add(DuplicateKey(record));
+                affectedParents.Add(record.ParentPath);
+                if (!record.IsFolder) changedOwnerPaths.Add(newPath);
+
+                byPath.Remove(oldPath);
+                record.Path = newPath;
+                record.ParentPath = Parent(newPath);
+                record.Name = record.IsFolder ? LastSegment(newPath) : Path.GetFileNameWithoutExtension(newPath);
+                record.Extension = record.IsFolder ? string.Empty : Path.GetExtension(newPath).ToLowerInvariant();
+                record.IsPackage = newPath.StartsWith("Packages/", StringComparison.Ordinal);
+                record.IsReadOnly = record.IsPackage;
+                affectedDuplicateKeys.Add(DuplicateKey(record));
+                affectedParents.Add(record.ParentPath);
+                byPath[newPath] = record;
+                diagnostics.Remove(record.Guid);
+                styles.Remove(record.Guid);
+            }
+        }
+
+        private static void RemoveIndexedPath(
+            string path,
+            HashSet<string> affectedGuids,
+            HashSet<string> affectedDuplicateKeys,
+            HashSet<string> affectedParents)
+        {
+            BetterProjectAssetRecord[] removed = records
+                .Where(record => IsPathOrChild(record.Path, path))
+                .ToArray();
+            if (removed.Length == 0) return;
+
+            var removedSet = new HashSet<BetterProjectAssetRecord>(removed);
+            records.RemoveAll(removedSet.Contains);
+            foreach (BetterProjectAssetRecord record in removed)
+            {
+                affectedGuids.Add(record.Guid);
+                affectedDuplicateKeys.Add(DuplicateKey(record));
+                affectedParents.Add(record.ParentPath);
+                byPath.Remove(record.Path);
+                byGuid.Remove(record.Guid);
+                InvalidateAssetCaches(record.Guid);
+            }
+        }
+
+        private static void AddOrUpdateIndexedPath(
+            string path,
+            HashSet<string> affectedGuids,
+            HashSet<string> affectedDuplicateKeys,
+            HashSet<string> affectedParents,
+            HashSet<string> changedOwnerPaths)
+        {
+            BetterProjectAssetRecord replacement = CreateRecord(path);
+            if (replacement == null) return;
+
+            if (byPath.TryGetValue(path, out BetterProjectAssetRecord existing))
+            {
+                replacement.DirectDependencyCount = existing.DirectDependencyCount;
+                replacement.ReferenceCount = existing.ReferenceCount;
+                affectedDuplicateKeys.Add(DuplicateKey(existing));
+                affectedParents.Add(existing.ParentPath);
+                records.Remove(existing);
+                byGuid.Remove(existing.Guid);
+                byPath.Remove(existing.Path);
+                InvalidateAssetCaches(existing.Guid);
+                affectedGuids.Add(existing.Guid);
+            }
+            records.Add(replacement);
+            byGuid[replacement.Guid] = replacement;
+            byPath[replacement.Path] = replacement;
+            affectedGuids.Add(replacement.Guid);
+            affectedDuplicateKeys.Add(DuplicateKey(replacement));
+            affectedParents.Add(replacement.ParentPath);
+            InvalidateAssetCaches(replacement.Guid);
+            if (!replacement.IsFolder) changedOwnerPaths.Add(replacement.Path);
+        }
+
+        private static void RefreshSecondaryIndexes(
+            HashSet<string> affectedParents,
+            HashSet<string> affectedDuplicateKeys)
+        {
+            if (affectedParents.Count > 64 || affectedDuplicateKeys.Count > 64)
+            {
+                RebuildLookupIndexes();
+                return;
+            }
+
+            foreach (string parent in affectedParents)
+            {
+                List<BetterProjectAssetRecord> siblings = records
+                    .Where(record => string.Equals(record.ParentPath, parent, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (siblings.Count == 0)
+                {
+                    children.Remove(parent);
+                }
+                else
+                {
+                    siblings.Sort(CompareDefault);
+                    children[parent] = siblings;
+                }
+            }
+
+            foreach (string key in affectedDuplicateKeys)
+            {
+                int count = records.Count(record =>
+                    string.Equals(DuplicateKey(record), key, StringComparison.OrdinalIgnoreCase));
+                if (count == 0) duplicateNames.Remove(key);
+                else duplicateNames[key] = count;
+            }
+        }
+
+        private static void RebuildLookupIndexes()
+        {
+            byGuid.Clear();
+            byPath.Clear();
+            children.Clear();
+            duplicateNames.Clear();
+            foreach (BetterProjectAssetRecord record in records)
+            {
+                byGuid[record.Guid] = record;
+                byPath[record.Path] = record;
+                if (!children.TryGetValue(record.ParentPath, out List<BetterProjectAssetRecord> siblings))
+                {
+                    siblings = new List<BetterProjectAssetRecord>();
+                    children.Add(record.ParentPath, siblings);
+                }
+                siblings.Add(record);
+                string key = DuplicateKey(record);
+                duplicateNames.TryGetValue(key, out int count);
+                duplicateNames[key] = count + 1;
+            }
+            foreach (List<BetterProjectAssetRecord> siblings in children.Values) siblings.Sort(CompareDefault);
+        }
+
+        private static void InvalidateRelatedPresentation(
+            HashSet<string> affectedGuids,
+            HashSet<string> duplicateKeys,
+            HashSet<string> parentPaths)
+        {
+            foreach (BetterProjectAssetRecord record in records)
+            {
+                if (duplicateKeys.Contains(DuplicateKey(record)) || parentPaths.Contains(record.Path))
+                {
+                    affectedGuids.Add(record.Guid);
+                }
+            }
+            foreach (string guid in affectedGuids)
+            {
+                diagnostics.Remove(guid);
+                styles.Remove(guid);
+            }
+        }
+
+        private static void InvalidateAssetCaches(string guid)
+        {
+            if (string.IsNullOrEmpty(guid)) return;
+            subAssets.Remove(guid);
+            labels.Remove(guid);
+            diagnostics.Remove(guid);
+            styles.Remove(guid);
+            mainAssets.Remove(guid);
+        }
+
+        private static void UpdateReferencesIncrementally(
+            IReadOnlyList<KeyValuePair<string, string>> moves,
+            HashSet<string> deletedRoots,
+            HashSet<string> changedOwnerPaths)
+        {
+            var remapped = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<string, HashSet<string>> entry in references)
+            {
+                string dependency = RemapMovedPath(entry.Key, moves);
+                if (deletedRoots.Any(root => IsPathOrChild(dependency, root))) continue;
+                if (!remapped.TryGetValue(dependency, out HashSet<string> owners))
+                {
+                    owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    remapped.Add(dependency, owners);
+                }
+                foreach (string rawOwner in entry.Value)
+                {
+                    string owner = RemapMovedPath(rawOwner, moves);
+                    if (!deletedRoots.Any(root => IsPathOrChild(owner, root))) owners.Add(owner);
+                }
+            }
+            references.Clear();
+            foreach (KeyValuePair<string, HashSet<string>> entry in remapped) references[entry.Key] = entry.Value;
+
+            foreach (HashSet<string> owners in references.Values)
+            {
+                owners.RemoveWhere(changedOwnerPaths.Contains);
+            }
+            foreach (string ownerPath in changedOwnerPaths)
+            {
+                BetterProjectAssetRecord owner = byPath.TryGetValue(ownerPath, out BetterProjectAssetRecord found)
+                    ? found
+                    : null;
+                if (owner == null || owner.IsFolder) continue;
+                foreach (string dependency in AssetDatabase.GetDependencies(owner.Path, false))
+                {
+                    if (string.Equals(dependency, owner.Path, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!references.TryGetValue(dependency, out HashSet<string> owners))
+                    {
+                        owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        references.Add(dependency, owners);
+                    }
+                    owners.Add(owner.Path);
+                }
+            }
+
+            foreach (string emptyKey in references.Where(pair => pair.Value.Count == 0).Select(pair => pair.Key).ToArray())
+            {
+                references.Remove(emptyKey);
+            }
+            foreach (BetterProjectAssetRecord record in records)
+            {
+                int count = references.TryGetValue(record.Path, out HashSet<string> owners) ? owners.Count : 0;
+                if (record.ReferenceCount != count)
+                {
+                    record.ReferenceCount = count;
+                    diagnostics.Remove(record.Guid);
+                    styles.Remove(record.Guid);
+                }
+            }
+            referenceWork = records.Where(record => !record.IsFolder).ToList();
+            referenceIndexCursor = referenceWork.Count;
+        }
+
+        private static string RemapMovedPath(
+            string path,
+            IReadOnlyList<KeyValuePair<string, string>> moves)
+        {
+            foreach (KeyValuePair<string, string> move in moves)
+            {
+                if (IsPathOrChild(path, move.Key))
+                {
+                    return move.Value + (path.Length == move.Key.Length ? string.Empty : path.Substring(move.Key.Length));
+                }
+            }
+            return path;
+        }
+
+        private static bool IsPathOrChild(string path, string root)
+        {
+            return string.Equals(path, root, StringComparison.OrdinalIgnoreCase) ||
+                   path.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static string DuplicateKey(BetterProjectAssetRecord record)
+        {
+            return (record.IsPackage ? "Packages|" : "Assets|") +
+                   record.Name + "|" + record.Extension;
         }
 
         private static void BuildReferenceBatch()
@@ -528,10 +1020,11 @@ namespace DansToolbox.EditorTools.BetterProject
                 return;
             }
 
-            int end = Math.Min(referenceWork.Count, referenceIndexCursor + ReferenceBatchSize);
-            for (; referenceIndexCursor < end; referenceIndexCursor++)
+            double startedAt = EditorApplication.timeSinceStartup;
+            int processed = 0;
+            while (referenceIndexCursor < referenceWork.Count && processed < ReferenceBatchLimit)
             {
-                BetterProjectAssetRecord owner = referenceWork[referenceIndexCursor];
+                BetterProjectAssetRecord owner = referenceWork[referenceIndexCursor++];
                 foreach (string dependency in AssetDatabase.GetDependencies(owner.Path, false))
                 {
                     if (string.Equals(dependency, owner.Path, StringComparison.OrdinalIgnoreCase))
@@ -545,6 +1038,11 @@ namespace DansToolbox.EditorTools.BetterProject
                     }
                     owners.Add(owner.Path);
                 }
+                processed++;
+                if ((EditorApplication.timeSinceStartup - startedAt) * 1000d >= ReferenceBatchBudgetMilliseconds)
+                {
+                    break;
+                }
             }
 
             if (referenceIndexCursor >= referenceWork.Count)
@@ -557,9 +1055,11 @@ namespace DansToolbox.EditorTools.BetterProject
                         : 0;
                 }
                 diagnostics.Clear();
+                styles.Clear();
+                revision++;
+                Changed?.Invoke();
             }
-            revision++;
-            Changed?.Invoke();
+            ReferenceProgressChanged?.Invoke();
         }
 
         private static bool Matches(
@@ -597,7 +1097,9 @@ namespace DansToolbox.EditorTools.BetterProject
                 case BetterProjectRuleMatch.Folder:
                     return record.IsFolder;
                 case BetterProjectRuleMatch.Diagnostic:
-                    return flags != BetterProjectDiagnosticFlags.None;
+                    return value.Equals("critical", StringComparison.OrdinalIgnoreCase)
+                        ? HasCriticalDiagnostics(flags)
+                        : flags != BetterProjectDiagnosticFlags.None;
                 case BetterProjectRuleMatch.Asset:
                     return string.Equals(record.Guid, value, StringComparison.Ordinal);
                 default:
@@ -696,6 +1198,14 @@ namespace DansToolbox.EditorTools.BetterProject
             return (path ?? string.Empty).Replace('\\', '/').TrimEnd('/');
         }
 
+        private static bool IsIndexablePath(string path)
+        {
+            return !string.IsNullOrEmpty(path) &&
+                   (path.StartsWith("Assets", StringComparison.Ordinal) ||
+                    path.StartsWith("Packages/", StringComparison.Ordinal)) &&
+                   !path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool IsTransientAsset(string path)
         {
             return string.Equals(
@@ -713,7 +1223,7 @@ namespace DansToolbox.EditorTools.BetterProject
             string[] movedAssets,
             string[] movedFromAssetPaths)
         {
-            BetterProjectIndex.QueueRefresh(
+            BetterProjectIndex.QueueAssetChanges(
                 importedAssets,
                 deletedAssets,
                 movedAssets,

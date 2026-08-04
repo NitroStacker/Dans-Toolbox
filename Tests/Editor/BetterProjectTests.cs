@@ -3,12 +3,25 @@ using System.Linq;
 using DansToolbox.EditorTools.BetterProject;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Presets;
 using UnityEngine;
 
 namespace DansToolbox.Editor.Tests
 {
     internal sealed class BetterProjectTests
     {
+        [SetUp]
+        public void SetUpAssetUndoJournal()
+        {
+            BetterProjectAssetUndo.ResetForTests();
+        }
+
+        [TearDown]
+        public void TearDownAssetUndoJournal()
+        {
+            BetterProjectAssetUndo.ResetForTests();
+        }
+
         [Test]
         public void Query_MatchesFuzzyTypePathLabelAndStateTerms()
         {
@@ -42,6 +55,20 @@ namespace DansToolbox.Editor.Tests
             Assert.That(
                 BetterProjectQuery.Tokenize("path:\"Player Art\" t:Texture -l:Old"),
                 Is.EqualTo(new[] { "path:Player Art", "t:Texture", "-l:Old" }));
+        }
+
+        [Test]
+        public void Query_OnlyRequestsExpensiveMetadataWhenTermsNeedIt()
+        {
+            BetterProjectQuery plain = BetterProjectQuery.Parse("player t:texture path:art");
+            BetterProjectQuery metadata = BetterProjectQuery.Parse("l:character is:favorite is:problem");
+
+            Assert.That(plain.RequiresDiagnostics, Is.False);
+            Assert.That(plain.RequiresFavorites, Is.False);
+            Assert.That(plain.RequiresLabels, Is.False);
+            Assert.That(metadata.RequiresDiagnostics, Is.True);
+            Assert.That(metadata.RequiresFavorites, Is.True);
+            Assert.That(metadata.RequiresLabels, Is.True);
         }
 
         [Test]
@@ -116,6 +143,60 @@ namespace DansToolbox.Editor.Tests
                     false,
                     false),
                 Is.EqualTo(BetterProjectAssetKind.Texture));
+        }
+
+        [Test]
+        public void IncrementalAssetChanges_AddMoveAndDeleteWhilePreservingUnchangedRecords()
+        {
+            const string root = "Assets/__BetterProjectIncrementalTests";
+            const string source = root + "/Source.asset";
+            const string destinationRoot = "Assets/__BetterProjectIncrementalMoved";
+            const string destination = destinationRoot + "/Source.asset";
+            AssetDatabase.DeleteAsset(root);
+            AssetDatabase.DeleteAsset(destinationRoot);
+            BetterProjectIndex.Refresh();
+            BetterProjectAssetRecord unchanged = BetterProjectIndex.GetByPath("Assets");
+
+            AssetDatabase.CreateFolder("Assets", "__BetterProjectIncrementalTests");
+            AssetDatabase.CreateAsset(new AnimationClip(), source);
+            AssetDatabase.SaveAssets();
+            try
+            {
+                BetterProjectIndex.ApplyAssetChanges(
+                    new[] { root, source },
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<string>());
+                BetterProjectAssetRecord created = BetterProjectIndex.GetByPath(source);
+                Assert.That(created, Is.Not.Null);
+                Assert.That(BetterProjectIndex.GetByPath("Assets"), Is.SameAs(unchanged));
+
+                Assert.That(AssetDatabase.MoveAsset(root, destinationRoot), Is.Empty);
+                BetterProjectIndex.ApplyAssetChanges(
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    new[] { destinationRoot },
+                    new[] { root });
+                Assert.That(BetterProjectIndex.GetByPath(source), Is.Null);
+                Assert.That(BetterProjectIndex.GetByPath(destination), Is.SameAs(created));
+                Assert.That(BetterProjectIndex.GetByPath("Assets"), Is.SameAs(unchanged));
+
+                AssetDatabase.DeleteAsset(destinationRoot);
+                BetterProjectIndex.ApplyAssetChanges(
+                    Array.Empty<string>(),
+                    new[] { destinationRoot },
+                    Array.Empty<string>(),
+                    Array.Empty<string>());
+                Assert.That(BetterProjectIndex.GetByPath(destination), Is.Null);
+                Assert.That(BetterProjectIndex.GetByPath("Assets"), Is.SameAs(unchanged));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(root);
+                AssetDatabase.DeleteAsset(destinationRoot);
+                AssetDatabase.Refresh();
+                BetterProjectIndex.Refresh();
+            }
         }
 
         [Test]
@@ -302,8 +383,77 @@ namespace DansToolbox.Editor.Tests
         {
             BetterProjectSettings.EnsureInitialized();
             Assert.That(BetterProjectSettings.Rules.Any(rule => rule.Match == BetterProjectRuleMatch.Extension && rule.Value == ".cs"), Is.True);
-            Assert.That(BetterProjectSettings.Rules.Any(rule => rule.Match == BetterProjectRuleMatch.Diagnostic), Is.True);
+            Assert.That(
+                BetterProjectSettings.Rules.Any(rule =>
+                    rule.Match == BetterProjectRuleMatch.Diagnostic &&
+                    rule.Value == "critical"),
+                Is.True);
             Assert.That(BetterProjectSettings.Rules.Any(rule => rule.Match == BetterProjectRuleMatch.Package), Is.True);
+        }
+
+        [Test]
+        public void DuplicateNames_DoNotCrossProjectAndPackageScopes()
+        {
+            BetterProjectAssetRecord projectCube = Record(
+                "project-cube",
+                "Assets/Cube.prefab",
+                typeof(GameObject),
+                1024);
+            BetterProjectAssetRecord secondProjectCube = Record(
+                "second-project-cube",
+                "Assets/Prefabs/Cube.prefab",
+                typeof(GameObject),
+                1024);
+            BetterProjectAssetRecord packageCube = Record(
+                "package-cube",
+                "Packages/com.example.tests/Cube.prefab",
+                typeof(GameObject),
+                1024);
+            packageCube.IsPackage = true;
+
+            Assert.That(
+                BetterProjectIndex.DuplicateKey(projectCube),
+                Is.EqualTo(BetterProjectIndex.DuplicateKey(secondProjectCube)));
+            Assert.That(
+                BetterProjectIndex.DuplicateKey(projectCube),
+                Is.Not.EqualTo(BetterProjectIndex.DuplicateKey(packageCube)));
+        }
+
+        [Test]
+        public void Diagnostics_ReserveCriticalSeverityForBrokenAssets()
+        {
+            Assert.That(
+                BetterProjectIndex.HasCriticalDiagnostics(BetterProjectDiagnosticFlags.MissingScript),
+                Is.True);
+            Assert.That(
+                BetterProjectIndex.HasCriticalDiagnostics(BetterProjectDiagnosticFlags.Importer),
+                Is.True);
+            Assert.That(
+                BetterProjectIndex.HasCriticalDiagnostics(BetterProjectDiagnosticFlags.DuplicateName),
+                Is.False);
+            Assert.That(
+                BetterProjectIndex.HasCriticalDiagnostics(BetterProjectDiagnosticFlags.Unreferenced),
+                Is.False);
+            Assert.That(
+                BetterProjectIndex.HasCriticalDiagnostics(BetterProjectDiagnosticFlags.Oversized),
+                Is.False);
+        }
+
+        [Test]
+        public void DiagnosticBadges_NameAndExplainTheirReason()
+        {
+            Assert.That(
+                BetterProjectGui.DiagnosticCode(BetterProjectDiagnosticFlags.DuplicateName),
+                Is.EqualTo("DUP"));
+            Assert.That(
+                BetterProjectGui.DiagnosticSummary(BetterProjectDiagnosticFlags.DuplicateName),
+                Does.Contain("Duplicate name"));
+            Assert.That(
+                BetterProjectGui.DiagnosticCode(BetterProjectDiagnosticFlags.MissingScript),
+                Is.EqualTo("SCRIPT"));
+            Assert.That(
+                BetterProjectGui.DiagnosticSummary(BetterProjectDiagnosticFlags.Unreferenced),
+                Does.Contain("may be intentional"));
         }
 
         [Test]
@@ -412,6 +562,200 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void AssetUndo_RenameRestoresPathAndGuidInBothDirections()
+        {
+            const string root = "Assets/__BetterProjectUndoRenameTests";
+            const string source = root + "/Source.asset";
+            const string renamed = root + "/Renamed.asset";
+            AssetDatabase.DeleteAsset(root);
+            AssetDatabase.CreateFolder("Assets", "__BetterProjectUndoRenameTests");
+            AssetDatabase.CreateAsset(new AnimationClip(), source);
+            AssetDatabase.SaveAssets();
+            string guid = AssetDatabase.AssetPathToGUID(source);
+
+            try
+            {
+                BetterProjectAssetRecord record = AssetRecord(source, typeof(AnimationClip));
+                Assert.That(BetterProjectOperations.Rename(record, "Renamed"), Is.Empty);
+                Assert.That(AssetDatabase.GUIDToAssetPath(guid), Is.EqualTo(renamed));
+
+                PerformUndo();
+                Assert.That(AssetDatabase.GUIDToAssetPath(guid), Is.EqualTo(source));
+
+                PerformRedo();
+                Assert.That(AssetDatabase.GUIDToAssetPath(guid), Is.EqualTo(renamed));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(root);
+                AssetDatabase.Refresh();
+            }
+        }
+
+        [Test]
+        public void AssetUndo_MoveAndCutPasteRestoreOriginalPaths()
+        {
+            const string root = "Assets/__BetterProjectUndoMoveTests";
+            const string moveFolder = root + "/Moved";
+            const string pasteFolder = root + "/Pasted";
+            const string moveSource = root + "/Move.asset";
+            const string moveDestination = moveFolder + "/Move.asset";
+            const string pasteSource = root + "/Paste.asset";
+            const string pasteDestination = pasteFolder + "/Paste.asset";
+            AssetDatabase.DeleteAsset(root);
+            AssetDatabase.CreateFolder("Assets", "__BetterProjectUndoMoveTests");
+            AssetDatabase.CreateFolder(root, "Moved");
+            AssetDatabase.CreateFolder(root, "Pasted");
+            AssetDatabase.CreateAsset(new AnimationClip(), moveSource);
+            AssetDatabase.CreateAsset(new AnimationClip(), pasteSource);
+            AssetDatabase.SaveAssets();
+            string moveGuid = AssetDatabase.AssetPathToGUID(moveSource);
+            string pasteGuid = AssetDatabase.AssetPathToGUID(pasteSource);
+
+            try
+            {
+                Assert.That(BetterProjectOperations.Move(new[] { moveSource }, moveFolder), Is.True);
+                Assert.That(AssetDatabase.GUIDToAssetPath(moveGuid), Is.EqualTo(moveDestination));
+                PerformUndo();
+                Assert.That(AssetDatabase.GUIDToAssetPath(moveGuid), Is.EqualTo(moveSource));
+                PerformRedo();
+                Assert.That(AssetDatabase.GUIDToAssetPath(moveGuid), Is.EqualTo(moveDestination));
+
+                BetterProjectOperations.Copy(
+                    new[] { AssetRecord(pasteSource, typeof(AnimationClip)) },
+                    true);
+                Assert.That(BetterProjectOperations.Paste(pasteFolder), Is.True);
+                Assert.That(AssetDatabase.GUIDToAssetPath(pasteGuid), Is.EqualTo(pasteDestination));
+                PerformUndo();
+                Assert.That(AssetDatabase.GUIDToAssetPath(pasteGuid), Is.EqualTo(pasteSource));
+                PerformRedo();
+                Assert.That(AssetDatabase.GUIDToAssetPath(pasteGuid), Is.EqualTo(pasteDestination));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(root);
+                AssetDatabase.Refresh();
+            }
+        }
+
+        [Test]
+        public void AssetUndo_DuplicateFolderAndDeletePreserveGuidAcrossRedo()
+        {
+            const string root = "Assets/__BetterProjectUndoCreateDeleteTests";
+            const string source = root + "/Source.asset";
+            const string createdFolder = root + "/Generated";
+            AssetDatabase.DeleteAsset(root);
+            AssetDatabase.CreateFolder("Assets", "__BetterProjectUndoCreateDeleteTests");
+            AssetDatabase.CreateAsset(new AnimationClip(), source);
+            AssetDatabase.SaveAssets();
+
+            try
+            {
+                string folderPath = BetterProjectOperations.CreateFolder(root, "Generated");
+                string folderGuid = AssetDatabase.AssetPathToGUID(folderPath);
+                Assert.That(folderPath, Is.EqualTo(createdFolder));
+                PerformUndo();
+                Assert.That(AssetDatabase.IsValidFolder(createdFolder), Is.False);
+                PerformRedo();
+                Assert.That(AssetDatabase.AssetPathToGUID(createdFolder), Is.EqualTo(folderGuid));
+
+                string duplicatePath = AssetDatabase.GenerateUniqueAssetPath(source);
+                Assert.That(
+                    BetterProjectOperations.Duplicate(
+                        new[] { AssetRecord(source, typeof(AnimationClip)) }),
+                    Is.True);
+                string duplicateGuid = AssetDatabase.AssetPathToGUID(duplicatePath);
+                Assert.That(duplicateGuid, Is.Not.Empty);
+                Assert.That(BetterProjectAssetUndo.Cursor, Is.EqualTo(2));
+                PerformUndo();
+                Assert.That(BetterProjectAssetUndo.Cursor, Is.EqualTo(1));
+                Assert.That(BetterProjectAssetUndo.AppliedCursor, Is.EqualTo(1));
+                string duplicateAbsolute = System.IO.Path.GetFullPath(
+                    System.IO.Path.Combine(
+                        System.IO.Directory.GetParent(Application.dataPath).FullName,
+                        duplicatePath));
+                Assert.That(System.IO.File.Exists(duplicateAbsolute), Is.False);
+                Assert.That(System.IO.File.Exists(duplicateAbsolute + ".meta"), Is.False);
+                Assert.That(AssetDatabase.LoadMainAssetAtPath(duplicatePath), Is.Null);
+                PerformRedo();
+                Assert.That(AssetDatabase.AssetPathToGUID(duplicatePath), Is.EqualTo(duplicateGuid));
+
+                string sourceGuid = AssetDatabase.AssetPathToGUID(source);
+                Assert.That(
+                    BetterProjectOperations.Delete(
+                        new[] { AssetRecord(source, typeof(AnimationClip)) },
+                        false),
+                    Is.True);
+                Assert.That(AssetDatabase.LoadMainAssetAtPath(source), Is.Null);
+                PerformUndo();
+                Assert.That(AssetDatabase.AssetPathToGUID(source), Is.EqualTo(sourceGuid));
+                PerformRedo();
+                Assert.That(AssetDatabase.LoadMainAssetAtPath(source), Is.Null);
+                PerformUndo();
+                Assert.That(AssetDatabase.AssetPathToGUID(source), Is.EqualTo(sourceGuid));
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(root);
+                AssetDatabase.Refresh();
+            }
+        }
+
+        [Test]
+        public void AssetUndo_LabelsAndImporterPresetsRestoreSerializedImporterState()
+        {
+            const string root = "Assets/__BetterProjectUndoImporterTests";
+            const string source = root + "/Source.png";
+            AssetDatabase.DeleteAsset(root);
+            AssetDatabase.CreateFolder("Assets", "__BetterProjectUndoImporterTests");
+            var texture = new Texture2D(2, 2);
+            texture.SetPixels(new[] { Color.red, Color.green, Color.blue, Color.white });
+            texture.Apply();
+            string sourceAbsolute = System.IO.Path.GetFullPath(System.IO.Path.Combine(
+                System.IO.Directory.GetParent(Application.dataPath).FullName,
+                source));
+            System.IO.File.WriteAllBytes(sourceAbsolute, texture.EncodeToPNG());
+            UnityEngine.Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(source, ImportAssetOptions.ForceSynchronousImport);
+            UnityEngine.Object asset = AssetDatabase.LoadMainAssetAtPath(source);
+            AssetDatabase.SetLabels(asset, new[] { "Before" });
+            AssetDatabase.SaveAssets();
+            Preset preset = null;
+
+            try
+            {
+                BetterProjectAssetRecord record = AssetRecord(source, typeof(Texture2D));
+                BetterProjectOperations.SetLabels(new[] { record }, new[] { "After" });
+                Assert.That(AssetDatabase.GetLabels(asset), Is.EqualTo(new[] { "After" }));
+                PerformUndo();
+                Assert.That(AssetDatabase.GetLabels(asset), Is.EqualTo(new[] { "Before" }));
+                PerformRedo();
+                Assert.That(AssetDatabase.GetLabels(asset), Is.EqualTo(new[] { "After" }));
+
+                AssetImporter importer = AssetImporter.GetAtPath(source);
+                importer.userData = "Preset Value";
+                importer.SaveAndReimport();
+                preset = new Preset(AssetImporter.GetAtPath(source));
+                importer = AssetImporter.GetAtPath(source);
+                importer.userData = "Before Value";
+                importer.SaveAndReimport();
+
+                Assert.That(BetterProjectOperations.ApplyPreset(new[] { record }, preset), Is.EqualTo(1));
+                Assert.That(AssetImporter.GetAtPath(source).userData, Is.EqualTo("Preset Value"));
+                PerformUndo();
+                Assert.That(AssetImporter.GetAtPath(source).userData, Is.EqualTo("Before Value"));
+                PerformRedo();
+                Assert.That(AssetImporter.GetAtPath(source).userData, Is.EqualTo("Preset Value"));
+            }
+            finally
+            {
+                if (preset != null) UnityEngine.Object.DestroyImmediate(preset);
+                AssetDatabase.DeleteAsset(root);
+                AssetDatabase.Refresh();
+            }
+        }
+
+        [Test]
         public void Window_CanBeCreatedAtCompactMinimumSize()
         {
             BetterProjectWindow window = ScriptableObject.CreateInstance<BetterProjectWindow>();
@@ -435,6 +779,16 @@ namespace DansToolbox.Editor.Tests
             Assert.That(wideColumns, Is.EqualTo(3));
             Assert.That(narrowWidth, Is.EqualTo(112f));
             Assert.That(wideWidth, Is.EqualTo(112f));
+        }
+
+        [Test]
+        public void HoverUpdates_AreBoundedToSixtyHertz()
+        {
+            double nextUpdateAt = 0d;
+
+            Assert.That(BetterProjectWindow.ShouldProcessHoverUpdate(10d, ref nextUpdateAt), Is.True);
+            Assert.That(BetterProjectWindow.ShouldProcessHoverUpdate(10.001d, ref nextUpdateAt), Is.False);
+            Assert.That(BetterProjectWindow.ShouldProcessHoverUpdate(nextUpdateAt, ref nextUpdateAt), Is.True);
         }
 
         [Test]
@@ -486,6 +840,25 @@ namespace DansToolbox.Editor.Tests
                 FileSize = bytes,
                 ModifiedUtc = DateTime.UtcNow
             };
+        }
+
+        private static BetterProjectAssetRecord AssetRecord(string path, Type type)
+        {
+            return Record(AssetDatabase.AssetPathToGUID(path), path, type, 0L);
+        }
+
+        private static void PerformUndo()
+        {
+            Undo.FlushUndoRecordObjects();
+            Undo.PerformUndo();
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        private static void PerformRedo()
+        {
+            Undo.FlushUndoRecordObjects();
+            Undo.PerformRedo();
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         }
     }
 }

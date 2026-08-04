@@ -36,6 +36,7 @@ namespace DansToolbox.EditorTools.BetterProject
         private const float ListSubAssetRowHeight = 52f;
         private const float GridGap = 8f;
         private const float GridScrollBarAllowance = 14f;
+        private const double HoverUpdateInterval = 1d / 60d;
 
         [SerializeField] private BetterProjectTreeViewState folderTreeState;
         [SerializeField] private BetterProjectSurface surface;
@@ -82,6 +83,27 @@ namespace DansToolbox.EditorTools.BetterProject
         [NonSerialized] private string dragHoverFolderGuid = string.Empty;
         [NonSerialized] private List<BetterProjectGridEntry> gridEntries =
             new List<BetterProjectGridEntry>();
+        [NonSerialized] private List<BetterProjectGridEntry> secondaryGridEntries =
+            new List<BetterProjectGridEntry>();
+        [NonSerialized] private IReadOnlyList<BetterProjectAssetRecord> gridEntrySource;
+        [NonSerialized] private IReadOnlyList<BetterProjectAssetRecord> secondaryGridEntrySource;
+        [NonSerialized] private int gridEntryExpansionRevision = -1;
+        [NonSerialized] private int secondaryGridEntryExpansionRevision = -1;
+        [NonSerialized] private int expansionRevision;
+        [NonSerialized] private Dictionary<string, Texture> thumbnailCache =
+            new Dictionary<string, Texture>(StringComparer.Ordinal);
+        [NonSerialized] private BetterProjectAssetRecord[] pinnedFolderCache = Array.Empty<BetterProjectAssetRecord>();
+        [NonSerialized] private int pinnedFolderCacheRevision = -1;
+        [NonSerialized] private string tokenizedSearch = string.Empty;
+        [NonSerialized] private IReadOnlyList<string> tokenCache = Array.Empty<string>();
+        [NonSerialized] private double nextPreviewRepaintAt;
+        [NonSerialized] private bool previewLoadingLastUpdate;
+        [NonSerialized] private double nextHoverUpdateAt;
+        [NonSerialized] private string previewMetadataGuid = string.Empty;
+        [NonSerialized] private int previewMetadataRevision = -1;
+        [NonSerialized] private int previewMetadataTargetId;
+        [NonSerialized] private BetterProjectMetadataLine[] previewMetadataCache =
+            Array.Empty<BetterProjectMetadataLine>();
 
         [MenuItem(MenuPath, false, 22)]
         internal static void Open()
@@ -115,6 +137,8 @@ namespace DansToolbox.EditorTools.BetterProject
             secondaryFolderHistory ??= new List<string>();
             visibleCache ??= new Dictionary<string, BetterProjectAssetRecord[]>(StringComparer.Ordinal);
             gridEntries ??= new List<BetterProjectGridEntry>();
+            secondaryGridEntries ??= new List<BetterProjectGridEntry>();
+            thumbnailCache ??= new Dictionary<string, Texture>(StringComparer.Ordinal);
             visibleCache.Clear();
             visibleCacheRevision = BetterProjectIndex.Revision;
             currentFolder = AssetDatabase.IsValidFolder(currentFolder) ? currentFolder : "Assets";
@@ -125,6 +149,8 @@ namespace DansToolbox.EditorTools.BetterProject
             RebuildFolderTree();
             BetterProjectIndex.Changed -= OnIndexChanged;
             BetterProjectIndex.Changed += OnIndexChanged;
+            BetterProjectIndex.ReferenceProgressChanged -= OnReferenceProgressChanged;
+            BetterProjectIndex.ReferenceProgressChanged += OnReferenceProgressChanged;
             BetterConsoleDiagnosticBridge.Changed -= OnConsoleDiagnosticsChanged;
             BetterConsoleDiagnosticBridge.Changed += OnConsoleDiagnosticsChanged;
             BetterConsoleDiagnosticBridge.AssetRevealRequested -= OnConsoleAssetRevealRequested;
@@ -133,15 +159,22 @@ namespace DansToolbox.EditorTools.BetterProject
             Selection.selectionChanged += SyncFromUnitySelection;
             Undo.undoRedoPerformed -= OnUndoRedo;
             Undo.undoRedoPerformed += OnUndoRedo;
+            EditorBuildSettings.sceneListChanged -= OnBuildSettingsChanged;
+            EditorBuildSettings.sceneListChanged += OnBuildSettingsChanged;
+            EditorApplication.update -= UpdatePreviewRepaints;
+            EditorApplication.update += UpdatePreviewRepaints;
         }
 
         private void OnDisable()
         {
             BetterProjectIndex.Changed -= OnIndexChanged;
+            BetterProjectIndex.ReferenceProgressChanged -= OnReferenceProgressChanged;
             BetterConsoleDiagnosticBridge.Changed -= OnConsoleDiagnosticsChanged;
             BetterConsoleDiagnosticBridge.AssetRevealRequested -= OnConsoleAssetRevealRequested;
             Selection.selectionChanged -= SyncFromUnitySelection;
             Undo.undoRedoPerformed -= OnUndoRedo;
+            EditorBuildSettings.sceneListChanged -= OnBuildSettingsChanged;
+            EditorApplication.update -= UpdatePreviewRepaints;
             DestroyPreviewEditor();
         }
 
@@ -151,11 +184,17 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 ClearFolderDropHover();
             }
+            bool hoverUpdate = Event.current.type == EventType.MouseMove;
+            if (hoverUpdate)
+            {
+                double now = EditorApplication.timeSinceStartup;
+                if (!ShouldProcessHoverUpdate(now, ref nextHoverUpdateAt)) return;
+            }
             EditorGUI.DrawRect(new Rect(0f, 0f, position.width, position.height), BetterProjectGui.Canvas);
             ReleaseSearchFocusOnPointerDown();
             HandleKeyboard();
 
-            IReadOnlyList<string> tokens = BetterProjectQuery.Tokenize(search);
+            IReadOnlyList<string> tokens = GetSearchTokens();
             float commandHeight = ToolbarHeight + (tokens.Count > 0 ? ChipHeight : 0f);
             Rect toolbarRect = new Rect(0f, 0f, position.width, ToolbarHeight);
             Rect chipsRect = new Rect(0f, ToolbarHeight, position.width, tokens.Count > 0 ? ChipHeight : 0f);
@@ -170,15 +209,52 @@ namespace DansToolbox.EditorTools.BetterProject
             DrawBody(bodyRect);
             DrawStatus(statusRect);
 
-            if (Event.current.type == EventType.MouseMove || AssetPreview.IsLoadingAssetPreviews())
-            {
-                Repaint();
-            }
+            if (hoverUpdate) Repaint();
+
             if (DansToolboxMotion.DrawWindowReveal(
                     new Rect(0f, 0f, position.width, position.height), revealStartedAt))
             {
                 Repaint();
             }
+        }
+
+        private IReadOnlyList<string> GetSearchTokens()
+        {
+            string value = search ?? string.Empty;
+            if (!string.Equals(tokenizedSearch, value, StringComparison.Ordinal))
+            {
+                tokenizedSearch = value;
+                tokenCache = BetterProjectQuery.Tokenize(value);
+            }
+            return tokenCache;
+        }
+
+        internal static bool ShouldProcessHoverUpdate(double now, ref double nextUpdateAt)
+        {
+            if (now < nextUpdateAt) return false;
+            nextUpdateAt = now + HoverUpdateInterval;
+            return true;
+        }
+
+        private void UpdatePreviewRepaints()
+        {
+            bool loading = AssetPreview.IsLoadingAssetPreviews();
+            if (!loading)
+            {
+                if (previewLoadingLastUpdate) Repaint();
+                previewLoadingLastUpdate = false;
+                return;
+            }
+            previewLoadingLastUpdate = true;
+            double now = EditorApplication.timeSinceStartup;
+            if (now < nextPreviewRepaintAt) return;
+            nextPreviewRepaintAt = now + 0.1d;
+            Repaint();
+        }
+
+        private void OnReferenceProgressChanged()
+        {
+            Repaint();
         }
 
         private void DrawRefinedToolbar(Rect rect)
@@ -774,11 +850,7 @@ namespace DansToolbox.EditorTools.BetterProject
             }
             BetterProjectGui.DrawPanel(pane, BetterProjectGui.Canvas, false);
 
-            BetterProjectAssetRecord[] pinnedFolders = BetterProjectUserSettings.FavoriteGuids
-                .Select(BetterProjectIndex.GetByGuid)
-                .Where(record => record != null && record.IsFolder)
-                .Take(5)
-                .ToArray();
+            BetterProjectAssetRecord[] pinnedFolders = GetPinnedFolders();
             if (pinnedFolders.Length > 0)
             {
                 DrawPinnedFolders(new Rect(pane.x, pane.y, pane.width, 25f), pinnedFolders, primary);
@@ -832,12 +904,24 @@ namespace DansToolbox.EditorTools.BetterProject
             }
         }
 
+        private BetterProjectAssetRecord[] GetPinnedFolders()
+        {
+            if (pinnedFolderCacheRevision == BetterProjectIndex.Revision) return pinnedFolderCache;
+            pinnedFolderCache = BetterProjectUserSettings.FavoriteGuids
+                .Select(BetterProjectIndex.GetByGuid)
+                .Where(record => record != null && record.IsFolder)
+                .Take(5)
+                .ToArray();
+            pinnedFolderCacheRevision = BetterProjectIndex.Revision;
+            return pinnedFolderCache;
+        }
+
         private void DrawGrid(Rect pane, IReadOnlyList<BetterProjectAssetRecord> visible, ref Vector2 scroll, bool primary)
         {
             CalculateGridLayout(pane.width, tileSize, out int columns, out float actualWidth);
             float cardHeight = actualWidth + 42f;
-            BuildGridEntries(visible);
-            int rows = Mathf.CeilToInt(gridEntries.Count / (float)columns);
+            IReadOnlyList<BetterProjectGridEntry> entries = GetGridEntries(visible, primary);
+            int rows = Mathf.CeilToInt(entries.Count / (float)columns);
             Rect content = new Rect(
                 0f,
                 0f,
@@ -846,7 +930,7 @@ namespace DansToolbox.EditorTools.BetterProject
             scroll = GUI.BeginScrollView(pane, scroll, content);
             float visibleTop = Mathf.Max(0f, scroll.y - GridGap);
             float visibleBottom = scroll.y + pane.height + GridGap;
-            for (int flatIndex = 0; flatIndex < gridEntries.Count; flatIndex++)
+            for (int flatIndex = 0; flatIndex < entries.Count; flatIndex++)
             {
                 int column = flatIndex % columns;
                 int row = flatIndex / columns;
@@ -857,7 +941,7 @@ namespace DansToolbox.EditorTools.BetterProject
                     cardHeight);
                 if (card.yMax < visibleTop || card.y > visibleBottom) continue;
 
-                BetterProjectGridEntry entry = gridEntries[flatIndex];
+                BetterProjectGridEntry entry = entries[flatIndex];
                 if (entry.SubAsset != null)
                 {
                     DrawSubAssetCard(card, entry.SubAsset);
@@ -870,19 +954,44 @@ namespace DansToolbox.EditorTools.BetterProject
             GUI.EndScrollView();
         }
 
-        private void BuildGridEntries(IReadOnlyList<BetterProjectAssetRecord> visible)
+        private IReadOnlyList<BetterProjectGridEntry> GetGridEntries(
+            IReadOnlyList<BetterProjectAssetRecord> visible,
+            bool primary)
         {
-            gridEntries.Clear();
+            List<BetterProjectGridEntry> entries = primary ? gridEntries : secondaryGridEntries;
+            IReadOnlyList<BetterProjectAssetRecord> cachedSource = primary
+                ? gridEntrySource
+                : secondaryGridEntrySource;
+            int cachedExpansionRevision = primary
+                ? gridEntryExpansionRevision
+                : secondaryGridEntryExpansionRevision;
+            if (ReferenceEquals(cachedSource, visible) && cachedExpansionRevision == expansionRevision)
+            {
+                return entries;
+            }
+
+            entries.Clear();
             for (int index = 0; index < visible.Count; index++)
             {
                 BetterProjectAssetRecord record = visible[index];
-                gridEntries.Add(new BetterProjectGridEntry(record, index, null));
+                entries.Add(new BetterProjectGridEntry(record, index, null));
                 if (!expandedAssetGuids.Contains(record.Guid)) continue;
                 foreach (UnityEngine.Object child in BetterProjectIndex.GetSubAssets(record))
                 {
-                    if (child != null) gridEntries.Add(new BetterProjectGridEntry(record, index, child));
+                    if (child != null) entries.Add(new BetterProjectGridEntry(record, index, child));
                 }
             }
+            if (primary)
+            {
+                gridEntrySource = visible;
+                gridEntryExpansionRevision = expansionRevision;
+            }
+            else
+            {
+                secondaryGridEntrySource = visible;
+                secondaryGridEntryExpansionRevision = expansionRevision;
+            }
+            return entries;
         }
 
         private int GetExpandedSubAssetCount(BetterProjectAssetRecord record)
@@ -938,22 +1047,29 @@ namespace DansToolbox.EditorTools.BetterProject
                 ? EditorGUIUtility.IconContent(style.IconName).image
                 : record.IsFolder
                     ? EditorGUIUtility.FindTexture("Folder Icon")
-                    : AssetPreview.GetAssetPreview(BetterProjectOperations.Load(record)) ?? AssetPreview.GetMiniThumbnail(BetterProjectOperations.Load(record));
+                    : GetAssetThumbnail(record, true);
             if (image != null)
             {
                 GUI.DrawTexture(preview, image, ScaleMode.ScaleToFit, true);
             }
             Rect name = new Rect(rect.x + 8f, preview.yMax + 4f, rect.width - 16f, 18f);
             GUI.Label(name, record.Name, BetterProjectGui.CardTitle);
+            BetterProjectDiagnosticFlags flags = BetterProjectIndex.GetDiagnostics(record);
+            bool criticalDiagnostic = BetterProjectIndex.HasCriticalDiagnostics(flags);
             string meta = style.IsValid && !string.IsNullOrEmpty(style.Badge) ? style.Badge : record.TypeName.ToUpperInvariant();
-            GUI.Label(new Rect(rect.x + 8f, name.yMax, rect.width - 34f, 16f), meta, BetterProjectGui.Tiny);
+            if (criticalDiagnostic) meta = BetterProjectGui.DiagnosticCode(flags);
+            GUI.Label(
+                new Rect(rect.x + 8f, name.yMax, rect.width - 34f, 16f),
+                new GUIContent(meta, criticalDiagnostic ? BetterProjectGui.DiagnosticSummary(flags) : string.Empty),
+                BetterProjectGui.Tiny);
 
             BetterConsoleDiagnosticSummary consoleSummary = BetterConsoleDiagnosticBridge.GetSummaryForAssetPath(record.Path);
-            BetterProjectDiagnosticFlags flags = BetterProjectIndex.GetDiagnostics(record);
-            if (flags != BetterProjectDiagnosticFlags.None)
+            if (flags != BetterProjectDiagnosticFlags.None && !criticalDiagnostic)
             {
-                float diagnosticOffset = consoleSummary.HasSignals ? 55f : 28f;
-                GUI.Label(new Rect(rect.xMax - diagnosticOffset, name.yMax, 20f, 14f), "!", BetterProjectGui.Badge);
+                float diagnosticOffset = consoleSummary.HasSignals ? 88f : 58f;
+                DrawProjectDiagnosticBadge(
+                    new Rect(rect.xMax - diagnosticOffset, name.yMax, 52f, 15f),
+                    flags);
             }
             if (consoleSummary.HasSignals)
             {
@@ -977,6 +1093,26 @@ namespace DansToolbox.EditorTools.BetterProject
             }
             HandleFolderDrop(mainRect, record);
             HandleAssetPointer(mainRect, record, index, primary);
+        }
+
+        private Texture GetAssetThumbnail(BetterProjectAssetRecord record, bool preferPreview)
+        {
+            if (record == null || record.IsFolder) return null;
+            string key = record.Guid + (preferPreview ? "|preview" : "|mini");
+            if (thumbnailCache.TryGetValue(key, out Texture cached) && cached != null)
+            {
+                return cached;
+            }
+
+            UnityEngine.Object asset = BetterProjectOperations.Load(record);
+            if (asset == null) return null;
+            Texture image = preferPreview ? AssetPreview.GetAssetPreview(asset) : null;
+            if (image == null) image = AssetPreview.GetMiniThumbnail(asset);
+            if (image != null && (!preferPreview || !AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID())))
+            {
+                thumbnailCache[key] = image;
+            }
+            return image;
         }
 
         private void DrawSubAssetCard(Rect rect, UnityEngine.Object subAsset)
@@ -1077,6 +1213,8 @@ namespace DansToolbox.EditorTools.BetterProject
             if (dropTarget) DrawDropTargetOutline(rect);
             BetterProjectStyle style = BetterProjectIndex.GetStyle(record);
             BetterConsoleDiagnosticSummary consoleSummary = BetterConsoleDiagnosticBridge.GetSummaryForAssetPath(record.Path);
+            BetterProjectDiagnosticFlags flags = BetterProjectIndex.GetDiagnostics(record);
+            bool criticalDiagnostic = BetterProjectIndex.HasCriticalDiagnostics(flags);
             EditorGUI.DrawRect(new Rect(rect.x, rect.y + 3f, 3f, rect.height - 6f), style.IsValid ? style.Color : BetterProjectGui.Border);
 
             Rect fold = new Rect(rect.x + 5f, rect.y + 2f, 22f, 22f);
@@ -1093,7 +1231,7 @@ namespace DansToolbox.EditorTools.BetterProject
                 ? EditorGUIUtility.IconContent(style.IconName).image
                 : record.IsFolder
                     ? EditorGUIUtility.FindTexture("Folder Icon")
-                    : AssetPreview.GetMiniThumbnail(BetterProjectOperations.Load(record));
+                    : GetAssetThumbnail(record, false);
             if (icon != null) GUI.DrawTexture(new Rect(rect.x + 32f, rect.y + 4f, 18f, 18f), icon, ScaleMode.ScaleToFit);
 
             float nameWidth = details ? rect.width * 0.48f - 12f : rect.width - 160f;
@@ -1118,6 +1256,11 @@ namespace DansToolbox.EditorTools.BetterProject
                 GUI.Label(new Rect(rect.x + rect.width * 0.56f, rect.y, 90f, rect.height), record.TypeName, BetterProjectGui.Tiny);
                 GUI.Label(new Rect(rect.xMax - 150f, rect.y, 70f, rect.height), record.IsFolder ? "—" : BetterProjectGui.FormatBytes(record.FileSize), BetterProjectGui.Tiny);
                 GUI.Label(new Rect(rect.xMax - 78f, rect.y, 70f, rect.height), record.ModifiedUtc == default ? "—" : record.ModifiedUtc.ToLocalTime().ToString("MM/dd/yy"), BetterProjectGui.Tiny);
+                if (flags != BetterProjectDiagnosticFlags.None)
+                {
+                    float diagnosticX = rect.x + rect.width * 0.56f - (consoleSummary.HasSignals ? 86f : 48f);
+                    DrawProjectDiagnosticBadge(new Rect(diagnosticX, rect.y + 5f, 44f, 16f), flags);
+                }
                 if (consoleSummary.HasSignals)
                 {
                     DrawConsoleDiagnosticBadge(
@@ -1129,13 +1272,20 @@ namespace DansToolbox.EditorTools.BetterProject
             else
             {
                 string badge = style.IsValid && !string.IsNullOrEmpty(style.Badge) ? style.Badge : record.TypeName;
-                GUI.Label(new Rect(rect.xMax - 108f, rect.y + 4f, 62f, 18f), badge, BetterProjectGui.Badge);
-                BetterProjectDiagnosticFlags flags = BetterProjectIndex.GetDiagnostics(record);
-                if (flags != BetterProjectDiagnosticFlags.None)
+                if (criticalDiagnostic) badge = BetterProjectGui.DiagnosticCode(flags);
+                float trailingOffset = 46f;
+                if (flags != BetterProjectDiagnosticFlags.None && !criticalDiagnostic)
                 {
-                    float diagnosticOffset = consoleSummary.HasSignals ? 72f : 42f;
-                    GUI.Label(new Rect(rect.xMax - diagnosticOffset, rect.y + 4f, 34f, 18f), "!", BetterProjectGui.Badge);
+                    trailingOffset = consoleSummary.HasSignals ? 42f : 8f;
+                    DrawProjectDiagnosticBadge(
+                        new Rect(rect.xMax - trailingOffset - 48f, rect.y + 5f, 48f, 16f),
+                        flags);
+                    trailingOffset += 52f;
                 }
+                GUI.Label(
+                    new Rect(rect.xMax - trailingOffset - 62f, rect.y + 4f, 62f, 18f),
+                    new GUIContent(badge, criticalDiagnostic ? BetterProjectGui.DiagnosticSummary(flags) : string.Empty),
+                    BetterProjectGui.Badge);
                 if (consoleSummary.HasSignals)
                 {
                     DrawConsoleDiagnosticBadge(
@@ -1152,6 +1302,7 @@ namespace DansToolbox.EditorTools.BetterProject
         {
             if (record == null || BetterProjectIndex.GetSubAssets(record).Count == 0) return;
             if (!expandedAssetGuids.Remove(record.Guid)) expandedAssetGuids.Add(record.Guid);
+            expansionRevision++;
             Repaint();
         }
 
@@ -1305,13 +1456,16 @@ namespace DansToolbox.EditorTools.BetterProject
             y += 24f;
             Rect preview = new Rect(0f, y, inner.width - 18f, Mathf.Min(230f, inner.width - 18f));
             BetterProjectGui.DrawPanel(preview, BetterProjectGui.Canvas);
-            if (record.Kind != BetterProjectAssetKind.Model &&
+            bool processInteractivePreview = Event.current.type != EventType.MouseMove ||
+                                             preview.Contains(Event.current.mousePosition);
+            if (processInteractivePreview &&
+                record.Kind != BetterProjectAssetKind.Model &&
                 previewEditor != null &&
                 previewEditor.HasPreviewGUI())
             {
                 previewEditor.OnInteractivePreviewGUI(new Rect(preview.x + 4f, preview.y + 4f, preview.width - 8f, preview.height - 8f), GUIStyle.none);
             }
-            else
+            else if (Event.current.type != EventType.MouseMove)
             {
                 Texture image = target == null ? null : AssetPreview.GetAssetPreview(target) ?? AssetPreview.GetMiniThumbnail(target);
                 if (image != null) GUI.DrawTexture(new Rect(preview.x + 8f, preview.y + 8f, preview.width - 16f, preview.height - 16f), image, ScaleMode.ScaleToFit, true);
@@ -1353,48 +1507,113 @@ namespace DansToolbox.EditorTools.BetterProject
 
         private void DrawMetadata(ref float y, float width, BetterProjectAssetRecord record, UnityEngine.Object target)
         {
+            foreach (BetterProjectMetadataLine line in GetPreviewMetadata(record, target))
+            {
+                DrawMetaLine(ref y, width, line.Key, line.Value);
+            }
+        }
+
+        private IReadOnlyList<BetterProjectMetadataLine> GetPreviewMetadata(
+            BetterProjectAssetRecord record,
+            UnityEngine.Object target)
+        {
+            int targetId = target == null ? 0 : target.GetInstanceID();
+            if (previewMetadataGuid == record.Guid &&
+                previewMetadataRevision == BetterProjectIndex.Revision &&
+                previewMetadataTargetId == targetId)
+            {
+                return previewMetadataCache;
+            }
+
+            var lines = new List<BetterProjectMetadataLine>(14)
+            {
+                new BetterProjectMetadataLine("TYPE", record.TypeName),
+                new BetterProjectMetadataLine("SIZE", record.IsFolder ? "—" : BetterProjectGui.FormatBytes(record.FileSize)),
+                new BetterProjectMetadataLine("GUID", record.Guid),
+                new BetterProjectMetadataLine("LABELS", string.Join(", ", BetterProjectIndex.GetLabels(record))),
+                new BetterProjectMetadataLine("USES", record.DirectDependencyCount.ToString()),
+                new BetterProjectMetadataLine("USED BY", record.ReferenceCount.ToString()),
+                new BetterProjectMetadataLine("BUILD", BetterProjectIndex.IsIncludedByBuildHeuristic(record) ? "LIKELY" : "—"),
+                new BetterProjectMetadataLine("ADDRESS", BetterProjectIntegrations.GetAddressableGroup(record.Guid)),
+                new BetterProjectMetadataLine("VCS", BetterProjectIntegrations.GetVersionControlState(record.Path))
+            };
             BetterProjectDiagnosticFlags flags = BetterProjectIndex.GetDiagnostics(record);
-            DrawMetaLine(ref y, width, "TYPE", record.TypeName);
-            DrawMetaLine(ref y, width, "SIZE", record.IsFolder ? "—" : BetterProjectGui.FormatBytes(record.FileSize));
-            DrawMetaLine(ref y, width, "GUID", record.Guid);
-            DrawMetaLine(ref y, width, "LABELS", string.Join(", ", BetterProjectIndex.GetLabels(record)));
-            DrawMetaLine(ref y, width, "USES", record.DirectDependencyCount.ToString());
-            DrawMetaLine(ref y, width, "USED BY", record.ReferenceCount.ToString());
-            DrawMetaLine(ref y, width, "BUILD", BetterProjectIndex.IsIncludedByBuildHeuristic(record) ? "LIKELY" : "—");
-            DrawMetaLine(ref y, width, "ADDRESS", BetterProjectIntegrations.GetAddressableGroup(record.Guid));
-            DrawMetaLine(ref y, width, "VCS", BetterProjectIntegrations.GetVersionControlState(record.Path));
-            if (flags != BetterProjectDiagnosticFlags.None) DrawMetaLine(ref y, width, "CHECK", flags.ToString());
-            if (target is Texture2D texture) DrawMetaLine(ref y, width, "IMAGE", texture.width + " × " + texture.height);
-            if (target is AudioClip audio) DrawMetaLine(ref y, width, "AUDIO", audio.length.ToString("0.00") + "s · " + audio.channels + "ch · " + audio.frequency + "Hz");
-            if (target is AnimationClip clip) DrawMetaLine(ref y, width, "CLIP", clip.length.ToString("0.00") + "s · " + clip.frameRate.ToString("0.#") + "fps");
+            if (flags != BetterProjectDiagnosticFlags.None)
+            {
+                lines.Add(new BetterProjectMetadataLine("CHECK", flags.ToString()));
+            }
+            if (target is Texture2D texture)
+            {
+                lines.Add(new BetterProjectMetadataLine("IMAGE", texture.width + " × " + texture.height));
+            }
+            if (target is AudioClip audio)
+            {
+                lines.Add(new BetterProjectMetadataLine(
+                    "AUDIO",
+                    audio.length.ToString("0.00") + "s · " + audio.channels + "ch · " + audio.frequency + "Hz"));
+            }
+            if (target is AnimationClip clip)
+            {
+                lines.Add(new BetterProjectMetadataLine(
+                    "CLIP",
+                    clip.length.ToString("0.00") + "s · " + clip.frameRate.ToString("0.#") + "fps"));
+            }
             if (target is GameObject gameObject)
             {
                 MeshFilter[] meshes = gameObject.GetComponentsInChildren<MeshFilter>(true);
-                int vertices = meshes.Where(filter => filter.sharedMesh != null).Sum(filter => filter.sharedMesh.vertexCount);
+                int vertices = meshes.Where(filter => filter.sharedMesh != null)
+                    .Sum(filter => filter.sharedMesh.vertexCount);
                 string label = record.Kind == BetterProjectAssetKind.Model ? "MODEL" : "PREFAB";
-                DrawMetaLine(ref y, width, label, gameObject.GetComponentsInChildren<Transform>(true).Length + " objects · " + vertices.ToString("N0") + " verts");
+                lines.Add(new BetterProjectMetadataLine(
+                    label,
+                    gameObject.GetComponentsInChildren<Transform>(true).Length +
+                    " objects · " + vertices.ToString("N0") + " verts"));
             }
-            if (target is Sprite sprite) DrawMetaLine(ref y, width, "SPRITE", sprite.rect.width + " × " + sprite.rect.height + " · " + sprite.pixelsPerUnit + " PPU");
-            if (target is Shader shader) DrawMetaLine(ref y, width, "SHADER", shader.GetPropertyCount() + " properties");
+            if (target is Sprite sprite)
+            {
+                lines.Add(new BetterProjectMetadataLine(
+                    "SPRITE",
+                    sprite.rect.width + " × " + sprite.rect.height + " · " + sprite.pixelsPerUnit + " PPU"));
+            }
+            if (target is Shader shader)
+            {
+                lines.Add(new BetterProjectMetadataLine("SHADER", shader.GetPropertyCount() + " properties"));
+            }
             if (target is MonoScript script)
             {
                 Type scriptType = script.GetClass();
-                DrawMetaLine(ref y, width, "SCRIPT", scriptType == null ? "No compiled class" : scriptType.FullName);
+                lines.Add(new BetterProjectMetadataLine(
+                    "SCRIPT",
+                    scriptType == null ? "No compiled class" : scriptType.FullName));
             }
             AssetImporter importer = AssetImporter.GetAtPath(record.Path);
             if (importer is TextureImporter textureImporter)
             {
-                DrawMetaLine(ref y, width, "IMPORT", textureImporter.textureType + " · max " + textureImporter.maxTextureSize + " · " + textureImporter.textureCompression);
+                lines.Add(new BetterProjectMetadataLine(
+                    "IMPORT",
+                    textureImporter.textureType + " · max " + textureImporter.maxTextureSize +
+                    " · " + textureImporter.textureCompression));
             }
             else if (importer is AudioImporter audioImporter)
             {
                 AudioImporterSampleSettings settings = audioImporter.defaultSampleSettings;
-                DrawMetaLine(ref y, width, "IMPORT", settings.loadType + " · " + settings.compressionFormat + " · q" + settings.quality.ToString("0.00"));
+                lines.Add(new BetterProjectMetadataLine(
+                    "IMPORT",
+                    settings.loadType + " · " + settings.compressionFormat +
+                    " · q" + settings.quality.ToString("0.00")));
             }
             else if (importer is ModelImporter modelImporter)
             {
-                DrawMetaLine(ref y, width, "IMPORT", modelImporter.animationType + " · scale " + modelImporter.globalScale.ToString("0.###"));
+                lines.Add(new BetterProjectMetadataLine(
+                    "IMPORT",
+                    modelImporter.animationType + " · scale " + modelImporter.globalScale.ToString("0.###")));
             }
+
+            previewMetadataGuid = record.Guid;
+            previewMetadataRevision = BetterProjectIndex.Revision;
+            previewMetadataTargetId = targetId;
+            previewMetadataCache = lines.ToArray();
+            return previewMetadataCache;
         }
 
         private static void DrawMetaLine(ref float y, float width, string key, string value)
@@ -1561,11 +1780,18 @@ namespace DansToolbox.EditorTools.BetterProject
                 source = source.Where(record => !record.IsPackage);
             }
             BetterProjectQuery query = BetterProjectQuery.Parse(search);
-            source = source.Where(record => query.Matches(
-                record,
-                BetterProjectIndex.GetDiagnostics(record),
-                BetterProjectUserSettings.IsFavorite(record.Guid),
-                BetterProjectIndex.GetLabels(record)));
+            if (!query.IsEmpty)
+            {
+                source = source.Where(record => query.Matches(
+                    record,
+                    query.RequiresDiagnostics
+                        ? BetterProjectIndex.GetDiagnostics(record)
+                        : BetterProjectDiagnosticFlags.None,
+                    query.RequiresFavorites && BetterProjectUserSettings.IsFavorite(record.Guid),
+                    query.RequiresLabels
+                        ? BetterProjectIndex.GetLabels(record)
+                        : Array.Empty<string>()));
+            }
             source = Sort(source);
             BetterProjectAssetRecord[] result = source.ToArray();
             if (visibleCache.Count >= 12)
@@ -1640,16 +1866,23 @@ namespace DansToolbox.EditorTools.BetterProject
 
         private IEnumerable<BetterProjectAssetRecord> Sort(IEnumerable<BetterProjectAssetRecord> source)
         {
-            Func<BetterProjectAssetRecord, object> key = sort switch
+            IOrderedEnumerable<BetterProjectAssetRecord> ordered = source
+                .OrderByDescending(record => record.IsFolder);
+            ordered = sort switch
             {
-                BetterProjectSort.Type => record => record.TypeName,
-                BetterProjectSort.Size => record => record.FileSize,
-                BetterProjectSort.Modified => record => record.ModifiedUtc,
-                _ => record => record.Name
+                BetterProjectSort.Type => sortAscending
+                    ? ordered.ThenBy(record => record.TypeName, StringComparer.OrdinalIgnoreCase)
+                    : ordered.ThenByDescending(record => record.TypeName, StringComparer.OrdinalIgnoreCase),
+                BetterProjectSort.Size => sortAscending
+                    ? ordered.ThenBy(record => record.FileSize)
+                    : ordered.ThenByDescending(record => record.FileSize),
+                BetterProjectSort.Modified => sortAscending
+                    ? ordered.ThenBy(record => record.ModifiedUtc)
+                    : ordered.ThenByDescending(record => record.ModifiedUtc),
+                _ => sortAscending
+                    ? ordered.ThenBy(record => record.Name, StringComparer.OrdinalIgnoreCase)
+                    : ordered.ThenByDescending(record => record.Name, StringComparer.OrdinalIgnoreCase)
             };
-            IOrderedEnumerable<BetterProjectAssetRecord> ordered = sortAscending
-                ? source.OrderByDescending(record => record.IsFolder).ThenBy(key)
-                : source.OrderByDescending(record => record.IsFolder).ThenByDescending(key);
             return ordered.ThenBy(record => record.Name, StringComparer.OrdinalIgnoreCase);
         }
 
@@ -1960,14 +2193,29 @@ namespace DansToolbox.EditorTools.BetterProject
             EditorGUI.DrawRect(
                 new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f),
                 new Color(signal.r, signal.g, signal.b, hover ? 0.28f : 0.17f));
-            GUIStyle style = new GUIStyle(EditorStyles.miniBoldLabel)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 8,
-                normal = { textColor = signal }
-            };
+            GUIStyle style = BetterProjectGui.SignalBadge;
+            style.normal.textColor = signal;
             GUI.Label(rect, new GUIContent(summary.Badge, summary.Tooltip), style);
             if (GUI.Button(rect, new GUIContent(string.Empty, summary.Tooltip), GUIStyle.none)) open();
+        }
+
+        private static void DrawProjectDiagnosticBadge(
+            Rect rect,
+            BetterProjectDiagnosticFlags flags)
+        {
+            bool critical = BetterProjectIndex.HasCriticalDiagnostics(flags);
+            Color signal = critical ? BetterProjectGui.Danger : BetterProjectGui.Warning;
+            EditorGUI.DrawRect(rect, BetterProjectGui.Border);
+            EditorGUI.DrawRect(
+                new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f),
+                new Color(signal.r, signal.g, signal.b, 0.18f));
+            GUIStyle style = BetterProjectGui.SignalBadge;
+            style.normal.textColor = signal;
+            string tooltip = BetterProjectGui.DiagnosticSummary(flags);
+            GUI.Label(
+                rect,
+                new GUIContent(BetterProjectGui.DiagnosticCode(flags), tooltip),
+                style);
         }
 
         private void ShowBlankMenu(string folder, bool primary)
@@ -2410,6 +2658,11 @@ namespace DansToolbox.EditorTools.BetterProject
         {
             visibleCache.Clear();
             visibleCacheRevision = BetterProjectIndex.Revision;
+            thumbnailCache.Clear();
+            pinnedFolderCacheRevision = -1;
+            gridEntrySource = null;
+            secondaryGridEntrySource = null;
+            InvalidatePreviewMetadata();
             if (lastSeenRevision != BetterProjectIndex.Revision)
             {
                 lastSeenRevision = BetterProjectIndex.Revision;
@@ -2445,6 +2698,20 @@ namespace DansToolbox.EditorTools.BetterProject
             BetterProjectIndex.InvalidatePresentation();
         }
 
+        private void OnBuildSettingsChanged()
+        {
+            InvalidatePreviewMetadata();
+            Repaint();
+        }
+
+        private void InvalidatePreviewMetadata()
+        {
+            previewMetadataGuid = string.Empty;
+            previewMetadataRevision = -1;
+            previewMetadataTargetId = 0;
+            previewMetadataCache = Array.Empty<BetterProjectMetadataLine>();
+        }
+
         private void SyncFromUnitySelection()
         {
             if (syncingSelection) return;
@@ -2471,6 +2738,18 @@ namespace DansToolbox.EditorTools.BetterProject
                 if (records[index].Guid == guid) return index;
             }
             return -1;
+        }
+
+        private readonly struct BetterProjectMetadataLine
+        {
+            internal BetterProjectMetadataLine(string key, string value)
+            {
+                Key = key;
+                Value = value ?? string.Empty;
+            }
+
+            internal string Key { get; }
+            internal string Value { get; }
         }
 
         private static void OpenUnityProjectWindow()

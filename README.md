@@ -143,6 +143,7 @@ See [Documentation~/retro-vfx.md](Documentation~/retro-vfx.md) for the full work
 - Library health views find broken imports, missing scripts or shaders, oversized assets, empty folders, unused candidates, and exact duplicate file content.
 - Impact maps direct dependencies and indexed reverse references, estimates build use, collects or exports dependencies, previews safe deletion impact, and can replace serialized references with a dry-run scan.
 - Batch actions rename with preview, apply labels, move assets, and apply compatible importer presets.
+- Asset rename, move, cut/paste, duplicate, folder creation, import, prefab creation, deletion, labels, and importer presets participate in Unity's normal Undo/Redo history while preserving `.meta` identity and GUIDs.
 - Native Project shortcuts are preserved, including F2, Delete, Enter, Backspace, Ctrl/Cmd+A/C/X/V/D/F, and Alt+Left/Right. The stock Project window remains available from `...`.
 
 ## Better Console essentials

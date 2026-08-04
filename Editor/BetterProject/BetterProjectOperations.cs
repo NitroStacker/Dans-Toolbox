@@ -18,7 +18,7 @@ namespace DansToolbox.EditorTools.BetterProject
 
         internal static UnityEngine.Object Load(BetterProjectAssetRecord record)
         {
-            return record == null ? null : AssetDatabase.LoadMainAssetAtPath(record.Path);
+            return BetterProjectIndex.LoadMainAsset(record);
         }
 
         internal static void Select(IEnumerable<BetterProjectAssetRecord> records)
@@ -58,19 +58,35 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 return "Invalid name";
             }
-            string error = AssetDatabase.RenameAsset(record.Path, newName);
+            string sourcePath = record.Path;
+            string guid = record.Guid;
+            string error = AssetDatabase.RenameAsset(sourcePath, newName);
             if (string.IsNullOrEmpty(error))
             {
                 AssetDatabase.SaveAssets();
+                string destinationPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (!string.IsNullOrEmpty(destinationPath) &&
+                    !string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin("Rename Asset");
+                    BetterProjectAssetUndo.RecordMove(transaction, sourcePath, destinationPath);
+                    BetterProjectAssetUndo.Commit(transaction);
+                }
             }
             return error;
         }
 
-        internal static bool Delete(IReadOnlyList<BetterProjectAssetRecord> selected)
+        internal static bool Delete(
+            IReadOnlyList<BetterProjectAssetRecord> selected,
+            bool confirm = true)
         {
             BetterProjectAssetRecord[] editable = (selected ?? Array.Empty<BetterProjectAssetRecord>())
                 .Where(record => record != null && !record.IsReadOnly && record.Path != "Assets")
                 .Distinct()
+                .Where(record => !(selected ?? Array.Empty<BetterProjectAssetRecord>()).Any(parent =>
+                    parent != null &&
+                    !ReferenceEquals(parent, record) &&
+                    record.Path.StartsWith(parent.Path.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
             if (editable.Length == 0)
             {
@@ -83,26 +99,27 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 detail += "\n\n" + dependents + " indexed references may be affected.";
             }
-            if (!EditorUtility.DisplayDialog("Move to Trash?", detail, "Move to Trash", "Cancel"))
+            if (confirm && !EditorUtility.DisplayDialog(
+                    "Move to Undoable Trash?",
+                    detail + "\n\nYou can restore this with Edit > Undo.",
+                    "Move to Trash",
+                    "Cancel"))
             {
                 return false;
             }
 
-            bool changed = false;
-            AssetDatabase.StartAssetEditing();
-            try
+            AssetDatabase.SaveAssets();
+            BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin(
+                editable.Length == 1 ? "Delete Asset" : "Delete Assets");
+            foreach (BetterProjectAssetRecord record in editable.OrderByDescending(item => item.Path.Length))
             {
-                foreach (BetterProjectAssetRecord record in editable.OrderByDescending(item => item.Path.Length))
-                {
-                    changed |= AssetDatabase.MoveAssetToTrash(record.Path);
-                }
+                BetterProjectAssetUndo.TryDelete(transaction, record.Path);
             }
-            finally
-            {
-                AssetDatabase.StopAssetEditing();
-                AssetDatabase.Refresh();
-            }
-            return changed;
+            if (!transaction.HasActions) return false;
+
+            BetterProjectAssetUndo.RefreshAfterFilesystemChange();
+            BetterProjectAssetUndo.Commit(transaction);
+            return true;
         }
 
         internal static void Copy(IReadOnlyList<BetterProjectAssetRecord> selected, bool cut)
@@ -117,12 +134,18 @@ namespace DansToolbox.EditorTools.BetterProject
 
         internal static bool Paste(string destinationFolder)
         {
+            return Paste(destinationFolder, clipboardCut ? "Move Assets" : "Paste Assets");
+        }
+
+        private static bool Paste(string destinationFolder, string undoName)
+        {
             if (clipboard.Count == 0 || !AssetDatabase.IsValidFolder(destinationFolder) ||
                 destinationFolder.StartsWith("Packages/", StringComparison.Ordinal))
             {
                 return false;
             }
             bool changed = false;
+            BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin(undoName);
             AssetDatabase.StartAssetEditing();
             try
             {
@@ -133,7 +156,10 @@ namespace DansToolbox.EditorTools.BetterProject
                     string error = clipboardCut
                         ? AssetDatabase.MoveAsset(source, destination)
                         : AssetDatabase.CopyAsset(source, destination) ? string.Empty : "Copy failed";
-                    changed |= string.IsNullOrEmpty(error);
+                    if (!string.IsNullOrEmpty(error)) continue;
+                    changed = true;
+                    if (clipboardCut) BetterProjectAssetUndo.RecordMove(transaction, source, destination);
+                    else BetterProjectAssetUndo.RecordCreated(transaction, destination);
                 }
             }
             finally
@@ -147,13 +173,15 @@ namespace DansToolbox.EditorTools.BetterProject
                 clipboard.Clear();
                 clipboardCut = false;
             }
+            BetterProjectAssetUndo.Commit(transaction);
             return changed;
         }
 
         internal static bool Duplicate(IReadOnlyList<BetterProjectAssetRecord> selected)
         {
             Copy(selected, false);
-            return selected != null && selected.Count > 0 && Paste(selected[0].ParentPath);
+            return selected != null && selected.Count > 0 &&
+                   Paste(selected[0].ParentPath, "Duplicate Assets");
         }
 
         internal static bool Move(IEnumerable<string> sourcePaths, string destinationFolder)
@@ -163,6 +191,7 @@ namespace DansToolbox.EditorTools.BetterProject
                 return false;
             }
             bool changed = false;
+            BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin("Move Assets");
             AssetDatabase.StartAssetEditing();
             try
             {
@@ -175,7 +204,9 @@ namespace DansToolbox.EditorTools.BetterProject
                     }
                     string destination = AssetDatabase.GenerateUniqueAssetPath(
                         destinationFolder + "/" + Path.GetFileName(assetPath));
-                    changed |= string.IsNullOrEmpty(AssetDatabase.MoveAsset(assetPath, destination));
+                    if (!string.IsNullOrEmpty(AssetDatabase.MoveAsset(assetPath, destination))) continue;
+                    changed = true;
+                    BetterProjectAssetUndo.RecordMove(transaction, assetPath, destination);
                 }
             }
             finally
@@ -184,6 +215,7 @@ namespace DansToolbox.EditorTools.BetterProject
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
             }
+            BetterProjectAssetUndo.Commit(transaction);
             return changed;
         }
 
@@ -291,6 +323,7 @@ namespace DansToolbox.EditorTools.BetterProject
             if (!IsWritableAssetFolder(destinationFolder)) return false;
 
             bool changed = false;
+            BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin("Import Assets");
             var importedAssets = new List<UnityEngine.Object>();
             foreach (string source in (sourcePaths ?? Array.Empty<string>())
                          .Where(CanImportExternalPath)
@@ -309,6 +342,7 @@ namespace DansToolbox.EditorTools.BetterProject
                     AssetDatabase.ImportAsset(destination, ImportAssetOptions.ForceSynchronousImport);
                     UnityEngine.Object imported = AssetDatabase.LoadMainAssetAtPath(destination);
                     if (imported != null) importedAssets.Add(imported);
+                    BetterProjectAssetUndo.RecordCreated(transaction, destination);
                     changed = true;
                 }
                 catch (Exception exception)
@@ -324,6 +358,7 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 AssetDatabase.SaveAssets();
                 if (importedAssets.Count > 0) Selection.objects = importedAssets.ToArray();
+                BetterProjectAssetUndo.Commit(transaction);
             }
             return changed;
         }
@@ -351,6 +386,13 @@ namespace DansToolbox.EditorTools.BetterProject
             GameObject[] roots = candidates
                 .Where(item => !HasDraggedAncestor(item.transform.parent, candidateTransforms))
                 .ToArray();
+            if (roots.Length == 0) return false;
+
+            Undo.IncrementCurrentGroup();
+            int undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(roots.Length == 1 ? "Create Prefab" : "Create Prefabs");
+            BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin(
+                roots.Length == 1 ? "Create Prefab" : "Create Prefabs");
             var createdAssets = new List<UnityEngine.Object>();
             foreach (GameObject source in roots)
             {
@@ -362,12 +404,17 @@ namespace DansToolbox.EditorTools.BetterProject
                     destination,
                     InteractionMode.UserAction,
                     out bool success);
-                if (success && prefab != null) createdAssets.Add(prefab);
+                if (success && prefab != null)
+                {
+                    createdAssets.Add(prefab);
+                    BetterProjectAssetUndo.RecordCreated(transaction, destination);
+                }
             }
 
             if (createdAssets.Count == 0) return false;
             AssetDatabase.SaveAssets();
             Selection.objects = createdAssets.ToArray();
+            BetterProjectAssetUndo.Commit(transaction, undoGroup);
             return true;
         }
 
@@ -478,7 +525,14 @@ namespace DansToolbox.EditorTools.BetterProject
                 name = preferredName + " " + suffix++;
             }
             string guid = AssetDatabase.CreateFolder(parent, name);
-            return AssetDatabase.GUIDToAssetPath(guid);
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            if (!string.IsNullOrEmpty(path))
+            {
+                BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin("Create Folder");
+                BetterProjectAssetUndo.RecordCreated(transaction, path);
+                BetterProjectAssetUndo.Commit(transaction);
+            }
+            return path;
         }
 
         internal static void SetLabels(
@@ -490,16 +544,36 @@ namespace DansToolbox.EditorTools.BetterProject
                 .Select(value => value.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+            var changes = new List<KeyValuePair<BetterProjectAssetRecord, UnityEngine.Object>>();
             foreach (BetterProjectAssetRecord record in selected ?? Array.Empty<BetterProjectAssetRecord>())
             {
                 UnityEngine.Object asset = Load(record);
-                if (asset != null && !record.IsReadOnly)
+                if (asset != null && !record.IsReadOnly &&
+                    !AssetDatabase.GetLabels(asset).OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                        .SequenceEqual(clean.OrderBy(value => value, StringComparer.OrdinalIgnoreCase),
+                            StringComparer.OrdinalIgnoreCase))
                 {
-                    AssetDatabase.SetLabels(asset, clean);
-                    EditorUtility.SetDirty(asset);
+                    changes.Add(new KeyValuePair<BetterProjectAssetRecord, UnityEngine.Object>(record, asset));
                 }
             }
+            if (changes.Count == 0) return;
+
+            BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin(
+                changes.Count == 1 ? "Set Asset Labels" : "Set Asset Labels (Batch)");
+            foreach (KeyValuePair<BetterProjectAssetRecord, UnityEngine.Object> change in changes)
+            {
+                string[] before = AssetDatabase.GetLabels(change.Value);
+                AssetDatabase.SetLabels(change.Value, clean);
+                EditorUtility.SetDirty(change.Value);
+                BetterProjectAssetUndo.RecordLabels(
+                    transaction,
+                    change.Key.Guid,
+                    change.Key.Path,
+                    before,
+                    clean);
+            }
             AssetDatabase.SaveAssets();
+            BetterProjectAssetUndo.Commit(transaction);
             BetterProjectIndex.InvalidatePresentation();
         }
 
@@ -511,17 +585,44 @@ namespace DansToolbox.EditorTools.BetterProject
             {
                 return 0;
             }
+            KeyValuePair<BetterProjectAssetRecord, AssetImporter>[] changes =
+                (selected ?? Array.Empty<BetterProjectAssetRecord>())
+                .Where(record => record != null && !record.IsReadOnly)
+                .Select(record => new KeyValuePair<BetterProjectAssetRecord, AssetImporter>(
+                    record,
+                    AssetImporter.GetAtPath(record.Path)))
+                .Where(change => change.Value != null && preset.CanBeAppliedTo(change.Value))
+                .ToArray();
+            if (changes.Length == 0) return 0;
+
+            BetterProjectAssetUndoTransaction transaction = BetterProjectAssetUndo.Begin(
+                changes.Length == 1 ? "Apply Importer Preset" : "Apply Importer Presets");
             int applied = 0;
-            foreach (BetterProjectAssetRecord record in selected ?? Array.Empty<BetterProjectAssetRecord>())
+            foreach (KeyValuePair<BetterProjectAssetRecord, AssetImporter> change in changes)
             {
-                AssetImporter importer = record == null ? null : AssetImporter.GetAtPath(record.Path);
-                if (importer != null && !record.IsReadOnly && preset.CanBeAppliedTo(importer))
+                var before = new Preset(change.Value);
+                Preset after = null;
+                try
                 {
-                    preset.ApplyTo(importer);
-                    importer.SaveAndReimport();
+                    preset.ApplyTo(change.Value);
+                    after = new Preset(change.Value);
+                    change.Value.SaveAndReimport();
+                    BetterProjectAssetUndo.RecordImporter(
+                        transaction,
+                        change.Key.Guid,
+                        change.Key.Path,
+                        before,
+                        after);
                     applied++;
                 }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(before);
+                    if (after != null) UnityEngine.Object.DestroyImmediate(after);
+                }
             }
+            BetterProjectAssetUndo.Commit(transaction);
+            BetterProjectIndex.InvalidatePresentation();
             return applied;
         }
 

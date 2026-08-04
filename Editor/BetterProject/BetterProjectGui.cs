@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DansToolbox.Editor;
 using UnityEditor;
 using UnityEngine;
@@ -31,7 +32,11 @@ namespace DansToolbox.EditorTools.BetterProject
         private static GUIStyle badge;
         private static GUIStyle cardTitle;
         private static GUIStyle tiny;
+        private static GUIStyle toolbarTabLabel;
+        private static GUIStyle signalBadge;
         private static readonly Vector3[] DisclosureStroke = new Vector3[3];
+        private static readonly Dictionary<BetterProjectDiagnosticFlags, string> DiagnosticSummaries =
+            new Dictionary<BetterProjectDiagnosticFlags, string>();
 
         internal static Color Canvas => DansToolboxTheme.Current.Canvas;
         internal static Color Panel => DansToolboxTheme.Current.Panel;
@@ -58,6 +63,8 @@ namespace DansToolbox.EditorTools.BetterProject
         internal static GUIStyle Badge { get { Ensure(); return badge; } }
         internal static GUIStyle CardTitle { get { Ensure(); return cardTitle; } }
         internal static GUIStyle Tiny { get { Ensure(); return tiny; } }
+        internal static GUIStyle ToolbarTabLabel { get { Ensure(); return toolbarTabLabel; } }
+        internal static GUIStyle SignalBadge { get { Ensure(); return signalBadge; } }
 
         internal static bool IconButton(Rect rect, GUIContent content, bool active = false)
         {
@@ -118,13 +125,8 @@ namespace DansToolbox.EditorTools.BetterProject
             Color fill = active ? AccentSoft : hovered ? Raised : Inset;
             DrawPanel(rect, fill, border);
 
-            GUIStyle labelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 9,
-                clipping = TextClipping.Clip,
-                normal = { textColor = active ? Text : hovered ? Text : MutedColor }
-            };
+            GUIStyle labelStyle = ToolbarTabLabel;
+            labelStyle.normal.textColor = active || hovered ? Text : MutedColor;
             GUI.Label(rect, new GUIContent(label, tooltip), labelStyle);
             return GUI.Button(rect, new GUIContent(string.Empty, tooltip), GUIStyle.none);
         }
@@ -307,11 +309,44 @@ namespace DansToolbox.EditorTools.BetterProject
             if ((flags & BetterProjectDiagnosticFlags.MissingScript) != 0) return "SCRIPT";
             if ((flags & BetterProjectDiagnosticFlags.MissingShader) != 0) return "SHADER";
             if ((flags & BetterProjectDiagnosticFlags.MissingAsset) != 0) return "MISSING";
+            if ((flags & BetterProjectDiagnosticFlags.Importer) != 0) return "IMPORT";
             if ((flags & BetterProjectDiagnosticFlags.Oversized) != 0) return "SIZE";
             if ((flags & BetterProjectDiagnosticFlags.Unreferenced) != 0) return "UNUSED?";
             if ((flags & BetterProjectDiagnosticFlags.DuplicateName) != 0) return "DUP";
             if ((flags & BetterProjectDiagnosticFlags.EmptyFolder) != 0) return "EMPTY";
+            if ((flags & BetterProjectDiagnosticFlags.Naming) != 0) return "NAME";
             return "CHECK";
+        }
+
+        internal static string DiagnosticSummary(BetterProjectDiagnosticFlags flags)
+        {
+            if (flags == BetterProjectDiagnosticFlags.None) return string.Empty;
+            if (DiagnosticSummaries.TryGetValue(flags, out string cached)) return cached;
+
+            var messages = new List<string>(4);
+            if ((flags & BetterProjectDiagnosticFlags.MissingAsset) != 0)
+                messages.Add("Missing asset: Unity cannot load this file.");
+            if ((flags & BetterProjectDiagnosticFlags.MissingScript) != 0)
+                messages.Add("Missing script: a prefab component has lost its script.");
+            if ((flags & BetterProjectDiagnosticFlags.MissingShader) != 0)
+                messages.Add("Missing shader: this material has no valid shader.");
+            if ((flags & BetterProjectDiagnosticFlags.Importer) != 0)
+                messages.Add("Importer problem: Unity cannot find an importer for this file.");
+            if ((flags & BetterProjectDiagnosticFlags.Oversized) != 0)
+                messages.Add("Large file: this asset exceeds the configured size guideline.");
+            if ((flags & BetterProjectDiagnosticFlags.EmptyFolder) != 0)
+                messages.Add("Empty folder: this folder contains no indexed assets.");
+            if ((flags & BetterProjectDiagnosticFlags.DuplicateName) != 0)
+                messages.Add("Duplicate name: another asset in the same project scope has this filename.");
+            if ((flags & BetterProjectDiagnosticFlags.Naming) != 0)
+                messages.Add("Naming issue: this filename has leading, trailing, or invalid characters.");
+            if ((flags & BetterProjectDiagnosticFlags.Unreferenced) != 0)
+                messages.Add("Possibly unused: the completed reference index found no owners. This may be intentional.");
+            if ((flags & BetterProjectDiagnosticFlags.EditorPlacement) != 0)
+                messages.Add("Editor placement issue detected.");
+            cached = string.Join("\n", messages);
+            DiagnosticSummaries[flags] = cached;
+            return cached;
         }
 
         internal static Texture Icon(string name)
@@ -361,6 +396,17 @@ namespace DansToolbox.EditorTools.BetterProject
                 alignment = TextAnchor.MiddleLeft,
                 clipping = TextClipping.Clip,
                 normal = { textColor = MutedColor }
+            };
+            toolbarTabLabel = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 9,
+                clipping = TextClipping.Clip
+            };
+            signalBadge = new GUIStyle(EditorStyles.miniBoldLabel)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 8
             };
         }
 

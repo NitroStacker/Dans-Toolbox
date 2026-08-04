@@ -4,6 +4,27 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [1.21.0] - 2026-08-04
+
+### Added
+
+- Add complete Better Project Undo/Redo for asset rename, move, cut/paste, duplicate, folder creation, imports, prefab creation, deletion, labels, and importer presets while preserving asset GUIDs.
+- Stage undoable deletions and created-asset redo data under `Library/DansToolbox/BetterProjectUndo`, keeping temporary recovery data out of the project asset database and version control.
+
+### Changed
+
+- Update Better Project incrementally for ordinary imported, deleted, and moved assets while preserving unaffected cached metadata and reserving full rebuilds for large or manual refreshes.
+- Reduce Better Project UI work by caching asset objects, styles, thumbnails, pinned folders, search metadata requirements, and expanded grid entries.
+
+### Fixed
+
+- Keep reference-index progress from invalidating search results and rebuilding the folder tree after every small batch.
+- Bound Better Project hover work to 60 Hz, cache selected-asset Addressables/build/importer metadata, and throttle asynchronous preview repaint checks.
+- Keep duplicate-name diagnostics within project or package scope so package test fixtures cannot flag unrelated project assets.
+- Reserve red issue styling for broken assets, scripts, shaders, and importers, while giving informational diagnostics named amber badges and explanatory tooltips.
+
 ## [1.20.2] - 2026-08-04
 
 ### Fixed

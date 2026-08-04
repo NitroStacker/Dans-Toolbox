@@ -25,10 +25,18 @@ namespace DansToolbox.EditorTools.BetterProject
                     terms.Add(new Term(key, valuePart, exclude));
                 }
             }
+            RequiresDiagnostics = terms.Any(term =>
+                term.Key == "is" && term.Value.Equals("problem", StringComparison.OrdinalIgnoreCase));
+            RequiresFavorites = terms.Any(term =>
+                term.Key == "is" && term.Value.Equals("favorite", StringComparison.OrdinalIgnoreCase));
+            RequiresLabels = terms.Any(term => term.Key == "l" || term.Key == "label");
         }
 
         internal string Raw { get; }
         internal bool IsEmpty => terms.Count == 0;
+        internal bool RequiresDiagnostics { get; }
+        internal bool RequiresFavorites { get; }
+        internal bool RequiresLabels { get; }
 
         internal static BetterProjectQuery Parse(string value)
         {

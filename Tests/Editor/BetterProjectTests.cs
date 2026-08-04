@@ -59,6 +59,29 @@ namespace DansToolbox.Editor.Tests
         }
 
         [Test]
+        public void AssetChanges_IgnoreOnlyTheTransientRetroSfxPreview()
+        {
+            string preview = DansToolboxTransientAssets.RetroSfxPreviewPath;
+
+            Assert.That(
+                BetterProjectIndex.ShouldRefreshForAssetChanges(new[] { preview }),
+                Is.False);
+            Assert.That(
+                BetterProjectIndex.ShouldRefreshForAssetChanges(
+                    Array.Empty<string>(),
+                    new[] { preview }),
+                Is.False);
+            Assert.That(
+                BetterProjectIndex.ShouldRefreshForAssetChanges(
+                    new[] { preview, "Assets/Audio/Finished.wav" }),
+                Is.True);
+            Assert.That(
+                BetterProjectIndex.ShouldRefreshForAssetChanges(
+                    new[] { "Packages/com.example.tool/Editor/Tool.cs" }),
+                Is.True);
+        }
+
+        [Test]
         public void AssetClassification_DistinguishesModelsPrefabsSpritesAndTextures()
         {
             Assert.That(

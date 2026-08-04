@@ -141,6 +141,12 @@ namespace DansToolbox.Editor
         }
     }
 
+    public static class DansToolboxTransientAssets
+    {
+        public const string RetroSfxPreviewPath =
+            "Assets/Editor/RetroSfxGenerator/__RetroSfxPreview.wav";
+    }
+
     [FilePath("ProjectSettings/DansToolboxSettings.asset", FilePathAttribute.Location.ProjectFolder)]
     public sealed class DansToolboxSettings : ScriptableSingleton<DansToolboxSettings>
     {

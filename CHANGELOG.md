@@ -4,6 +4,13 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.20.2] - 2026-08-04
+
+### Fixed
+
+- Restore audible Retro SFX editor previews by using the proven asset-backed WAV path while excluding only its transient preview asset from Better Project indexing.
+- Refresh the Better Project index from path-aware asset import notifications, preserving normal asset updates without rebuilding the entire index for Retro SFX preview creation and cleanup.
+
 ## [1.20.1] - 2026-08-04
 
 ### Fixed

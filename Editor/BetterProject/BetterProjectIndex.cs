@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using DansToolbox.Editor;
 using UnityEditor;
 using UnityEngine;
 using PackageManagerInfo = UnityEditor.PackageManager.PackageInfo;
@@ -47,8 +48,6 @@ namespace DansToolbox.EditorTools.BetterProject
 
         static BetterProjectIndex()
         {
-            EditorApplication.projectChanged -= QueueRefresh;
-            EditorApplication.projectChanged += QueueRefresh;
             AssemblyReloadEvents.beforeAssemblyReload -= CancelReferenceIndex;
             AssemblyReloadEvents.beforeAssemblyReload += CancelReferenceIndex;
         }
@@ -99,6 +98,10 @@ namespace DansToolbox.EditorTools.BetterProject
             foreach (string rawPath in AssetDatabase.GetAllAssetPaths())
             {
                 string path = Normalize(rawPath);
+                if (IsTransientAsset(path))
+                {
+                    continue;
+                }
                 if ((!path.StartsWith("Assets", StringComparison.Ordinal) &&
                      !path.StartsWith("Packages/", StringComparison.Ordinal)) ||
                     path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
@@ -484,8 +487,27 @@ namespace DansToolbox.EditorTools.BetterProject
             }
         }
 
-        private static void QueueRefresh()
+        internal static bool ShouldRefreshForAssetChanges(params string[][] changedPathGroups)
         {
+            foreach (string[] paths in changedPathGroups ?? Array.Empty<string[]>())
+            {
+                foreach (string path in paths ?? Array.Empty<string>())
+                {
+                    if (!string.IsNullOrEmpty(path) && !IsTransientAsset(path))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        internal static void QueueRefresh(params string[][] changedPathGroups)
+        {
+            if (!ShouldRefreshForAssetChanges(changedPathGroups))
+            {
+                return;
+            }
             if (refreshQueued)
             {
                 return;
@@ -672,6 +694,30 @@ namespace DansToolbox.EditorTools.BetterProject
         private static string Normalize(string path)
         {
             return (path ?? string.Empty).Replace('\\', '/').TrimEnd('/');
+        }
+
+        private static bool IsTransientAsset(string path)
+        {
+            return string.Equals(
+                Normalize(path),
+                DansToolboxTransientAssets.RetroSfxPreviewPath,
+                StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    internal sealed class BetterProjectAssetPostprocessor : AssetPostprocessor
+    {
+        private static void OnPostprocessAllAssets(
+            string[] importedAssets,
+            string[] deletedAssets,
+            string[] movedAssets,
+            string[] movedFromAssetPaths)
+        {
+            BetterProjectIndex.QueueRefresh(
+                importedAssets,
+                deletedAssets,
+                movedAssets,
+                movedFromAssetPaths);
         }
     }
 }

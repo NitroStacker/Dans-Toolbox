@@ -34,7 +34,8 @@ namespace DansToolbox.EditorTools.Audio
 
         private const string DefaultOutputFolder = "Assets/Audio/GeneratedSfx";
         private const string DefaultExportName = "retro_sfx";
-        private const string PreviewClipName = "Retro SFX Preview";
+        // Unity's Editor preview mixer does not reliably output runtime-created clips.
+        private const string PreviewAssetPath = DansToolboxTransientAssets.RetroSfxPreviewPath;
         private const float MinimumTime = 0f;
         private const float MaximumEnvelopeTime = 2f;
         private const float MinimumFrequency = 20f;
@@ -109,7 +110,7 @@ namespace DansToolbox.EditorTools.Audio
                     ? "Select or drop an AudioClip"
                     : $"Editing {importedAudio.SourceClip.name}"
                 : "Select a family or shape a patch";
-            CleanupPreviewClip();
+            CleanupPreviewAsset();
             EditorApplication.update += UpdatePreviewState;
             EnsureWaveformIsCurrent();
         }
@@ -1824,29 +1825,26 @@ namespace DansToolbox.EditorTools.Audio
 
             try
             {
-                previewClip = AudioClip.Create(
-                    PreviewClipName,
-                    generatedSamples.Length,
-                    1,
-                    RetroSfxSettings.SampleRate,
-                    false);
-                if (previewClip == null)
-                {
-                    statusMessage = "Unity could not create the in-memory preview clip.";
-                    return;
-                }
-                previewClip.hideFlags = HideFlags.HideAndDontSave;
-                if (!previewClip.SetData(generatedSamples, 0))
-                {
-                    CleanupPreviewClip();
-                    statusMessage = "Unity could not load the generated samples into the preview clip.";
-                    return;
-                }
+                WavFileWriter.WriteMono16(
+                    Path.GetFullPath(PreviewAssetPath),
+                    generatedSamples,
+                    RetroSfxSettings.SampleRate);
+                AssetDatabase.ImportAsset(
+                    PreviewAssetPath,
+                    ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                previewClip = AssetDatabase.LoadAssetAtPath<AudioClip>(PreviewAssetPath);
             }
             catch (Exception exception)
             {
-                CleanupPreviewClip();
+                CleanupPreviewAsset();
                 statusMessage = $"Preview could not be prepared: {exception.Message}";
+                return;
+            }
+
+            if (previewClip == null)
+            {
+                CleanupPreviewAsset();
+                statusMessage = "Unity could not import the temporary preview WAV.";
                 return;
             }
 
@@ -1859,7 +1857,7 @@ namespace DansToolbox.EditorTools.Audio
             }
             else
             {
-                CleanupPreviewClip();
+                CleanupPreviewAsset();
                 statusMessage = $"Preview could not start: {failureReason}";
             }
         }
@@ -1962,7 +1960,7 @@ namespace DansToolbox.EditorTools.Audio
                 !reportedPlaying && EditorApplication.timeSinceStartup - previewStartedAt > 0.1d)
             {
                 previewIsActive = false;
-                CleanupPreviewClip();
+                CleanupPreviewAsset();
                 statusMessage = "Preview finished";
             }
 
@@ -1974,7 +1972,7 @@ namespace DansToolbox.EditorTools.Audio
             bool wasActive = previewIsActive;
             EditorAudioPreviewService.Stop();
             previewIsActive = false;
-            CleanupPreviewClip();
+            CleanupPreviewAsset();
             if (wasActive)
             {
                 statusMessage = "STOPPED  ·  preview ended";
@@ -1982,12 +1980,13 @@ namespace DansToolbox.EditorTools.Audio
             Repaint();
         }
 
-        private void CleanupPreviewClip()
+        private void CleanupPreviewAsset()
         {
-            if (previewClip != null)
+            previewClip = null;
+            if (AssetDatabase.LoadMainAssetAtPath(PreviewAssetPath) != null ||
+                File.Exists(PreviewAssetPath))
             {
-                DestroyImmediate(previewClip);
-                previewClip = null;
+                AssetDatabase.DeleteAsset(PreviewAssetPath);
             }
         }
 

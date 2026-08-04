@@ -108,6 +108,12 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
     internal sealed class NativeWindowSession : IDisposable
     {
+        internal const uint HostPositionFlags = NativeWindowInterop.SWP_NOACTIVATE;
+        internal const uint HostRevealFlags = NativeWindowInterop.SWP_NOMOVE
+                                                | NativeWindowInterop.SWP_NOSIZE
+                                                | NativeWindowInterop.SWP_NOACTIVATE
+                                                | NativeWindowInterop.SWP_SHOWWINDOW;
+
         private readonly IntPtr target;
         private readonly IntPtr originalParent;
         private readonly long originalStyle;
@@ -122,6 +128,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         private bool embedded;
         private bool disposed;
         private bool visible;
+        private bool needsPresentRedraw;
 
         private NativeWindowSession(
             IntPtr target,
@@ -216,6 +223,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
                 hostOwner = unityWindow;
                 lastHostBounds = new RectInt(int.MinValue, int.MinValue, 0, 0);
+                needsPresentRedraw = true;
             }
 
             RepairTargetEmbedding();
@@ -236,12 +244,12 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 lastHostBounds = hostBounds;
                 NativeWindowInterop.SetWindowPos(
                     host,
-                    IntPtr.Zero,
+                    NativeWindowInterop.HWND_TOP,
                     hostBounds.x,
                     hostBounds.y,
                     hostBounds.width,
                     hostBounds.height,
-                    NativeWindowInterop.SWP_NOACTIVATE | NativeWindowInterop.SWP_NOZORDER);
+                    HostPositionFlags);
             }
 
             RectInt targetBounds = crop.CalculateTargetBounds(width, height, scale);
@@ -262,18 +270,32 @@ namespace DansToolbox.EditorTools.NativeWindowDock
 
         internal void SetVisible(bool shouldBeVisible)
         {
-            if (disposed
-                || !embedded
-                || visible == shouldBeVisible
-                || !NativeWindowInterop.IsWindow(host))
+            if (disposed || !embedded || !NativeWindowInterop.IsWindow(host))
             {
                 return;
             }
 
-            visible = shouldBeVisible;
-            NativeWindowInterop.ShowWindow(
-                host,
-                shouldBeVisible ? NativeWindowInterop.SW_SHOWNA : NativeWindowInterop.SW_HIDE);
+            if (visible != shouldBeVisible)
+            {
+                visible = shouldBeVisible;
+                if (shouldBeVisible)
+                {
+                    NativeWindowInterop.SetWindowPos(
+                        host,
+                        NativeWindowInterop.HWND_TOP,
+                        0,
+                        0,
+                        0,
+                        0,
+                        HostRevealFlags);
+                }
+                else
+                {
+                    NativeWindowInterop.ShowWindow(host, NativeWindowInterop.SW_HIDE);
+                }
+            }
+
+            PresentEmbeddedWindowIfNeeded();
         }
 
         internal void Focus()
@@ -376,6 +398,7 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 NativeWindowInterop.RedrawEmbeddedWindow(target);
                 embedded = true;
                 visible = false;
+                needsPresentRedraw = true;
                 NativeWindowSafetyNet.Register(this);
             }
             catch
@@ -485,7 +508,22 @@ namespace DansToolbox.EditorTools.NativeWindowDock
                 | NativeWindowInterop.SWP_NOZORDER
                 | NativeWindowInterop.SWP_FRAMECHANGED);
             NativeWindowInterop.ShowWindow(target, NativeWindowInterop.SW_SHOW);
+            needsPresentRedraw = true;
             NativeWindowSafetyNet.Register(this);
+        }
+
+        private void PresentEmbeddedWindowIfNeeded()
+        {
+            if (!visible
+                || !needsPresentRedraw
+                || !NativeWindowInterop.IsWindow(target))
+            {
+                return;
+            }
+
+            needsPresentRedraw = false;
+            NativeWindowInterop.ShowWindow(target, NativeWindowInterop.SW_SHOW);
+            NativeWindowInterop.RedrawEmbeddedWindow(target);
         }
     }
 
@@ -685,6 +723,8 @@ namespace DansToolbox.EditorTools.NativeWindowDock
         internal const int SW_RESTORE = 9;
         internal const int SW_SHOWNA = 8;
 
+        internal const uint SWP_NOSIZE = 0x0001;
+        internal const uint SWP_NOMOVE = 0x0002;
         internal const uint SWP_NOZORDER = 0x0004;
         internal const uint SWP_NOACTIVATE = 0x0010;
         internal const uint SWP_FRAMECHANGED = 0x0020;

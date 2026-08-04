@@ -4,6 +4,12 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.19.1] - 2026-08-04
+
+### Fixed
+
+- Keep the Native Window Dock host above Unity's rendered client surface and issue a one-time presentation redraw, preventing attached Chromium windows from appearing as a blank gray viewport.
+
 ## [1.19.0] - 2026-08-04
 
 ### Added

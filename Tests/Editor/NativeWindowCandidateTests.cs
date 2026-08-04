@@ -134,6 +134,28 @@ namespace DansToolbox.EditorTools.NativeWindowDock.Tests
         }
 
         [Test]
+        public void NativeHostPlacement_RaisesAndRevealsWithoutChangingBounds()
+        {
+            Assert.AreEqual(
+                0u,
+                NativeWindowSession.HostPositionFlags & NativeWindowInterop.SWP_NOZORDER,
+                "Initial placement must be allowed to raise the host above Unity's client surface.");
+            Assert.AreNotEqual(
+                0u,
+                NativeWindowSession.HostRevealFlags & NativeWindowInterop.SWP_SHOWWINDOW);
+            Assert.AreNotEqual(
+                0u,
+                NativeWindowSession.HostRevealFlags & NativeWindowInterop.SWP_NOMOVE);
+            Assert.AreNotEqual(
+                0u,
+                NativeWindowSession.HostRevealFlags & NativeWindowInterop.SWP_NOSIZE);
+            Assert.AreEqual(
+                0u,
+                NativeWindowSession.HostRevealFlags & NativeWindowInterop.SWP_NOZORDER,
+                "Revealing a selected tab must restore the host's top z-order.");
+        }
+
+        [Test]
         public void ThumbnailCapture_RejectsAnInvalidWindowWithoutAllocatingPixels()
         {
             NativeWindowThumbnailData result = NativeWindowThumbnailCapture.Capture(

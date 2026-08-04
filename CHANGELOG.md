@@ -4,6 +4,14 @@ All notable changes to Dans Toolbox are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.20.0] - 2026-08-04
+
+### Added
+
+- Add Artboard, a native layered drawing and cel-animation workspace for digital art, pixel art, onion-skin animation, mirrored painting, and crisp high-resolution sprite production.
+- Export individual Sprite PNGs or automatically sliced sprite sheets at 1×–16× using nearest-neighbor expansion, Point filtering, uncompressed texture import, and optional generated `AnimationClip` assets.
+- Show a themed, pixel-aligned Pencil, Brush, and Eraser footprint on the artboard with a live size readout that stays visible at distant zoom levels.
+
 ## [1.19.1] - 2026-08-04
 
 ### Fixed

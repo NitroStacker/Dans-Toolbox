@@ -64,6 +64,7 @@ namespace DansToolbox.Editor
         public const string BetterProjectId = "better-project";
         public const string BetterConsoleId = "better-console";
         public const string BetterSceneId = "better-scene";
+        public const string ArtboardId = "artboard";
 
         private static readonly IReadOnlyList<DansToolboxToolDescriptor> descriptors =
             new[]
@@ -114,6 +115,12 @@ namespace DansToolbox.Editor
                     BetterSceneId,
                     "Better Scene",
                     "Place, align, isolate, measure, review, and revisit scene content faster.",
+                    true,
+                    false),
+                new DansToolboxToolDescriptor(
+                    ArtboardId,
+                    "Artboard",
+                    "Draw, layer, animate, and export crisp high-resolution sprites.",
                     true,
                     false)
             };

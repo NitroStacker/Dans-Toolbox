@@ -10,7 +10,8 @@
     "DansToolbox.BetterInspector.Editor",
     "DansToolbox.BetterProject.Editor",
     "DansToolbox.BetterConsole.Editor",
-    "DansToolbox.BetterScene.Editor"
+    "DansToolbox.BetterScene.Editor",
+    "DansToolbox.Artboard.Editor"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

@@ -10,6 +10,14 @@ The available themes are **Signal Orange**, **Neon Cyan**, and **Arcade Violet**
 
 The Dans Toolbox icon in Unity's main toolbar opens the searchable Toolbox Hub. Its responsive visual gallery has direct All Tools, Workspace, Create, and Integrate filters; tiles can be pinned, recent tools stay one click away, and open windows are identified in place. Click a tile for its recommended dock or position. Retro SFX and Retro VFX automatically join the Inspector-side dock. Native Window Dock presents numbered overlays on the live Unity panes so each new panel can be docked exactly where it belongs; explicit floating positions remain in the tile menu. **Close Tool Windows** closes only Dans Toolbox windows and safely detaches embedded applications.
 
+## Artboard
+
+Open **Tools > Dans Toolbox > Artboard** to create layered digital art, pixel art, or cel animation directly in Unity. Artboard documents are normal project `.asset` files with persistent layers, frames, frame holds, palette, canvas settings, and compressed cel pixels. Use Pencil, Brush, Eraser, Fill, Line, Rectangle, and Ellipse for authoring; right-click samples color, the mouse wheel zooms, and middle-drag pans.
+
+Pixel Grid, mirrored drawing, frame playback, and previous/next onion skins keep the animation loop direct. Layer visibility and opacity remain editable per document, while frame duplication makes pose-to-pose animation quick.
+
+Export a current frame or automatically sliced sprite sheet at 1×–16×. Artboard performs nearest-neighbor pixel replication before writing the PNG, configures the resulting Sprite with Point filtering, no mipmaps, no compression, and Clamp wrapping, and can generate an `AnimationClip` from the sliced frames. Output is capped at 16,384 px per dimension to keep high-resolution exports within a practical Unity texture ceiling.
+
 ## Retro SFX
 
 Open **Tools > Dans Toolbox > Retro SFX**. Use the Synth and Import tabs to choose a source, apply effects, preview with the transport controls, and render a WAV asset into the project.

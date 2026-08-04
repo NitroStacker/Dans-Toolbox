@@ -1,7 +1,8 @@
 # Dans Toolbox
 
-Dans Toolbox is a Unity 6 package containing eight focused tools:
+Dans Toolbox is a Unity 6 package containing nine focused tools:
 
+- **Artboard** — draw layered digital or pixel art, animate cels with onion skinning, and export crisp high-resolution sprites or sliced sprite sheets.
 - **Retro SFX** — create, preview, import, process, and render retro sound effects.
 - **Retro VFX** — forge deterministic particle effects, import flipbooks, attach advanced rendering, and export editable prefabs or baked sprite sheets.
 - **Native Window Dock** — place interactive Windows application windows inside independently positioned panels, including multi-panel layouts and crop framing.
@@ -37,7 +38,7 @@ This tracks the repository's `main` branch. When a newer commit is available, se
 For a project that must stay on an exact release, use a version-tagged URL instead:
 
 ```text
-https://github.com/NitroStacker/Dans-Toolbox.git#v1.19.1
+https://github.com/NitroStacker/Dans-Toolbox.git#v1.20.0
 ```
 
 Tagged installs are intentionally pinned and do not advance when a newer tag is published.
@@ -71,8 +72,17 @@ The package can also be added directly to a project's `Packages/manifest.json`:
 - **Tools > Dans Toolbox > Better Project**
 - **Tools > Dans Toolbox > Better Console**
 - **Tools > Dans Toolbox > Better Scene**
+- **Tools > Dans Toolbox > Artboard**
 
 The Toolbox Hub presents tools as a responsive visual gallery with direct All Tools, Workspace, Create, and Integrate filters. It searches names and jobs, remembers favorites and recent tools, and reports which tools are already open. Click a tile to use its recommended dock or position. Retro SFX and Retro VFX automatically join the Inspector-side dock. Native Window Dock opens a numbered full-Editor picker so each new panel can be attached to a specific Unity pane; floating positions remain available from the tile menu. **Close Tool Windows** closes only Dans Toolbox windows and leaves the user's Unity layout untouched.
+
+## Artboard essentials
+
+- Create an editable `.asset` document from **Assets > Create > Dans Toolbox > Artboard** or from the Artboard window's **New** action.
+- Choose Digital Art, Animation, or Pixel Art. Paint with pencil, brush, eraser, fill, line, rectangle, and ellipse tools; right-click samples a color.
+- Build art with reorderable layers, per-layer visibility and opacity, mirrored strokes, a pixel grid, frames, frame holds, playback, and onion skinning.
+- Export the current frame or a sliced sprite sheet at 1×–16×. Enlargement uses nearest-neighbor pixel replication, and imported sprites are configured with Point filtering, no mipmaps, and no compression.
+- Sprite-sheet export can also create an `AnimationClip` whose keys respect each frame's hold and the document FPS.
 
 ## Native Window Dock essentials
 

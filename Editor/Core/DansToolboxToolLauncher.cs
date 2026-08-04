@@ -146,6 +146,14 @@ namespace DansToolbox.Editor
                     new Vector2(920f, 740f),
                     new Vector2(760f, 720f)),
                 new DansToolboxLaunchDescriptor(
+                    DansToolboxTools.ArtboardId,
+                    "DansToolbox.EditorTools.Artboard.ArtboardWindow, DansToolbox.Artboard.Editor",
+                    "Sprite Icon",
+                    DansToolboxToolGroup.Create,
+                    DansToolboxPlacement.Center,
+                    new Vector2(1180f, 760f),
+                    new Vector2(720f, 440f)),
+                new DansToolboxLaunchDescriptor(
                     DansToolboxTools.NativeWindowDockId,
                     "DansToolbox.EditorTools.NativeWindowDock.NativeWindowDockWindow, DansToolbox.NativeWindowDock.Editor",
                     "BuildSettings.Standalone.Small",

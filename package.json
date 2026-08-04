@@ -1,8 +1,8 @@
 {
   "name": "com.dans.toolbox",
-  "version": "1.19.1",
+  "version": "1.20.0",
   "displayName": "Dans Toolbox",
-  "description": "A polished Unity toolbox containing Retro SFX, Retro VFX, Native Window Dock, Better Hierarchy, Better Inspector, Better Project, Better Console, and Better Scene.",
+  "description": "A polished Unity toolbox containing Artboard, Retro SFX, Retro VFX, Native Window Dock, Better Hierarchy, Better Inspector, Better Project, Better Console, and Better Scene.",
   "unity": "6000.0",
   "keywords": [
     "editor",
@@ -24,7 +24,11 @@
     "debugging",
     "placement",
     "scene-view",
-    "snapping"
+    "snapping",
+    "artboard",
+    "sprite",
+    "pixel-art",
+    "animation"
   ],
   "author": {
     "name": "Dan"
